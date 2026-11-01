@@ -5,6 +5,7 @@ compatibility_date = "2026-11-01"
 [vars]
 APP_NAME = "FacelessLab"
 APP_ENV = "production"
+APP_ORIGIN = "https://facelesslab.pages.dev"
 
 [[d1_databases]]
 binding = "DB"
