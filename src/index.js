@@ -129,7 +129,8 @@ async function generateScriptWithProviders(env, project) {
   if (firstError) throw firstError;
   throw new Error("AI provider is not configured. Add AI_API_KEY and AI_MODEL to Worker secrets/variables.");
 }
-\nasync function handle(request, env) {
+
+async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
