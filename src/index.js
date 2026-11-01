@@ -60,7 +60,76 @@ function publicUser(user) {
   };
 }
 
-async function handle(request, env) {
+
+function extractJson(text) {
+  const cleaned = String(text || "").trim().replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/, "");
+  try { return JSON.parse(cleaned); } catch {}
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+  throw new Error("AI returned an invalid script format.");
+}
+
+async function callAiProvider(env, provider, prompt) {
+  const baseUrl = String(provider.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
+  const response = await fetch(baseUrl + "/chat/completions", {
+    method: "POST",
+    headers: {
+      "authorization": "Bearer " + provider.apiKey,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: provider.model || "gpt-4o-mini",
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "You are a professional short-form video scriptwriter. Return valid JSON only. No markdown fences." },
+        { role: "user", content: prompt }
+      ]
+    }),
+    signal: AbortSignal.timeout(55000)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error?.message || data.message || ("AI provider returned HTTP " + response.status));
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error("AI provider returned an empty response.");
+  return extractJson(text);
+}
+
+async function generateScriptWithProviders(env, project) {
+  const prompt = [
+    "Create a complete short-form vertical video script using this project brief.",
+    "Return this exact JSON structure:",
+    '{"title":"...","hook":"...","narration":"...","scenes":[{"scene":1,"duration_seconds":5,"voiceover":"...","visual_prompt":"...","on_screen_text":"...","transition":"..."}],"closing":"...","cta":"...","estimated_duration_seconds":45}',
+    "Rules: write all audience-facing text in the requested language; make the hook compelling in the first 2 seconds; narration must fit the target duration; scenes must cover the whole narration and have concise visual prompts; do not invent factual claims for news or educational topics; use a strong but natural CTA.",
+    "Topic: " + project.topic,
+    "Language: " + ({id:"Indonesian",en:"English",ms:"Malay"}[project.language] || "Indonesian"),
+    "Target duration: " + project.duration_seconds + " seconds",
+    "Style: " + project.style
+  ].join("\n");
+  const primary = {
+    apiKey: env.AI_API_KEY,
+    baseUrl: env.AI_BASE_URL,
+    model: env.AI_MODEL
+  };
+  const fallback = {
+    apiKey: env.AI_FALLBACK_API_KEY,
+    baseUrl: env.AI_FALLBACK_BASE_URL,
+    model: env.AI_FALLBACK_MODEL
+  };
+  let firstError;
+  if (primary.apiKey) {
+    try { return { script: await callAiProvider(env, primary, prompt), provider: "primary" }; }
+    catch (error) { firstError = error; }
+  }
+  if (fallback.apiKey) {
+    try { return { script: await callAiProvider(env, fallback, prompt), provider: "fallback" }; }
+    catch (error) { throw new Error("Primary and fallback AI providers failed. " + (firstError?.message || "") + " " + error.message); }
+  }
+  if (firstError) throw firstError;
+  throw new Error("AI provider is not configured. Add AI_API_KEY and AI_MODEL to Worker secrets/variables.");
+}
+\nasync function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
@@ -92,7 +161,7 @@ async function handle(request, env) {
     return json({
       name: env.APP_NAME || "FacelessLab",
       version: "0.2.0",
-      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/me", "/api/projects"]
+      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/me", "/api/projects", "/api/projects/:id/generate-script"]
     });
   }
 
@@ -159,7 +228,50 @@ async function handle(request, env) {
       const wallet = await env.DB.prepare("SELECT balance FROM wallets WHERE user_id = ?").bind(user.id).first();
       return json({ ok: true, user: publicUser(user), points: user.role === "admin" ? null : (wallet?.balance ?? 0), unlimited_points: user.role === "admin" });
     }
-    if (path === "/api/projects" && method === "GET") {
+
+    const scriptMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/generate-script$/i);
+    if (scriptMatch && method === "POST") {
+      const projectId = scriptMatch[1];
+      const project = await env.DB.prepare(
+        "SELECT id, user_id, title, topic, language, duration_seconds, style FROM projects WHERE id = ? AND user_id = ?"
+      ).bind(projectId, user.id).first();
+      if (!project) return json({ ok: false, error: "Project not found." }, 404);
+      const latest = await env.DB.prepare(
+        "SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1"
+      ).bind(projectId, user.id).first();
+      if (latest) {
+        return json({ ok: true, cached: true, generation_id: latest.id, script: JSON.parse(latest.output_json) });
+      }
+      const generationId = crypto.randomUUID();
+      await env.DB.prepare(
+        "INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'script', 'processing', ?)"
+      ).bind(generationId, projectId, user.id, JSON.stringify({ topic: project.topic, language: project.language, duration_seconds: project.duration_seconds, style: project.style })).run();
+      try {
+        const result = await generateScriptWithProviders(env, project);
+        const script = result.script;
+        if (!script || typeof script !== "object" || !Array.isArray(script.scenes) || !script.narration) {
+          throw new Error("AI response is missing required script fields.");
+        }
+        await env.DB.prepare(
+          "UPDATE generations SET status = 'completed', output_json = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?"
+        ).bind(JSON.stringify({ ...script, _provider: result.provider }), generationId, user.id).run();
+        return json({ ok: true, cached: false, generation_id: generationId, script: { ...script, _provider: result.provider } }, 201);
+      } catch (error) {
+        await env.DB.prepare(
+          "UPDATE generations SET status = 'failed', error_message = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?"
+        ).bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
+        return json({ ok: false, error: String(error.message || "Script generation failed.") }, 502);
+      }
+    }
+    const existingScriptMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/script$/i);
+    if (existingScriptMatch && method === "GET") {
+      const projectId = existingScriptMatch[1];
+      const result = await env.DB.prepare(
+        "SELECT id, output_json, created_at FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1"
+      ).bind(projectId, user.id).first();
+      return json({ ok: true, script: result ? JSON.parse(result.output_json) : null, generation_id: result?.id || null });
+    }
+\n    if (path === "/api/projects" && method === "GET") {
       const result = await env.DB.prepare(
         "SELECT id, title, topic, status, aspect_ratio, language, duration_seconds, style, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY created_at DESC LIMIT 100"
       ).bind(user.id).all();
