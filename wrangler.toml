@@ -1,0 +1,17 @@
+name = "facelesslab-api"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+APP_NAME = "FacelessLab"
+APP_ENV = "production"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "facelesslab-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "facelesslab-media"
