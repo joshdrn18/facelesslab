@@ -272,7 +272,8 @@ async function handle(request, env) {
       ).bind(projectId, user.id).first();
       return json({ ok: true, script: result ? JSON.parse(result.output_json) : null, generation_id: result?.id || null });
     }
-\n    if (path === "/api/projects" && method === "GET") {
+
+    if (path === "/api/projects" && method === "GET") {
       const result = await env.DB.prepare(
         "SELECT id, title, topic, status, aspect_ratio, language, duration_seconds, style, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY created_at DESC LIMIT 100"
       ).bind(user.id).all();
