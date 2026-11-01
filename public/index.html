@@ -87,18 +87,32 @@ function showApp(user, points) {
  $("pointsBalance").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
  refreshProjects();
 }
-async function refreshProjects() {
+async async function refreshProjects() {
  try {
   const data = await api("/api/projects");
   const projects = data.projects || [];
   $("projectCount").textContent = projects.length;
   $("videoCount").textContent = projects.filter(p => p.status === "completed").length;
-  $("projectList").innerHTML = projects.length ? projects.map(p => '<article class="project-wrap"><div class="project"><div class="project-main"><b>' + escapeHtml(p.title) + '</b><small>' + escapeHtml(p.language.toUpperCase()) + ' · ' + new Date(p.created_at * 1000).toLocaleString() + '</small></div><div class="project-actions"><span class="status">' + escapeHtml(p.status) + '</span><button class="mini-btn" onclick="generateScript(\'' + escapeHtml(p.id) + '\', this)">✦ Generate script</button></div></div><div id="script-' + escapeHtml(p.id) + '"></div></article>').join("") : '<div class="empty">No projects yet. Create your first video above.</div>';
+  $("projectList").innerHTML = projects.length ? projects.map(p => '<article class="project-wrap"><div class="project"><div class="project-main"><b>' + escapeHtml(p.title) + '</b><small>' + escapeHtml(p.language.toUpperCase()) + ' · ' + new Date(p.created_at * 1000).toLocaleString() + '</small></div><div class="project-actions"><span class="status">' + escapeHtml(p.status) + '</span><button class="mini-btn" id="script-btn-' + escapeHtml(p.id) + '" onclick="generateScript(\'' + escapeHtml(p.id) + '\', this)">✦ Generate script</button></div></div><div id="script-' + escapeHtml(p.id) + '"></div></article>').join("") : '<div class="empty">No projects yet. Create your first video above.</div>';
+  await Promise.all(projects.map(p => loadSavedScript(p.id)));
  } catch (error) { $("projectList").innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>'; }
 }
 function renderScript(script) {
  const scenes = (script.scenes || []).map(scene => '<div class="scene-card"><small>SCENE ' + escapeHtml(scene.scene) + ' · ' + escapeHtml(scene.duration_seconds) + 's</small><p><b>Voiceover:</b> ' + escapeHtml(scene.voiceover) + '</p><p><b>Visual:</b> ' + escapeHtml(scene.visual_prompt) + '</p><p><b>On-screen text:</b> ' + escapeHtml(scene.on_screen_text || '') + '</p></div>').join("");
  return '<div class="script-output"><h4>' + escapeHtml(script.title || "Generated script") + '</h4><p><b>HOOK</b>\n' + escapeHtml(script.hook || "") + '</p><p><b>NARRATION</b>\n' + escapeHtml(script.narration || "") + '</p>' + scenes + '<p><b>CLOSING</b> ' + escapeHtml(script.closing || "") + '</p><p><b>CTA</b> ' + escapeHtml(script.cta || "") + '</p></div>';
+}
+async function loadSavedScript(projectId) {
+ try {
+  const data = await api("/api/projects/" + projectId + "/script");
+  if (data.script) {
+   const output = $("script-" + projectId);
+   const button = $("script-btn-" + projectId);
+   if (output) output.innerHTML = renderScript(data.script);
+   if (button) button.textContent = "✓ View script";
+  }
+ } catch (error) {
+  console.warn("Could not load saved script:", error.message);
+ }
 }
 async function generateScript(projectId, button) {
  const output = $("script-" + projectId);
