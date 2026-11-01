@@ -161,7 +161,7 @@ async function handle(request, env) {
     }
     if (path === "/api/projects" && method === "GET") {
       const result = await env.DB.prepare(
-        "SELECT id, title, topic, status, aspect_ratio, language, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY created_at DESC LIMIT 100"
+        "SELECT id, title, topic, status, aspect_ratio, language, duration_seconds, style, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY created_at DESC LIMIT 100"
       ).bind(user.id).all();
       return json({ ok: true, projects: result.results || [] });
     }
@@ -176,8 +176,8 @@ async function handle(request, env) {
       const id = crypto.randomUUID();
       const title = topic.length > 72 ? topic.slice(0, 69) + "..." : topic;
       await env.DB.prepare(
-        "INSERT INTO projects (id, user_id, title, topic, status, aspect_ratio, language) VALUES (?, ?, ?, ?, 'draft', '9:16', ?)"
-      ).bind(id, user.id, title, topic, language).run();
+        "INSERT INTO projects (id, user_id, title, topic, status, aspect_ratio, language, duration_seconds, style) VALUES (?, ?, ?, ?, 'draft', '9:16', ?, ?, ?)"
+      ).bind(id, user.id, title, topic, language, duration, style).run();
       return json({ ok: true, project: { id, title, topic, status: "draft", aspect_ratio: "9:16", language, duration, style } }, 201);
     }
     return json({ ok: false, error: "Not found" }, 404);
