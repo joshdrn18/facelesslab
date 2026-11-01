@@ -1,0 +1,2 @@
+ALTER TABLE projects ADD COLUMN duration_seconds INTEGER NOT NULL DEFAULT 45;
+ALTER TABLE projects ADD COLUMN style TEXT NOT NULL DEFAULT 'storytelling';
