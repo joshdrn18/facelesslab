@@ -10,7 +10,7 @@ const SESSION_DAYS = 30;
 function base64url(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g, "").replace(/\\+/g, "-").replace(/\\//g, "_");
+  return btoa(binary).replace(/=/g, "").replaceAll("+", "-").replaceAll("/", "_");
 }
 
 function randomToken() {
@@ -101,7 +101,7 @@ async function handle(request, env) {
     const email = String(body?.email || "").trim().toLowerCase();
     const password = String(body?.password || "");
     const displayName = String(body?.display_name || "").trim().slice(0, 80);
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) return json({ ok: false, error: "Enter a valid email address." }, 400);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ ok: false, error: "Enter a valid email address." }, 400);
     if (password.length < 8 || password.length > 128) return json({ ok: false, error: "Password must be 8–128 characters." }, 400);
 
     const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
