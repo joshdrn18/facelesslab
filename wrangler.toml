@@ -9,7 +9,7 @@ APP_ENV = "production"
 [[d1_databases]]
 binding = "DB"
 database_name = "facelesslab-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "e1e1693e-2508-4315-a580-dd601262d34a"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
