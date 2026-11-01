@@ -3,9 +3,12 @@ main = "src/index.js"
 compatibility_date = "2026-11-01"
 
 [vars]
-APP_NAME = "FacelessLab"
+AI_BASE_URL = "https://api.groq.com/openai/v1"
+AI_MODEL = "openai/gpt-oss-20b"
 APP_ENV = "production"
+APP_NAME = "FacelessLab"
 APP_ORIGIN = "https://facelesslab.pages.dev"
+
 
 [[d1_databases]]
 binding = "DB"
