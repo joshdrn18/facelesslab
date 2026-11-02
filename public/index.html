@@ -101,7 +101,7 @@ async function refreshProjects() {
 }
 function renderScript(script) {
  const scenes = (script.scenes || []).map(scene => '<div class="scene-card"><small>SCENE ' + escapeHtml(scene.scene) + ' · ' + escapeHtml(scene.duration_seconds) + 's</small><p><b>Voiceover:</b> ' + escapeHtml(scene.voiceover) + '</p><p><b>Visual:</b> ' + escapeHtml(scene.visual_prompt) + '</p><p><b>On-screen text:</b> ' + escapeHtml(scene.on_screen_text || '') + '</p></div>').join("");
- return '<div class="script-output"><h4>' + escapeHtml(script.title || "Generated script") + '</h4><p><b>HOOK</b>\n' + escapeHtml(script.hook || "") + '</p><p><b>NARRATION</b>\n' + escapeHtml(script.narration || "") + '</p>' + scenes + '<p><b>CLOSING</b> ' + escapeHtml(script.closing || "") + '</p><p><b>CTA</b> ' + escapeHtml(script.cta || "") + '</p><div class="voice-panel"><h4>🎙️ AI Voice Over · MeloTTS</h4><p>Free Cloudflare Workers AI voice generation. English projects only for now. Standard MeloTTS voice; no paid provider fallback.</p><button class="primary" id="voice-btn-' + activeVoiceProject + '" onclick="generateVoice(\'' + activeVoiceProject + '\', this)">Generate English voice-over →</button><div id="voice-result-' + activeVoiceProject + '"></div></div></div>';
+ return '<div class="script-output"><h4>' + escapeHtml(script.title || "Generated script") + '</h4><p><b>HOOK</b>\n' + escapeHtml(script.hook || "") + '</p><p><b>NARRATION</b>\n' + escapeHtml(script.narration || "") + '</p>' + scenes + '<p><b>CLOSING</b> ' + escapeHtml(script.closing || "") + '</p><p><b>CTA</b> ' + escapeHtml(script.cta || "") + '</p><div class="voice-panel"><h4>🎙️ AI Voice Over · MeloTTS</h4><p>Free Cloudflare Workers AI voice generation. English projects only for now. Standard MeloTTS voice; no paid provider fallback.</p><button class="primary" id="voice-btn-' + activeVoiceProject + '" onclick="generateVoice(\'' + activeVoiceProject + '\', this)">Generate English voice-over →</button><div id="voice-result-' + activeVoiceProject + '"></div><div class="voice-panel" style="margin-top:12px"><h4>💬 Auto Subtitles</h4><p>Generate timed captions from your script. Timing is estimated from the selected project duration; audio alignment will be added with the video editor.</p><button class="primary" id="subtitle-btn-' + activeVoiceProject + '" onclick="generateSubtitles(\'' + activeVoiceProject + '\', this)">Generate subtitles →</button><div id="subtitle-result-' + activeVoiceProject + '"></div></div></div></div>';
 }
 
 async function loadSavedVoice(projectId) {
@@ -122,6 +122,44 @@ async function generateVoice(projectId,button) {
  finally{button.disabled=false;}
 }
 
+function formatSubtitleTime(seconds, separator) {
+ const ms = Math.max(0, Math.round(Number(seconds) * 1000));
+ const hours = Math.floor(ms / 3600000);
+ const minutes = Math.floor((ms % 3600000) / 60000);
+ const secs = Math.floor((ms % 60000) / 1000);
+ const millis = ms % 1000;
+ return String(hours).padStart(2,"0")+":"+String(minutes).padStart(2,"0")+":"+String(secs).padStart(2,"0")+separator+String(millis).padStart(3,"0");
+}
+function renderSubtitleResult(projectId, subtitleData) {
+ const result=$("subtitle-result-"+projectId);
+ if(!result || !subtitleData)return;
+ const cues=subtitleData.cues||[];
+ const preview=cues.slice(0,5).map(c=>'<div class="scene-card"><small>'+formatSubtitleTime(c.start,",")+' → '+formatSubtitleTime(c.end,",")+'</small><p>'+escapeHtml(c.text)+'</p></div>').join("");
+ result.innerHTML='<div class="muted" style="font-size:11px;margin-top:10px">✓ '+cues.length+' caption lines · '+subtitleData.duration_seconds+'s target · Estimated timing</div>'+preview+(cues.length>5?'<p class="muted" style="font-size:11px">+ '+(cues.length-5)+' more caption lines</p>':"")+'<button class="mini-btn" style="margin-top:9px" onclick="downloadSubtitles(\''+projectId+'\')">↓ Download .SRT</button>';
+ window.facelessSubtitles=window.facelessSubtitles||{};
+ window.facelessSubtitles[projectId]=subtitleData;
+}
+function downloadSubtitles(projectId) {
+ const data=window.facelessSubtitles?.[projectId];
+ if(!data)return;
+ const srt=data.cues.map((c,i)=>(i+1)+"\\n"+formatSubtitleTime(c.start,",")+" --> "+formatSubtitleTime(c.end,",")+"\\n"+c.text).join("\\n\\n");
+ const blob=new Blob([srt],{type:"text/plain;charset=utf-8"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");a.href=url;a.download="facelesslab-subtitles-"+projectId.slice(0,8)+".srt";a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function loadSavedSubtitles(projectId) {
+ try {const data=await api("/api/projects/"+projectId+"/subtitles");if(data.subtitles)renderSubtitleResult(projectId,data.subtitles);}catch(error){console.warn("Could not load saved subtitles:",error.message);}
+}
+async function generateSubtitles(projectId,button) {
+ const result=$("subtitle-result-"+projectId);
+ button.disabled=true;button.textContent="Generating captions…";
+ result.innerHTML='<div class="empty">Building subtitle timestamps from your narration…</div>';
+ try {const data=await api("/api/projects/"+projectId+"/subtitles",{method:"POST",body:"{}"});renderSubtitleResult(projectId,data.subtitles);button.textContent="↻ Regenerate subtitles";}
+ catch(error){result.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';button.textContent="↻ Retry subtitles";}
+ finally{button.disabled=false;}
+}
+
 async function loadSavedScript(projectId) {
  try {
   const data = await api("/api/projects/" + projectId + "/script");
@@ -132,6 +170,7 @@ async function loadSavedScript(projectId) {
    if (output) output.innerHTML = renderScript(data.script);
    if (button) button.textContent = "✓ View script";
    await loadSavedVoice(projectId);
+   await loadSavedSubtitles(projectId);
   }
  } catch (error) {
   console.warn("Could not load saved script:", error.message);
