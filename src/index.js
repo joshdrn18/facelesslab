@@ -83,11 +83,11 @@ async function callAiProvider(env, provider, prompt) {
     { role: "user", content: prompt }
   ];
 
-  async function requestJson(useJsonMode) {
+  async function requestJson(useJsonMode, tokenLimit = 3500) {
     const body = {
       model,
       temperature: 0.4,
-      max_tokens: 3000,
+      max_tokens: tokenLimit,
       messages
     };
     if (useJsonMode) body.response_format = { type: "json_object" };
@@ -120,7 +120,7 @@ async function callAiProvider(env, provider, prompt) {
     const retryable = firstError.status === 400 || /failed_generation|json|invalid script format|no script content|response_format/i.test(message);
     if (!retryable) throw firstError;
     try {
-      return await requestJson(false);
+      return await requestJson(false, 5000);
     } catch (retryError) {
       throw new Error("AI could not produce a valid script JSON after retry. First attempt: " + message.slice(0, 240) + " | Retry: " + String(retryError.message || retryError).slice(0, 240));
     }
@@ -136,7 +136,7 @@ async function generateScriptWithProviders(env, project) {
     "Write a concise, engaging short-form vertical video script for the project brief.",
     "Return exactly one valid JSON object with this schema: {\\"title\\":string,\\"hook\\":string,\\"narration\\":string,\\"scenes\\":[{\\"scene\\":number,\\"duration_seconds\\":number,\\"voiceover\\":string,\\"visual_prompt\\":string,\\"on_screen_text\\":string,\\"transition\\":string}],\\"closing\\":string,\\"cta\\":string,\\"estimated_duration_seconds\\":number}.",
     "Narration must contain " + minWords + " to " + maxWords + " spoken words (aim for " + targetWords + "). Keep it natural and avoid padding.",
-    "Create 5 to 7 scenes for this 45-second project, with durations adding up to about " + targetSeconds + " seconds. Scene voiceovers must divide the narration in order without adding extra narration.",
+    "Create 5 to 7 scenes covering the full target duration of " + targetSeconds + " seconds. Scene voiceovers must divide the narration in order without adding extra narration.",
     "Keep each visual_prompt short (8 to 18 words), each on_screen_text under 8 words, and each transition to a few words.",
     "Write audience-facing text in the requested language. Start with a strong 2-second hook, use clear storytelling, and finish with a natural CTA. Return JSON only; no markdown or commentary.",
     "Topic: " + project.topic,
