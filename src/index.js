@@ -231,7 +231,7 @@ async function handle(request, env) {
     }
 
 
-    const voiceMatch = path.match(/^\\/api\\/projects\\/([a-f0-9-]+)\\/generate-voice$/i);
+    const voiceMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/generate-voice$/i);
     if (voiceMatch && method === "POST") {
       const projectId = voiceMatch[1];
       const project = await env.DB.prepare("SELECT id, language FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
