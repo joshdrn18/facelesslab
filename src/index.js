@@ -97,14 +97,23 @@ async function callAiProvider(env, provider, prompt) {
 }
 
 async function generateScriptWithProviders(env, project) {
+  const targetSeconds = Number(project.duration_seconds) || 45;
+  const targetWords = Math.round(targetSeconds * 2.25);
+  const minWords = Math.round(targetWords * 0.92);
+  const maxWords = Math.round(targetWords * 1.08);
   const prompt = [
-    "Create a complete short-form vertical video script using this project brief.",
+    "Create a complete, fully narrated short-form vertical video script using this project brief.",
     "Return this exact JSON structure:",
     '{"title":"...","hook":"...","narration":"...","scenes":[{"scene":1,"duration_seconds":5,"voiceover":"...","visual_prompt":"...","on_screen_text":"...","transition":"..."}],"closing":"...","cta":"...","estimated_duration_seconds":45}',
-    "Rules: write all audience-facing text in the requested language; make the hook compelling in the first 2 seconds; narration must fit the target duration; scenes must cover the whole narration and have concise visual prompts; do not invent factual claims for news or educational topics; use a strong but natural CTA.",
+    "CRITICAL DURATION RULE: narration must contain between " + minWords + " and " + maxWords + " spoken words. Aim for " + targetWords + " words. This is mandatory; do not write a short summary.",
+    "Use a natural short-form speaking pace of about 135 words per minute. Do not count title, hook labels, scene descriptions, on-screen text, or CTA labels toward the narration word count.",
+    "The narration field must contain the complete spoken script from opening hook through closing and CTA, not just an outline. Include enough explanation, examples, and transitions to fill the duration without padding or repetition.",
+    "Split the same complete narration across scene voiceover fields in the same order. The combined scene voiceovers must closely match the narration; do not omit paragraphs or shorten it.",
+    "Create enough scenes to cover the entire target duration, with scene durations adding up to approximately " + targetSeconds + " seconds.",
+    "Write all audience-facing text in the requested language; make the hook compelling in the first 2 seconds; use concise visual prompts; do not invent factual claims for news or educational topics; use a strong but natural CTA.",
     "Topic: " + project.topic,
     "Language: " + ({id:"Indonesian",en:"English",ms:"Malay"}[project.language] || "Indonesian"),
-    "Target duration: " + project.duration_seconds + " seconds",
+    "Target duration: " + targetSeconds + " seconds",
     "Style: " + project.style
   ].join("\n");
   const primary = {
@@ -298,7 +307,13 @@ async function handle(request, env) {
         "SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1"
       ).bind(projectId, user.id).first();
       if (latest) {
-        return json({ ok: true, cached: true, generation_id: latest.id, script: JSON.parse(latest.output_json) });
+        const cachedScript = JSON.parse(latest.output_json);
+        const cachedWords = String(cachedScript.narration || "").trim().split(/\\s+/).filter(Boolean).length;
+        const expectedWords = Math.round((Number(project.duration_seconds) || 45) * 2.25);
+        if (cachedWords >= Math.round(expectedWords * 0.92)) {
+          return json({ ok: true, cached: true, generation_id: latest.id, script: cachedScript });
+        }
+        // Older short scripts are regenerated once using the stricter duration target below.
       }
       const generationId = crypto.randomUUID();
       await env.DB.prepare(
