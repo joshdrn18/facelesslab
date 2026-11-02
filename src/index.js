@@ -336,6 +336,60 @@ async function handle(request, env) {
         return json({ ok: false, error: String(error.message || "Script generation failed.") }, 502);
       }
     }
+    const visualImageMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/visuals\/([a-f0-9-]+)\/image$/i);
+    if (visualImageMatch && method === "GET") {
+      const projectId=visualImageMatch[1], generationId=visualImageMatch[2];
+      const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      const row=await env.DB.prepare("SELECT output_json FROM generations WHERE id=? AND project_id=? AND user_id=? AND stage='visuals' AND status='completed'").bind(generationId,projectId,user.id).first();
+      if(!row)return json({ok:false,error:"Visual not found."},404);
+      const meta=JSON.parse(row.output_json), object=await env.MEDIA.get(meta.object_key);
+      if(!object)return json({ok:false,error:"Image file is missing from storage."},404);
+      return new Response(object.body,{headers:{"content-type":"image/jpeg","content-length":String(meta.bytes),"cache-control":"private, no-store"}});
+    }
+
+    const visualsMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/visuals$/i);
+    if (visualsMatch && (method === "GET" || method === "POST")) {
+      const projectId=visualsMatch[1];
+      const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      if(method==="GET"){
+        const rows=await env.DB.prepare("SELECT id,output_json,created_at FROM generations WHERE project_id=? AND user_id=? AND stage='visuals' AND status='completed' ORDER BY created_at DESC").bind(projectId,user.id).all();
+        const latest=new Map();
+        for(const row of (rows.results||[])){const meta=JSON.parse(row.output_json);if(!latest.has(meta.scene_number))latest.set(meta.scene_number,{generation_id:row.id,...meta,created_at:row.created_at});}
+        return json({ok:true,visuals:[...latest.values()]});
+      }
+      if(!env.AI||typeof env.AI.run!=="function")return json({ok:false,error:"Cloudflare Workers AI binding AI is missing."},503);
+      const body=await request.json().catch(()=>null);
+      const sceneNumber=Number(body?.scene_number);
+      if(!Number.isInteger(sceneNumber)||sceneNumber<1||sceneNumber>20)return json({ok:false,error:"Invalid scene number."},400);
+      const scriptRow=await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      if(!scriptRow)return json({ok:false,error:"Generate a script before creating visuals."},409);
+      const script=JSON.parse(scriptRow.output_json), scene=(script.scenes||[]).find(item=>Number(item.scene)===sceneNumber);
+      if(!scene)return json({ok:false,error:"Scene not found in the saved script."},404);
+      const visualPrompt=String(scene.visual_prompt||"").trim();
+      if(!visualPrompt)return json({ok:false,error:"This scene has no visual prompt."},422);
+      const prompt=[visualPrompt,"Vertical 9:16 cinematic composition, high detail, professional short-form video still, no captions, no text, no watermark."].join(" ");
+      if(prompt.length>2048)return json({ok:false,error:"Visual prompt is too long."},422);
+      const generationId=crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'visuals','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({model:"@cf/black-forest-labs/flux-1-schnell",scene_number:sceneNumber,prompt})).run();
+      try{
+        const result=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});
+        if(!result?.image||typeof result.image!=="string")throw new Error("FLUX returned no image data.");
+        const binary=atob(result.image), bytes=new Uint8Array(binary.length);
+        for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+        const objectKey="users/"+user.id+"/projects/"+projectId+"/visuals/"+generationId+".jpg";
+        await env.MEDIA.put(objectKey,bytes,{httpMetadata:{contentType:"image/jpeg",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId,sceneNumber:String(sceneNumber)}});
+        const output={object_key:objectKey,mime_type:"image/jpeg",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:"@cf/black-forest-labs/flux-1-schnell",scene_number:sceneNumber,prompt};
+        await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
+        return json({ok:true,generation_id:generationId,visual:{generation_id:generationId,...output}},201);
+      }catch(error){
+        await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
+        const message=String(error.message||"Visual generation failed.");
+        return json({ok:false,error:message},/limit|quota|billing|exceeded/i.test(message)?429:502);
+      }
+    }
+
     const subtitlesMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/subtitles$/i);
     if (subtitlesMatch && (method === "GET" || method === "POST")) {
       const projectId = subtitlesMatch[1];
