@@ -87,6 +87,7 @@ async function callAiProvider(env, provider, prompt) {
     const body = {
       model,
       temperature: 0.4,
+      max_tokens: 3000,
       messages
     };
     if (useJsonMode) body.response_format = { type: "json_object" };
@@ -132,15 +133,12 @@ async function generateScriptWithProviders(env, project) {
   const minWords = Math.round(targetWords * 0.92);
   const maxWords = Math.round(targetWords * 1.08);
   const prompt = [
-    "Create a complete, fully narrated short-form vertical video script using this project brief.",
-    "Return this exact JSON structure:",
-    '{"title":"...","hook":"...","narration":"...","scenes":[{"scene":1,"duration_seconds":5,"voiceover":"...","visual_prompt":"...","on_screen_text":"...","transition":"..."}],"closing":"...","cta":"...","estimated_duration_seconds":45}',
-    "CRITICAL DURATION RULE: narration must contain between " + minWords + " and " + maxWords + " spoken words. Aim for " + targetWords + " words. This is mandatory; do not write a short summary.",
-    "Use a natural short-form speaking pace of about 135 words per minute. Do not count title, hook labels, scene descriptions, on-screen text, or CTA labels toward the narration word count.",
-    "The narration field must contain the complete spoken script from opening hook through closing and CTA, not just an outline. Include enough explanation, examples, and transitions to fill the duration without padding or repetition.",
-    "Split the same complete narration across scene voiceover fields in the same order. The combined scene voiceovers must closely match the narration; do not omit paragraphs or shorten it.",
-    "Create enough scenes to cover the entire target duration, with scene durations adding up to approximately " + targetSeconds + " seconds.",
-    "Write all audience-facing text in the requested language; make the hook compelling in the first 2 seconds; use concise visual prompts; do not invent factual claims for news or educational topics; use a strong but natural CTA.",
+    "Write a concise, engaging short-form vertical video script for the project brief.",
+    "Return exactly one valid JSON object with this schema: {\\"title\\":string,\\"hook\\":string,\\"narration\\":string,\\"scenes\\":[{\\"scene\\":number,\\"duration_seconds\\":number,\\"voiceover\\":string,\\"visual_prompt\\":string,\\"on_screen_text\\":string,\\"transition\\":string}],\\"closing\\":string,\\"cta\\":string,\\"estimated_duration_seconds\\":number}.",
+    "Narration must contain " + minWords + " to " + maxWords + " spoken words (aim for " + targetWords + "). Keep it natural and avoid padding.",
+    "Create 5 to 7 scenes for this 45-second project, with durations adding up to about " + targetSeconds + " seconds. Scene voiceovers must divide the narration in order without adding extra narration.",
+    "Keep each visual_prompt short (8 to 18 words), each on_screen_text under 8 words, and each transition to a few words.",
+    "Write audience-facing text in the requested language. Start with a strong 2-second hook, use clear storytelling, and finish with a natural CTA. Return JSON only; no markdown or commentary.",
     "Topic: " + project.topic,
     "Language: " + ({id:"Indonesian",en:"English",ms:"Malay"}[project.language] || "Indonesian"),
     "Target duration: " + targetSeconds + " seconds",
