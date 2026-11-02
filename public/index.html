@@ -222,6 +222,7 @@ async function generateScript(projectId, button) {
   activeVoiceProject = projectId;
   output.innerHTML = renderScript(data.script, projectId);
   await loadSavedVoice(projectId);
+  await loadSavedVisuals(projectId);
   button.textContent = data.cached ? "✓ View script" : "✓ Script ready";
  } catch (error) {
   output.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
