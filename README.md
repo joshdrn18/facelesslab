@@ -36,7 +36,7 @@ MVP flow: topic → script → voiceover → visuals → subtitles → rendered 
 
 ## Voice-over providers
 
-The voice-over endpoint supports Google Cloud Text-to-Speech and ElevenLabs. Google is the default provider and uses Indonesian Standard voices by default (id-ID-Standard-A female, id-ID-Standard-B male), which currently fall within Google's free quota of 4 million characters per month. Billing must still be enabled on the Google Cloud project; Google bills usage beyond the free quota at its published Standard voice rate. Wavenet and Chirp voices are not selected by this free-quota setup.
+The voice-over endpoint supports Google Cloud Text-to-Speech and ElevenLabs. Google is the default provider and uses Indonesian Standard voices by default (id-ID-Standard-A female, id-ID-Standard-B male), which currently fall within Google's free quota of 4 million characters per month. Billing must still be enabled on the Google Cloud project; Google bills usage beyond the free quota at its published Standard voice rate. The implementation defaults to Standard voices; Google's current pricing page also lists monthly free quotas for WaveNet and Chirp 3 HD, but those voices are not exposed in this UI.
 
 ### Google Cloud setup
 
