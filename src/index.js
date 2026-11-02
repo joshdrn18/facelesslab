@@ -72,28 +72,58 @@ function extractJson(text) {
 
 async function callAiProvider(env, provider, prompt) {
   const baseUrl = String(provider.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
-  const response = await fetch(baseUrl + "/chat/completions", {
-    method: "POST",
-    headers: {
-      "authorization": "Bearer " + provider.apiKey,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      model: provider.model || "gpt-4o-mini",
-      temperature: 0.7,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: "You are a professional short-form video scriptwriter. Return valid JSON only. No markdown fences." },
-        { role: "user", content: prompt }
-      ]
-    }),
-    signal: AbortSignal.timeout(55000)
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error?.message || data.message || ("AI provider returned HTTP " + response.status));
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error("AI provider returned an empty response.");
-  return extractJson(text);
+  const endpoint = baseUrl + "/chat/completions";
+  const headers = {
+    "authorization": "Bearer " + provider.apiKey,
+    "content-type": "application/json"
+  };
+  const model = provider.model || "gpt-4o-mini";
+  const messages = [
+    { role: "system", content: "You are a professional short-form video scriptwriter. Return one valid JSON object only. Do not use markdown fences or add commentary. Use double quotes and escape any quotes inside strings." },
+    { role: "user", content: prompt }
+  ];
+
+  async function requestJson(useJsonMode) {
+    const body = {
+      model,
+      temperature: 0.4,
+      messages
+    };
+    if (useJsonMode) body.response_format = { type: "json_object" };
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(55000)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data.error?.message || data.message || ("AI provider returned HTTP " + response.status);
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
+    }
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
+    if (!content) {
+      const reason = choice?.finish_reason || "unknown";
+      throw new Error("AI provider returned no script content (finish reason: " + reason + ").");
+    }
+    return extractJson(content);
+  }
+
+  try {
+    return await requestJson(true);
+  } catch (firstError) {
+    const message = String(firstError.message || firstError);
+    const retryable = firstError.status === 400 || /failed_generation|json|invalid script format|no script content|response_format/i.test(message);
+    if (!retryable) throw firstError;
+    try {
+      return await requestJson(false);
+    } catch (retryError) {
+      throw new Error("AI could not produce a valid script JSON after retry. First attempt: " + message.slice(0, 240) + " | Retry: " + String(retryError.message || retryError).slice(0, 240));
+    }
+  }
 }
 
 async function generateScriptWithProviders(env, project) {
