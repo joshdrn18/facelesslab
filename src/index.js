@@ -238,29 +238,48 @@ async function handle(request, env) {
       if (!project) return json({ ok: false, error: "Project not found." }, 404);
       const body = await request.json().catch(() => ({}));
       const voiceChoice = ["default", "male", "female"].includes(body.voice) ? body.voice : "default";
+      const provider = ["google", "elevenlabs"].includes(body.provider) ? body.provider : (env.TTS_DEFAULT_PROVIDER || "google");
       const style = ["natural", "cinematic", "energetic", "documentary"].includes(body.style) ? body.style : "natural";
-      const voiceId = voiceChoice === "male" ? (env.TTS_VOICE_ID_MALE || env.TTS_VOICE_ID) : voiceChoice === "female" ? (env.TTS_VOICE_ID_FEMALE || env.TTS_VOICE_ID) : env.TTS_VOICE_ID;
+      const voiceId = provider === "google"
+        ? (voiceChoice === "male" ? (env.GOOGLE_TTS_VOICE_MALE || "id-ID-Standard-B") : voiceChoice === "female" ? (env.GOOGLE_TTS_VOICE_FEMALE || "id-ID-Standard-A") : (env.GOOGLE_TTS_VOICE_DEFAULT || "id-ID-Standard-A"))
+        : (voiceChoice === "male" ? (env.TTS_VOICE_ID_MALE || env.TTS_VOICE_ID) : voiceChoice === "female" ? (env.TTS_VOICE_ID_FEMALE || env.TTS_VOICE_ID) : env.TTS_VOICE_ID);
       const scriptRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
       if (!scriptRow) return json({ ok: false, error: "Generate a script before creating the voice-over." }, 409);
       const script = JSON.parse(scriptRow.output_json);
       const narration = String(script.narration || (script.scenes || []).map(s => s.voiceover || "").join(" ")).trim();
       if (!narration) return json({ ok: false, error: "The saved script has no narration text." }, 422);
       if (narration.length > 4500) return json({ ok: false, error: "Narration is too long. Keep it under 4,500 characters for now." }, 413);
-      if (!env.TTS_API_KEY || !voiceId) return json({ ok: false, error: "Voice provider setup is incomplete. Configure TTS_API_KEY and TTS_VOICE_ID in Worker settings." }, 503);
+      if (provider === "google" && !env.GOOGLE_TTS_API_KEY) return json({ ok: false, error: "Google TTS is not configured. Add GOOGLE_TTS_API_KEY as a Worker secret." }, 503);
+      if (provider === "elevenlabs" && (!env.TTS_API_KEY || !voiceId)) return json({ ok: false, error: "ElevenLabs is not configured. Add TTS_API_KEY and TTS_VOICE_ID to Worker settings." }, 503);
       const generationId = crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ voice: voiceChoice, style, characters: narration.length })).run();
+      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ provider, voice: voiceChoice, voice_id: voiceId, style, characters: narration.length })).run();
       try {
-        const presets = { natural:{stability:0.55,similarity_boost:0.75,style:0.1}, cinematic:{stability:0.7,similarity_boost:0.8,style:0.35}, energetic:{stability:0.35,similarity_boost:0.75,style:0.65}, documentary:{stability:0.65,similarity_boost:0.8,style:0.2} };
-        const tts = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(voiceId) + "?output_format=mp3_44100_128", {
-          method:"POST", headers:{"xi-api-key":env.TTS_API_KEY,"content-type":"application/json","accept":"audio/mpeg"},
-          body:JSON.stringify({text:narration,model_id:env.TTS_MODEL || "eleven_multilingual_v2",voice_settings:presets[style]}),
-          signal:AbortSignal.timeout(55000)
-        });
-        if (!tts.ok) { const detail=await tts.json().catch(()=>({})); throw new Error(detail.detail?.message || detail.detail?.status || detail.message || ("TTS provider returned HTTP "+tts.status)); }
-        const audio=await tts.arrayBuffer();
+        let audio;
+        if (provider === "google") {
+          const tts = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize", {
+            method: "POST",
+            headers: { "x-goog-api-key": env.GOOGLE_TTS_API_KEY, "content-type": "application/json" },
+            body: JSON.stringify({ input: { text: narration }, voice: { languageCode: "id-ID", name: voiceId }, audioConfig: { audioEncoding: "MP3" } }),
+            signal: AbortSignal.timeout(55000)
+          });
+          const data = await tts.json().catch(() => ({}));
+          if (!tts.ok || !data.audioContent) throw new Error(data.error?.message || ("Google TTS returned HTTP " + tts.status));
+          const binary = atob(data.audioContent);
+          audio = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) audio[i] = binary.charCodeAt(i);
+        } else {
+          const presets = { natural:{stability:0.55,similarity_boost:0.75,style:0.1}, cinematic:{stability:0.7,similarity_boost:0.8,style:0.35}, energetic:{stability:0.35,similarity_boost:0.75,style:0.65}, documentary:{stability:0.65,similarity_boost:0.8,style:0.2} };
+          const tts = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(voiceId) + "?output_format=mp3_44100_128", {
+            method:"POST", headers:{"xi-api-key":env.TTS_API_KEY,"content-type":"application/json","accept":"audio/mpeg"},
+            body:JSON.stringify({text:narration,model_id:env.TTS_MODEL || "eleven_multilingual_v2",voice_settings:presets[style]}),
+            signal:AbortSignal.timeout(55000)
+          });
+          if (!tts.ok) { const detail=await tts.json().catch(()=>({})); throw new Error(detail.detail?.message || detail.detail?.status || detail.message || ("TTS provider returned HTTP "+tts.status)); }
+          audio = await tts.arrayBuffer();
+        }
         const objectKey="users/"+user.id+"/projects/"+projectId+"/voice/"+generationId+".mp3";
         await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:"audio/mpeg",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId}});
-        const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,voice:voiceChoice,style,provider:"elevenlabs",characters:narration.length};
+        const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,voice:voiceChoice,style,provider,voice_id:voiceId,characters:narration.length};
         await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
         return json({ok:true,generation_id:generationId,voice:output},201);
       } catch(error) {
