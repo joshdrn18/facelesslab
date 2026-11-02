@@ -308,7 +308,7 @@ async function handle(request, env) {
       ).bind(projectId, user.id).first();
       if (latest) {
         const cachedScript = JSON.parse(latest.output_json);
-        const cachedWords = String(cachedScript.narration || "").trim().split(/\\s+/).filter(Boolean).length;
+        const cachedWords = String(cachedScript.narration || "").trim().split(/\s+/).filter(Boolean).length;
         const expectedWords = Math.round((Number(project.duration_seconds) || 45) * 2.25);
         if (cachedWords >= Math.round(expectedWords * 0.92)) {
           return json({ ok: true, cached: true, generation_id: latest.id, script: cachedScript });
