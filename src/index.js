@@ -161,8 +161,8 @@ async function handle(request, env) {
   if (path === "/" && method === "GET") {
     return json({
       name: env.APP_NAME || "FacelessLab",
-      version: "0.2.0",
-      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/generate-voice", "/api/projects/:id/voice", "/api/projects/:id/voice/audio"]
+      version: "0.4.0",
+      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/generate-voice (Cloudflare Workers AI MeloTTS)", "/api/projects/:id/voice", "/api/projects/:id/voice/audio"]
     });
   }
 
@@ -231,41 +231,37 @@ async function handle(request, env) {
     }
 
 
-    const voiceMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/generate-voice$/i);
+    const voiceMatch = path.match(/^\\/api\\/projects\\/([a-f0-9-]+)\\/generate-voice$/i);
     if (voiceMatch && method === "POST") {
       const projectId = voiceMatch[1];
-      const project = await env.DB.prepare("SELECT id FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
+      const project = await env.DB.prepare("SELECT id, language FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
       if (!project) return json({ ok: false, error: "Project not found." }, 404);
-      const body = await request.json().catch(() => ({}));
-      const voiceChoice = ["default", "male", "female"].includes(body.voice) ? body.voice : "default";
-      const style = ["natural", "cinematic", "energetic", "documentary"].includes(body.style) ? body.style : "natural";
-      const voiceId = voiceChoice === "male" ? (env.TTS_VOICE_ID_MALE || env.TTS_VOICE_ID) : voiceChoice === "female" ? (env.TTS_VOICE_ID_FEMALE || env.TTS_VOICE_ID) : env.TTS_VOICE_ID;
+      if (project.language !== "en") return json({ ok: false, error: "MeloTTS is currently enabled for English projects only. Create an English project to generate this voice-over." }, 422);
+      if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "Cloudflare Workers AI binding is missing. Add an AI binding named AI to this Worker." }, 503);
       const scriptRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
       if (!scriptRow) return json({ ok: false, error: "Generate a script before creating the voice-over." }, 409);
       const script = JSON.parse(scriptRow.output_json);
       const narration = String(script.narration || (script.scenes || []).map(s => s.voiceover || "").join(" ")).trim();
       if (!narration) return json({ ok: false, error: "The saved script has no narration text." }, 422);
       if (narration.length > 4500) return json({ ok: false, error: "Narration is too long. Keep it under 4,500 characters for now." }, 413);
-      if (!env.TTS_API_KEY || !voiceId) return json({ ok: false, error: "Voice provider setup is incomplete. Configure TTS_API_KEY and TTS_VOICE_ID in Worker settings." }, 503);
       const generationId = crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ voice: voiceChoice, style, characters: narration.length })).run();
+      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ provider: "cloudflare-workers-ai", model: "@cf/myshell-ai/melotts", language: "en", characters: narration.length })).run();
       try {
-        const presets = { natural:{stability:0.55,similarity_boost:0.75,style:0.1}, cinematic:{stability:0.7,similarity_boost:0.8,style:0.35}, energetic:{stability:0.35,similarity_boost:0.75,style:0.65}, documentary:{stability:0.65,similarity_boost:0.8,style:0.2} };
-        const tts = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(voiceId) + "?output_format=mp3_44100_128", {
-          method:"POST", headers:{"xi-api-key":env.TTS_API_KEY,"content-type":"application/json","accept":"audio/mpeg"},
-          body:JSON.stringify({text:narration,model_id:env.TTS_MODEL || "eleven_multilingual_v2",voice_settings:presets[style]}),
-          signal:AbortSignal.timeout(55000)
-        });
-        if (!tts.ok) { const detail=await tts.json().catch(()=>({})); throw new Error(detail.detail?.message || detail.detail?.status || detail.message || ("TTS provider returned HTTP "+tts.status)); }
-        const audio=await tts.arrayBuffer();
-        const objectKey="users/"+user.id+"/projects/"+projectId+"/voice/"+generationId+".mp3";
-        await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:"audio/mpeg",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId}});
-        const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,voice:voiceChoice,style,provider:"elevenlabs",characters:narration.length};
-        await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
-        return json({ok:true,generation_id:generationId,voice:output},201);
-      } catch(error) {
-        await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
-        return json({ok:false,error:String(error.message||"Voice generation failed.")},502);
+        const result = await env.AI.run("@cf/myshell-ai/melotts", { prompt: narration, lang: "en" });
+        const encodedAudio = typeof result === "string" ? result : result?.audio;
+        if (!encodedAudio || typeof encodedAudio !== "string") throw new Error("MeloTTS returned no MP3 audio. Please retry.");
+        const binary = atob(encodedAudio);
+        const audio = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) audio[i] = binary.charCodeAt(i);
+        const objectKey = "users/" + user.id + "/projects/" + projectId + "/voice/" + generationId + ".mp3";
+        await env.MEDIA.put(objectKey, audio, { httpMetadata: { contentType: "audio/mpeg", cacheControl: "private, max-age=3600" }, customMetadata: { userId: user.id, projectId, generationId } });
+        const output = { object_key: objectKey, mime_type: "audio/mpeg", bytes: audio.byteLength, provider: "cloudflare-workers-ai", model: "@cf/myshell-ai/melotts", language: "en", characters: narration.length };
+        await env.DB.prepare("UPDATE generations SET status='completed', output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output), generationId, user.id).run();
+        return json({ ok: true, generation_id: generationId, voice: output }, 201);
+      } catch (error) {
+        await env.DB.prepare("UPDATE generations SET status='failed', error_message=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
+        const message = String(error.message || "Voice generation failed.");
+        return json({ ok: false, error: message }, /limit|quota|billing|exceeded/i.test(message) ? 429 : 502);
       }
     }
 
