@@ -275,10 +275,11 @@ async function renderProjectVideo(projectId,button) {
   const quality=Number($("editor-quality-"+projectId)?.value)||720;
   const frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
   const args=["-y","-f","concat","-safe","0","-i","scenes.txt","-i","voice.mp3"];
+  if(captionMode==="soft")args.push("-i","captions.srt");
   if(captionMode==="burn")args.push("-vf","scale="+frameWidth+":"+frameHeight+":force_original_aspect_ratio=increase,crop="+frameWidth+":"+frameHeight+",subtitles=captions.srt:force_style='FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2,Shadow=0,Alignment=2,MarginV=90'");
-  else args.push("-vf","scale=720:"+quality+":force_original_aspect_ratio=increase,crop=720:"+quality);
-  args.push("-r","30","-c:v","libx264","-preset","ultrafast","-crf","27","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-t",String(totalDuration),"-shortest");
-  if(captionMode==="soft")args.push("-i","captions.srt","-c:s","mov_text");
+  else args.push("-vf","scale="+frameWidth+":"+frameHeight+":force_original_aspect_ratio=increase,crop="+frameWidth+":"+frameHeight);
+  args.push("-map","0:v:0","-map","1:a:0","-r","30","-c:v","libx264","-preset","ultrafast","-crf","27","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-t",String(totalDuration),"-shortest");
+  if(captionMode==="soft")args.push("-map","2:s:0","-c:s","mov_text");
   args.push("-movflags","+faststart","output.mp4");await ffmpeg.exec(args);
   if(bar)bar.style.width="92%";
   const output=await ffmpeg.readFile("output.mp4");if(!output?.length)throw new Error("FFmpeg produced an empty video.");
