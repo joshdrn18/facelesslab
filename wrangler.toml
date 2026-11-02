@@ -9,7 +9,11 @@ AI_MODEL = "openai/gpt-oss-20b"
 APP_ENV = "production"
 APP_NAME = "FacelessLab"
 APP_ORIGIN = "https://facelesslab.pages.dev"
+TTS_DEFAULT_PROVIDER = "google"
 TTS_MODEL = "eleven_multilingual_v2"
+GOOGLE_TTS_VOICE_DEFAULT = "id-ID-Standard-A"
+GOOGLE_TTS_VOICE_FEMALE = "id-ID-Standard-A"
+GOOGLE_TTS_VOICE_MALE = "id-ID-Standard-B"
 TTS_VOICE_ID = "3mAVBNEqop5UbHtD8oxQ"
 
 
