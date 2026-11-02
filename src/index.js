@@ -134,7 +134,7 @@ async function generateScriptWithProviders(env, project) {
   const maxWords = Math.round(targetWords * 1.08);
   const prompt = [
     "Write a concise, engaging short-form vertical video script for the project brief.",
-    "Return exactly one valid JSON object with this schema: {\\"title\\":string,\\"hook\\":string,\\"narration\\":string,\\"scenes\\":[{\\"scene\\":number,\\"duration_seconds\\":number,\\"voiceover\\":string,\\"visual_prompt\\":string,\\"on_screen_text\\":string,\\"transition\\":string}],\\"closing\\":string,\\"cta\\":string,\\"estimated_duration_seconds\\":number}.",
+    `Return exactly one valid JSON object with this schema: {"title":"string","hook":"string","narration":"string","scenes":[{"scene":"number","duration_seconds":"number","voiceover":"string","visual_prompt":"string","on_screen_text":"string","transition":"string"}],"closing":"string","cta":"string","estimated_duration_seconds":"number"}.`,
     "Narration must contain " + minWords + " to " + maxWords + " spoken words (aim for " + targetWords + "). Keep it natural and avoid padding.",
     "Create 5 to 7 scenes covering the full target duration of " + targetSeconds + " seconds. Scene voiceovers must divide the narration in order without adding extra narration.",
     "Keep each visual_prompt short (8 to 18 words), each on_screen_text under 8 words, and each transition to a few words.",
