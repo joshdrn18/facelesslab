@@ -336,6 +336,50 @@ async function handle(request, env) {
         return json({ ok: false, error: String(error.message || "Script generation failed.") }, 502);
       }
     }
+    const subtitlesMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/subtitles$/i);
+    if (subtitlesMatch && (method === "GET" || method === "POST")) {
+      const projectId = subtitlesMatch[1];
+      const project = await env.DB.prepare("SELECT id, duration_seconds FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
+      if (!project) return json({ ok: false, error: "Project not found." }, 404);
+      if (method === "GET") {
+        const saved = await env.DB.prepare("SELECT id, output_json, created_at FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
+        return json({ ok: true, subtitles: saved ? JSON.parse(saved.output_json) : null, generation_id: saved?.id || null });
+      }
+      const scriptRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
+      if (!scriptRow) return json({ ok: false, error: "Generate a script before creating subtitles." }, 409);
+      const script = JSON.parse(scriptRow.output_json);
+      const narration = String(script.narration || "").replace(/\s+/g, " ").trim();
+      if (!narration) return json({ ok: false, error: "The saved script has no narration." }, 422);
+      const sentences = narration.match(/[^.!?]+[.!?]?/g) || [narration];
+      const chunks = [];
+      let words = [];
+      for (const sentence of sentences) {
+        const sentenceWords = sentence.trim().split(/\s+/).filter(Boolean);
+        while (sentenceWords.length) {
+          const room = Math.max(1, 9 - words.length);
+          words.push(...sentenceWords.splice(0, room));
+          if (words.length >= 7 || !sentenceWords.length && words.length >= 4) {
+            chunks.push(words.join(" "));
+            words = [];
+          }
+        }
+      }
+      if (words.length) chunks.push(words.join(" "));
+      const totalWords = chunks.reduce((sum, chunk) => sum + chunk.split(/\s+/).length, 0);
+      const duration = Math.max(10, Number(project.duration_seconds) || 45);
+      let cursor = 0;
+      const cues = chunks.map((caption, index) => {
+        const count = caption.split(/\s+/).length;
+        const start = cursor;
+        cursor = index === chunks.length - 1 ? duration : cursor + duration * count / totalWords;
+        return { index: index + 1, start: Number(start.toFixed(3)), end: Number(cursor.toFixed(3)), text: caption };
+      });
+      const subtitleData = { format: "webvtt", timing: "estimated", duration_seconds: duration, cues };
+      const generationId = crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json, output_json) VALUES (?, ?, ?, 'subtitles', 'completed', ?, ?)").bind(generationId, projectId, user.id, JSON.stringify({ source: "script narration", timing: "estimated", duration_seconds: duration }), JSON.stringify(subtitleData)).run();
+      return json({ ok: true, subtitles: subtitleData, generation_id: generationId }, 201);
+    }
+
     const existingScriptMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/script$/i);
     if (existingScriptMatch && method === "GET") {
       const projectId = existingScriptMatch[1];
