@@ -101,7 +101,7 @@ async function refreshProjects() {
 }
 function renderScript(script) {
  const scenes = (script.scenes || []).map(scene => '<div class="scene-card"><small>SCENE ' + escapeHtml(scene.scene) + ' · ' + escapeHtml(scene.duration_seconds) + 's</small><p><b>Voiceover:</b> ' + escapeHtml(scene.voiceover) + '</p><p><b>Visual:</b> ' + escapeHtml(scene.visual_prompt) + '</p><p><b>On-screen text:</b> ' + escapeHtml(scene.on_screen_text || '') + '</p></div>').join("");
- return '<div class="script-output"><h4>' + escapeHtml(script.title || "Generated script") + '</h4><p><b>HOOK</b>\n' + escapeHtml(script.hook || "") + '</p><p><b>NARRATION</b>\n' + escapeHtml(script.narration || "") + '</p>' + scenes + '<p><b>CLOSING</b> ' + escapeHtml(script.closing || "") + '</p><p><b>CTA</b> ' + escapeHtml(script.cta || "") + '</p><div class="voice-panel"><h4>🎙️ AI Voice Over</h4><p>Turn your narration into a downloadable MP3.</p><div class="two"><div><label class="field">Voice</label><select id="voice-choice-' + activeVoiceProject + '"><option value="default">Default voice</option><option value="female">Female voice</option><option value="male">Male voice</option></select></div><div><label class="field">Delivery style</label><select id="voice-style-' + activeVoiceProject + '"><option value="natural">Natural</option><option value="cinematic">Cinematic</option><option value="energetic">Energetic</option><option value="documentary">Documentary</option></select></div></div><button class="primary" id="voice-btn-' + activeVoiceProject + '" onclick="generateVoice(\'' + activeVoiceProject + '\', this)">Generate voice-over →</button><div id="voice-result-' + activeVoiceProject + '"></div></div></div>';
+ return '<div class="script-output"><h4>' + escapeHtml(script.title || "Generated script") + '</h4><p><b>HOOK</b>\n' + escapeHtml(script.hook || "") + '</p><p><b>NARRATION</b>\n' + escapeHtml(script.narration || "") + '</p>' + scenes + '<p><b>CLOSING</b> ' + escapeHtml(script.closing || "") + '</p><p><b>CTA</b> ' + escapeHtml(script.cta || "") + '</p><div class="voice-panel"><h4>🎙️ AI Voice Over · MeloTTS</h4><p>Free Cloudflare Workers AI voice generation. English projects only for now. Standard MeloTTS voice; no paid provider fallback.</p><button class="primary" id="voice-btn-' + activeVoiceProject + '" onclick="generateVoice(\'' + activeVoiceProject + '\', this)">Generate English voice-over →</button><div id="voice-result-' + activeVoiceProject + '"></div></div></div>';
 }
 
 async function loadSavedVoice(projectId) {
@@ -115,9 +115,9 @@ async function showVoiceAudio(projectId,container,meta) {
  container.innerHTML='<div class="voice-result"><div class="muted" style="font-size:11px;margin:10px 0">✓ Voice-over ready · '+(meta.bytes/1024).toFixed(0)+' KB · '+escapeHtml(meta.provider||"TTS")+'</div><audio controls preload="metadata" src="'+objectUrl+'"></audio><a class="mini-btn" style="display:inline-block;text-decoration:none;margin-top:9px" href="'+objectUrl+'" download="facelesslab-voice-'+escapeHtml(projectId.slice(0,8))+'.mp3">↓ Download MP3</a></div>';
 }
 async function generateVoice(projectId,button) {
- const result=$("voice-result-"+projectId);const voice=$("voice-choice-"+projectId)?.value||"default";const style=$("voice-style-"+projectId)?.value||"natural";
+ const result=$("voice-result-"+projectId);
  button.disabled=true;button.textContent="Generating audio…";result.innerHTML='<div class="empty">Creating your voice-over. Please keep this page open…</div>';
- try{const data=await api("/api/projects/"+projectId+"/generate-voice",{method:"POST",body:JSON.stringify({voice,style})});await showVoiceAudio(projectId,result,data.voice);button.textContent="↻ Regenerate voice-over";}
+ try{const data=await api("/api/projects/"+projectId+"/generate-voice",{method:"POST",body:JSON.stringify({})});await showVoiceAudio(projectId,result,data.voice);button.textContent="↻ Regenerate voice-over";}
  catch(error){result.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';button.textContent="↻ Retry voice-over";}
  finally{button.disabled=false;}
 }
