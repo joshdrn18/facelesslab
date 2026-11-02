@@ -2,12 +2,15 @@ name = "facelesslab-api"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
 
+
 [vars]
 AI_BASE_URL = "https://api.groq.com/openai/v1"
 AI_MODEL = "openai/gpt-oss-20b"
 APP_ENV = "production"
 APP_NAME = "FacelessLab"
 APP_ORIGIN = "https://facelesslab.pages.dev"
+TTS_MODEL = "eleven_multilingual_v2"
+TTS_VOICE_ID = "3mAVBNEqop5UbHtD8oxQ"
 
 
 [[d1_databases]]
