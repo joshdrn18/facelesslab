@@ -142,7 +142,7 @@ function renderSubtitleResult(projectId, subtitleData) {
 function downloadSubtitles(projectId) {
  const data=window.facelessSubtitles?.[projectId];
  if(!data)return;
- const srt=data.cues.map((c,i)=>(i+1)+"\\n"+formatSubtitleTime(c.start,",")+" --> "+formatSubtitleTime(c.end,",")+"\\n"+c.text).join("\\n\\n");
+ const srt=data.cues.map((c,i)=>(i+1)+"\n"+formatSubtitleTime(c.start,",")+" --> "+formatSubtitleTime(c.end,",")+"\n"+c.text).join("\n\n");
  const blob=new Blob([srt],{type:"text/plain;charset=utf-8"});
  const url=URL.createObjectURL(blob);
  const a=document.createElement("a");a.href=url;a.download="facelesslab-subtitles-"+projectId.slice(0,8)+".srt";a.click();
