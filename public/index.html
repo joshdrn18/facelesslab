@@ -118,6 +118,9 @@ function navigateTo(view,updateHash=true){
 }
 document.querySelectorAll(".nav a[data-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();navigateTo(a.dataset.view);}));
 window.addEventListener("hashchange",()=>navigateTo(location.hash.slice(1),false));
+\n$("projectSearch").addEventListener("input", renderProjectList);
+$("projectSort").addEventListener("change", renderProjectList);
+$("refreshProjectsBtn").addEventListener("click", async () => { const b=$("refreshProjectsBtn"); b.disabled=true; b.textContent="Refreshing…"; await refreshProjects(); b.disabled=false; b.textContent="↻ Refresh"; });
 \nfunction showApp(user, points) {
  currentUser = user;
  $("authScreen").classList.add("hidden");
@@ -132,12 +135,21 @@ window.addEventListener("hashchange",()=>navigateTo(location.hash.slice(1),false
 async function refreshProjects() {
  try {
   const data = await api("/api/projects");
-  const projects = data.projects || [];
-  $("projectCount").textContent = projects.length;
-  $("videoCount").textContent = projects.filter(p => p.status === "completed").length;
-  $("projectList").innerHTML = projects.length ? projects.map(p => '<article class="project-wrap"><div class="project"><div class="project-main"><div class="project-topline"><span class="project-type">VIDEO PROJECT</span><span class="status">' + escapeHtml(p.status) + '</span></div><b>' + escapeHtml(p.title) + '</b><small>' + escapeHtml(p.language.toUpperCase()) + ' · ' + escapeHtml(p.duration_seconds || 45) + ' sec · ' + new Date(p.created_at * 1000).toLocaleDateString() + '</small></div><div class="project-actions"><button class="mini-btn" id="script-btn-' + escapeHtml(p.id) + '" onclick="generateScript(\'' + escapeHtml(p.id) + '\', this)">✦ ' + (p.status === 'completed' ? 'Open script' : 'Generate script') + '</button></div></div><div id="script-' + escapeHtml(p.id) + '"></div></article>').join("") : '<div class="empty">No projects yet. Create your first video above.</div>';
-  await Promise.all(projects.map(p => loadSavedScript(p.id)));
+  cachedProjects = data.projects || [];
+  $("projectCount").textContent = cachedProjects.length;
+  $("videoCount").textContent = cachedProjects.filter(p => p.status === "completed").length;
+  $("billingProjects").textContent = cachedProjects.length;
+  $("billingVideos").textContent = cachedProjects.filter(p => p.status === "completed").length;
+  renderProjectList();
+  await Promise.all(cachedProjects.map(p => loadSavedScript(p.id)));
  } catch (error) { $("projectList").innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>'; }
+}
+function renderProjectList() {
+ const query = ($("projectSearch")?.value || "").trim().toLowerCase();
+ const sort = $("projectSort")?.value || "newest";
+ const projects = cachedProjects.filter(p => String(p.title || "").toLowerCase().includes(query)).slice();
+ projects.sort((a,b) => sort === "oldest" ? a.created_at-b.created_at : sort === "title" ? String(a.title).localeCompare(String(b.title)) : b.created_at-a.created_at);
+ $("projectList").innerHTML = projects.length ? projects.map(p => '<article class="project-wrap"><div class="project"><div class="project-main"><div class="project-topline"><span class="project-type">VIDEO PROJECT</span><span class="status">' + escapeHtml(p.status) + '</span></div><b>' + escapeHtml(p.title) + '</b><small>' + escapeHtml(p.language.toUpperCase()) + ' · ' + escapeHtml(p.duration_seconds || 45) + ' sec · ' + new Date(p.created_at * 1000).toLocaleDateString() + '</small></div><div class="project-actions"><button class="mini-btn" id="script-btn-' + escapeHtml(p.id) + '" onclick="generateScript(\'' + escapeHtml(p.id) + '\', this)">✦ ' + (p.status === 'completed' ? 'Open script' : 'Generate script') + '</button></div></div><div id="script-' + escapeHtml(p.id) + '"></div></article>').join("") : '<div class="empty">' + (query ? "No projects match your search." : "No projects yet. Create your first video above.") + '</div>';
 }
 function renderScript(script, projectId) {
 
@@ -411,7 +423,7 @@ $("createForm").addEventListener("submit", async (event) => {
    duration: Number($("duration").value), style: $("style").value
   }) });
   $("createNotice").style.color = "var(--cyan)";
-  $("createNotice").textContent = "Project saved! Use “Generate script” in My projects to create your first AI script.";
+  $("createNotice").textContent = "Project saved! Opening My projects…";
   $("topic").value = "";
   await refreshProjects();
  } catch (error) { $("createNotice").style.color = "var(--red)"; $("createNotice").textContent = error.message; }
