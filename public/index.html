@@ -283,7 +283,13 @@ async function getBrowserFFmpeg(projectId,status) {
  const ffmpeg=new FFmpeg();
  ffmpeg.on("log",({message})=>{if(/frame=|time=/.test(message))status.textContent="Rendering video… "+message.slice(0,100);});
  const base="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
- await ffmpeg.load({coreURL:await toBlobURL(base+"/ffmpeg-core.js","text/javascript"),wasmURL:await toBlobURL(base+"/ffmpeg-core.wasm","application/wasm"),classWorkerURL:location.origin+"/ffmpeg-worker.js"});
+ const [coreURL,wasmURL]=await Promise.all([
+  toBlobURL(base+"/ffmpeg-core.js","text/javascript"),
+  toBlobURL(base+"/ffmpeg-core.wasm","application/wasm")
+ ]);
+ await ffmpeg.load({coreURL,wasmURL,classWorkerURL:location.origin+"/ffmpeg-worker.js"});
+ const probe=await ffmpeg.exec(["-version"]);
+ if(probe!==0)throw new Error("FFmpeg engine self-check failed (exit "+probe+").");
  ffmpegInstances[projectId]=ffmpeg;return ffmpeg;
 }
 async function renderProjectVideo(projectId,button) {
@@ -345,10 +351,13 @@ async function renderProjectVideo(projectId,button) {
   else args.push("-vf",motionFilter);
   args.push("-map","0:v:0","-map","1:a:0","-r","30","-c:v","libx264","-preset","ultrafast","-crf","27","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-t",String(totalDuration),"-shortest");
   if(captionMode==="soft")args.push("-map","2:s:0","-c:s","mov_text");
-  args.push("-movflags","+faststart","output.mp4");await ffmpeg.exec(args);
+  args.push("-movflags","+faststart","output.mp4");
+  const exitCode=await ffmpeg.exec(args);
+  if(exitCode!==0)throw new Error("FFmpeg exited with code "+exitCode+". Check the selected subtitle mode and source media.");
   if(bar)bar.style.width="92%";
-  const output=await ffmpeg.readFile("output.mp4");if(!output?.length)throw new Error("FFmpeg produced an empty video.");
-  const blob=new Blob([output.buffer],{type:"video/mp4"}),url=URL.createObjectURL(blob);
+  const output=await ffmpeg.readFile("output.mp4");
+  if(!output||!output.length)throw new Error("FFmpeg produced an empty video.");
+  const blob=new Blob([output],{type:"video/mp4"}),url=URL.createObjectURL(blob);
   window.facelessRenderedUrls=window.facelessRenderedUrls||{};
   if(window.facelessRenderedUrls[projectId])URL.revokeObjectURL(window.facelessRenderedUrls[projectId]);
   window.facelessRenderedUrls[projectId]=url;
@@ -361,16 +370,21 @@ async function renderProjectVideo(projectId,button) {
 async function loadSavedScript(projectId) {
  try {
   const data = await api("/api/projects/" + projectId + "/script");
-  if (data.script) {
-   activeVoiceProject = projectId;
-   const output = $("script-" + projectId);
-   const button = $("script-btn-" + projectId);
-   if (output) output.innerHTML = renderScript(data.script, projectId);
-   if (button) button.textContent = "✓ View script";
-   await loadSavedVoice(projectId);
-   await loadSavedSubtitles(projectId);
-   await loadSavedVisuals(projectId);
-  }
+  if (!data.script) return;
+  activeVoiceProject = projectId;
+  const output = $("script-" + projectId);
+  const button = $("script-btn-" + projectId);
+  if (output) output.innerHTML = renderScript(data.script, projectId);
+  if (button) button.textContent = "✓ View script";
+  // Restore production assets independently so one missing file cannot hide the others.
+  const results = await Promise.allSettled([
+   loadSavedVoice(projectId),
+   loadSavedSubtitles(projectId),
+   loadSavedVisuals(projectId)
+  ]);
+  results.forEach((result,index) => {
+   if (result.status === "rejected") console.warn("Could not restore project asset", index, result.reason);
+  });
  } catch (error) {
   console.warn("Could not load saved script:", error.message);
  }
