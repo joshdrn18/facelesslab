@@ -138,16 +138,18 @@ async function generateScriptWithProviders(env, project) {
   const minWords = Math.round(targetWords * 0.92);
   const maxWords = Math.round(targetWords * 1.08);
   const prompt = [
-    "Write a concise, engaging short-form vertical video script for the project brief.",
+    "You are a professional short-form documentary director and storyboard artist. Create a coherent visual story, not a random image slideshow.",
     `Return exactly one valid JSON object with this schema: {"title":"string","hook":"string","narration":"string","scenes":[{"scene":"number","duration_seconds":"number","voiceover":"string","visual_prompt":"string","on_screen_text":"string","transition":"string"}],"closing":"string","cta":"string","estimated_duration_seconds":"number"}.`,
     "Narration must contain " + minWords + " to " + maxWords + " spoken words (aim for " + targetWords + "). Keep it natural and avoid padding.",
-    "Create 5 to 7 scenes covering the full target duration of " + targetSeconds + " seconds. Scene voiceovers must divide the narration in order without adding extra narration.",
-    "Keep each visual_prompt short (8 to 18 words), each on_screen_text under 8 words, and each transition to a few words.",
-    "Write audience-facing text in the requested language. Start with a strong 2-second hook, use clear storytelling, and finish with a natural CTA. Return JSON only; no markdown or commentary.",
+    "Create 5 to 7 scenes covering the full target duration. Scene voiceovers must divide the narration in order, preserve its exact sequence, and collectively cover the whole narration.",
+    "STORYBOARD RULES: Every scene must depict the exact event, person, place, object, or action being described by that scene's voiceover. Build a logical beginning-middle-ending sequence. Each scene must be a new visual moment and materially different from the previous scene; never reuse the same image idea, pose, camera angle, or setting just to fill time.",
+    "VISUAL PROMPT RULES: Write each visual_prompt as a concrete image-generation instruction describing one specific photographic/cinematic moment, including subject, action, setting, and shot framing. Make prompts specific and distinct, not vague mood words. Keep recurring people recognizably consistent across scenes by repeating concise identity, age range, hairstyle, clothing, and other non-sensitive visual details when relevant. Keep the overall art direction, color palette, lighting, and realism consistent across the whole story.",
+    "Never request collages, grids, split screens, contact sheets, storyboards, comic panels, screenshots, posters, infographics, UI, multiple frames, or images containing text. Each visual must be one clean full-frame scene. No text, captions, logos, borders, or watermarks in the image.",
+    "Keep each on_screen_text under 8 words and each transition to a few words. Write audience-facing text in the requested language. Start with a strong 2-second hook and finish with a natural CTA. Return JSON only; no markdown or commentary.",
     "Topic: " + project.topic,
     "Language: " + ({id:"Indonesian",en:"English",ms:"Malay"}[project.language] || "Indonesian"),
     "Target duration: " + targetSeconds + " seconds",
-    "Style: " + project.style
+    "Visual style / art direction: " + project.style
   ].join("\n");
   const primary = {
     apiKey: env.AI_API_KEY,
@@ -384,7 +386,7 @@ async function handle(request, env) {
     const visualsMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/visuals$/i);
     if (visualsMatch && (method === "GET" || method === "POST")) {
       const projectId=visualsMatch[1];
-      const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      const project=await env.DB.prepare("SELECT * FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
       if(!project)return json({ok:false,error:"Project not found."},404);
       if(method==="GET"){
         const rows=await env.DB.prepare("SELECT id,output_json,created_at FROM generations WHERE project_id=? AND user_id=? AND stage='visuals' AND status='completed' ORDER BY created_at DESC").bind(projectId,user.id).all();
@@ -400,9 +402,23 @@ async function handle(request, env) {
       if(!scriptRow)return json({ok:false,error:"Generate a script before creating visuals."},409);
       const script=JSON.parse(scriptRow.output_json), scene=(script.scenes||[]).find(item=>Number(item.scene)===sceneNumber);
       if(!scene)return json({ok:false,error:"Scene not found in the saved script."},404);
+      const scenes=script.scenes||[];
+      const sceneIndex=scenes.findIndex(item=>Number(item.scene)===sceneNumber);
+      const previousScene=sceneIndex>0?scenes[sceneIndex-1]:null;
+      const nextScene=sceneIndex<scenes.length-1?scenes[sceneIndex+1]:null;
       const visualPrompt=String(scene.visual_prompt||"").trim();
       if(!visualPrompt)return json({ok:false,error:"This scene has no visual prompt."},422);
-      const prompt=[visualPrompt,"Vertical 9:16 cinematic composition, high detail, professional short-form video still, no captions, no text, no watermark."].join(" ");
+      const clean=(value,max=260)=>String(value||"").replace(/\\s+/g," ").trim().slice(0,max);
+      const prompt=[
+        "Create ONE single cinematic film still for ONE moment. Vertical 9:16 portrait frame, photorealistic cinematic visual storytelling, natural believable anatomy, detailed environment.",
+        "STORY CONTEXT: "+clean(project.topic,220)+". Film title: "+clean(script.title,100)+". Overall narration: "+clean(script.narration,420),
+        "THIS SCENE (must be the main subject and action, follow literally): "+clean(scene.voiceover,240),
+        "EXACT VISUAL TO DEPICT: "+clean(visualPrompt,420),
+        "CONTINUITY / ART DIRECTION: "+clean(project.style,160)+". Maintain a consistent visual world, color grade, lighting approach, era and recurring character appearance across this story. If a person appears in adjacent scenes, keep their face, hairstyle and clothing consistent.",
+        previousScene?"PREVIOUS MOMENT (context only; do NOT repeat its composition): "+clean(previousScene.voiceover,140):"Opening shot: establish the story world clearly.",
+        nextScene?"NEXT MOMENT (foreshadow only; do NOT depict it): "+clean(nextScene.voiceover,140):"Final moment: make this feel like a meaningful closing image.",
+        "STRICT NEGATIVE INSTRUCTIONS: no collage, no montage, no grid, no split screen, no panels, no contact sheet, no screenshot, no poster, no infographic, no UI, no multiple scenes, no duplicated subjects, no typography, no letters, no subtitles, no captions, no logos, no watermark, no borders. One subject/action in one coherent location and one camera shot."
+      ].join(" ");
       if(prompt.length>2048)return json({ok:false,error:"Visual prompt is too long."},422);
       const generationId=crypto.randomUUID();
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'visuals','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({model:"@cf/black-forest-labs/flux-1-schnell",scene_number:sceneNumber,prompt})).run();
