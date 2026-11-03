@@ -229,7 +229,7 @@ async function getBrowserFFmpeg(projectId,status) {
  const ffmpeg=new FFmpeg();
  ffmpeg.on("log",({message})=>{if(/frame=|time=/.test(message))status.textContent="Rendering video… "+message.slice(0,100);});
  const base="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
- await ffmpeg.load({coreURL:await toBlobURL(base+"/ffmpeg-core.js","text/javascript"),wasmURL:await toBlobURL(base+"/ffmpeg-core.wasm","application/wasm")});
+ await ffmpeg.load({coreURL:await toBlobURL(base+"/ffmpeg-core.js","text/javascript"),wasmURL:await toBlobURL(base+"/ffmpeg-core.wasm","application/wasm"),classWorkerURL:location.origin+"/ffmpeg-worker.js"});
  ffmpegInstances[projectId]=ffmpeg;return ffmpeg;
 }
 async function renderProjectVideo(projectId,button) {
