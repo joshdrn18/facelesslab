@@ -3,13 +3,9 @@ const TYPES={LOAD:"LOAD",EXEC:"EXEC",FFPROBE:"FFPROBE",WRITE_FILE:"WRITE_FILE",R
 let ffmpeg;
 async function load({coreURL,wasmURL,workerURL}={}) {
   if(!coreURL) throw new Error("FFmpeg core URL is missing");
-  let factory;
-  let importedModule={};
-  try { importScripts(coreURL); factory=self.createFFmpegCore; } catch (_) {
-    importedModule=await import(coreURL);
-    factory=importedModule.default||self.createFFmpegCore;
-  }
-  if(typeof factory!=="function") throw new Error("Could not load FFmpeg core factory (module exports: "+Object.keys(importedModule||{}).join(", ")+")");
+  const importedModule=await import(coreURL);
+  const factory=importedModule.default;
+  if(typeof factory!=="function") throw new Error("Could not load FFmpeg ESM core factory (module exports: "+Object.keys(importedModule||{}).join(", ")+")");
   const actualWasm=wasmURL||coreURL.replace(/.js$/,".wasm");
   const actualWorker=workerURL||coreURL.replace(/.js$/,".worker.js");
   ffmpeg=await factory({mainScriptUrlOrBlob:coreURL+"#"+btoa(JSON.stringify({wasmURL:actualWasm,workerURL:actualWorker}))});
