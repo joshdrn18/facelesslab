@@ -87,9 +87,14 @@ async function callAiProvider(env, provider, prompt) {
     const body = {
       model,
       temperature: 0.4,
-      max_tokens: tokenLimit,
+      max_completion_tokens: tokenLimit,
       messages
     };
+    // Groq GPT-OSS spends completion tokens on reasoning unless it is disabled.
+    if (/openai\\/gpt-oss/i.test(model)) {
+      body.reasoning_effort = "low";
+      body.include_reasoning = false;
+    }
     if (useJsonMode) body.response_format = { type: "json_object" };
     const response = await fetch(endpoint, {
       method: "POST",
@@ -120,7 +125,7 @@ async function callAiProvider(env, provider, prompt) {
     const retryable = firstError.status === 400 || /failed_generation|json|invalid script format|no script content|response_format/i.test(message);
     if (!retryable) throw firstError;
     try {
-      return await requestJson(false, 5000);
+      return await requestJson(false, 6000);
     } catch (retryError) {
       throw new Error("AI could not produce a valid script JSON after retry. First attempt: " + message.slice(0, 240) + " | Retry: " + String(retryError.message || retryError).slice(0, 240));
     }
