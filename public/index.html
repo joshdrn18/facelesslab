@@ -186,24 +186,23 @@ async function loadSavedVisuals(projectId) {
  } catch(error){console.warn("Could not load saved visuals:",error.message);}
 }
 async function generateAllSceneVisuals(projectId,button) {
- const status=$("visual-all-status-"+projectId);
- const output=$("script-"+projectId);
+ const status=$("visual-all-status-"+projectId),output=$("script-"+projectId);
  const buttons=Array.from(output.querySelectorAll('[id^="visual-btn-'+projectId+'-"]'));
  const pending=buttons.filter(item=>item.textContent.trim()!=="↻ Regenerate visual");
  if(!pending.length){if(status)status.textContent="All scene visuals are already generated.";return;}
- button.disabled=true;
- let completed=0,failed=0;
- for(const sceneButton of pending){
-  const match=sceneButton.id.match(/-(\d+)$/);
+ button.disabled=true;let completed=0,failed=0;
+ for(let i=0;i<pending.length;i++){
+  const sceneButton=pending[i],match=sceneButton.id.match(/-(\d+)$/);
   if(!match)continue;
   const sceneNumber=Number(match[1]);
-  if(status)status.textContent="Generating scene "+(completed+failed+1)+" of "+pending.length+"…";
-  try{await generateSceneVisual(projectId,sceneNumber,sceneButton);if(sceneButton.textContent.includes("Regenerate"))completed++;else failed++;}
-  catch(error){failed++;}
+  if(status)status.textContent="Generating scene "+(i+1)+" of "+pending.length+"…";
+  try{await generateSceneVisual(projectId,sceneNumber,sceneButton);completed++;}
+  catch(error){failed++;if(status)status.textContent="Scene "+sceneNumber+" failed: "+error.message;}
  }
  if(status)status.textContent=completed+" generated · "+failed+" failed · "+(buttons.length-pending.length)+" already ready";
  button.disabled=false;
 }
+
 async function generateSceneVisual(projectId,sceneNumber,button) {
  const container=$("visual-result-"+projectId+"-"+sceneNumber);
  button.disabled=true;button.textContent="Generating…";
@@ -211,12 +210,14 @@ async function generateSceneVisual(projectId,sceneNumber,button) {
  try {
   const data=await api("/api/projects/"+projectId+"/visuals",{method:"POST",body:JSON.stringify({scene_number:sceneNumber})});
   await showSceneVisual(projectId,sceneNumber,data.visual);
- } catch(error){if(container)container.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';button.textContent="↻ Retry visual";}
- finally{button.disabled=false;}
+  return data.visual;
+ } catch(error) {
+  if(container)container.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';
+  button.textContent="↻ Retry visual";
+  throw error;
+ } finally {button.disabled=false;}
 }
 
-
-const ffmpegInstances = {};
 async function getBrowserFFmpeg(projectId,status) {
  if(ffmpegInstances[projectId])return ffmpegInstances[projectId];
  status.textContent="Loading FFmpeg engine (first load is about 30 MB)…";
@@ -246,7 +247,15 @@ async function renderProjectVideo(projectId,button) {
   if(!voiceResponse.ok)throw new Error("Generate an English voice-over first. Current TTS supports English only.");
   const visualMap=new Map((visualData.visuals||[]).map(v=>[Number(v.scene_number),v]));
   const missing=scenes.filter(scene=>!visualMap.has(Number(scene.scene)));
-  if(missing.length)throw new Error("Generate all scene visuals first. Missing scene(s): "+missing.map(x=>x.scene).join(", "));
+  for(let i=0;i<missing.length;i++){
+   const scene=missing[i],sceneNumber=Number(scene.scene);
+   status.textContent="Generating missing visual "+(i+1)+" of "+missing.length+" · Scene "+sceneNumber+"…";
+   const sceneButton=$("visual-btn-"+projectId+"-"+sceneNumber);
+   if(!sceneButton)throw new Error("Visual control for scene "+sceneNumber+" was not found. Reopen the script and try again.");
+   const visual=await generateSceneVisual(projectId,sceneNumber,sceneButton);
+   visualMap.set(sceneNumber,visual);
+   if(bar)bar.style.width=(5+Math.round((i+1)/Math.max(1,missing.length)*5))+"%";
+  }
   const subtitleData=subtitleResponse.subtitles||window.facelessSubtitles?.[projectId];
   const captionMode=$("editor-captions-"+projectId)?.value||"burn";
   if(captionMode!=="off"&&!subtitleData?.cues?.length)throw new Error("Generate subtitles first, or choose No subtitles.");
