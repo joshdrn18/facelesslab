@@ -61,6 +61,13 @@
 <script>
 const API_BASE = "https://facelesslab-api.joshdrn18.workers.dev";
 const $ = (id) => document.getElementById(id);
+document.addEventListener('toggle',function(event){
+ const target=event.target;
+ if(target&&target.matches&&target.matches('details.script-workspace')){
+  const id=target.id.replace('script-workspace-','');
+  if(id)localStorage.setItem('facelesslab_workspace_'+id,target.open?'1':'0');
+ }
+},true);
 let token = localStorage.getItem("facelesslab_token") || "";
 let authMode = "login";
 let currentUser = null;
@@ -112,13 +119,7 @@ async function refreshProjects() {
  } catch (error) { $("projectList").innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>'; }
 }
 function renderScript(script, projectId) {
- document.addEventListener('toggle',function(event){
-  const target=event.target;
-  if(target&&target.matches&&target.matches('details.script-workspace')){
-   const id=target.id.replace('script-workspace-','');
-   if(id) localStorage.setItem('facelesslab_workspace_'+id,target.open?'1':'0');
-  }
- },true);
+
  window.facelessScripts=window.facelessScripts||{};window.facelessScripts[projectId]=script;
  const scenes = (script.scenes || []).map(scene => '<article class="scene-card"><div class="scene-head"><b>Scene ' + escapeHtml(scene.scene) + '</b><span>' + escapeHtml(scene.duration_seconds) + ' sec</span></div><p><b>Voiceover</b>' + escapeHtml(scene.voiceover) + '</p><p><b>Visual direction</b>' + escapeHtml(scene.visual_prompt) + '</p><p><b>Screen text</b>' + escapeHtml(scene.on_screen_text || '—') + '</p><button class="mini-btn" id="visual-btn-' + projectId + '-' + (Number(scene.scene)||0) + '" onclick="generateSceneVisual(\'' + projectId + '\',' + (Number(scene.scene)||0) + ',this)">✦ Generate visual</button><div id="visual-result-' + projectId + '-' + (Number(scene.scene)||0) + '"></div></article>').join("");
  const workspaceOpen=localStorage.getItem('facelesslab_workspace_'+projectId)==='1';
