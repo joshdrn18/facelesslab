@@ -521,7 +521,7 @@ async function handle(request, env) {
       if (topic.length < 5 || topic.length > 5000) return json({ ok: false, error: "Topic must be between 5 and 5000 characters." }, 400);
       const language = ["id", "en", "ms"].includes(body?.language) ? body.language : "id";
       const duration = [30, 45, 60].includes(Number(body?.duration)) ? Number(body.duration) : 45;
-      const styles = ["storytelling", "educational", "toplist", "motivation", "news"];
+      const styles = ["storytelling", "anime", "educational", "toplist", "motivation", "news"];
       const style = styles.includes(body?.style) ? body.style : "storytelling";
       const id = crypto.randomUUID();
       const title = topic.length > 72 ? topic.slice(0, 69) + "..." : topic;
