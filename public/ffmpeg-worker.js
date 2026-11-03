@@ -6,9 +6,9 @@ async function load({coreURL,wasmURL,workerURL}={}) {
   let factory;
   try { importScripts(coreURL); factory=self.createFFmpegCore; } catch (_) {
     const imported=await import(coreURL);
-    factory=imported.default;
+    factory=imported.default||self.createFFmpegCore;
   }
-  if(typeof factory!=="function") throw new Error("Could not load FFmpeg core factory");
+  if(typeof factory!=="function") throw new Error("Could not load FFmpeg core factory (module exports: "+Object.keys(imported||{}).join(", ")+")");
   const actualWasm=wasmURL||coreURL.replace(/.js$/,".wasm");
   const actualWorker=workerURL||coreURL.replace(/.js$/,".worker.js");
   ffmpeg=await factory({mainScriptUrlOrBlob:coreURL+"#"+btoa(JSON.stringify({wasmURL:actualWasm,workerURL:actualWorker}))});
