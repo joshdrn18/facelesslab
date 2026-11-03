@@ -118,10 +118,12 @@ function navigateTo(view,updateHash=true){
 }
 document.querySelectorAll(".nav a[data-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();navigateTo(a.dataset.view);}));
 window.addEventListener("hashchange",()=>navigateTo(location.hash.slice(1),false));
-\n$("projectSearch").addEventListener("input", renderProjectList);
+
+$("projectSearch").addEventListener("input", renderProjectList);
 $("projectSort").addEventListener("change", renderProjectList);
 $("refreshProjectsBtn").addEventListener("click", async () => { const b=$("refreshProjectsBtn"); b.disabled=true; b.textContent="Refreshing…"; await refreshProjects(); b.disabled=false; b.textContent="↻ Refresh"; });
-\nfunction showApp(user, points) {
+
+function showApp(user, points) {
  currentUser = user;
  $("authScreen").classList.add("hidden");
  $("appScreen").classList.remove("hidden");
@@ -130,6 +132,8 @@ $("refreshProjectsBtn").addEventListener("click", async () => { const b=$("refre
  $("userEmail").textContent = user.email;
  $("avatar").textContent = name.slice(0,2).toUpperCase();
  $("pointsBalance").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
+ $("billingPoints").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
+ $("accountPlan").textContent = user.role === "admin" ? "Admin workspace" : "Free workspace";
  refreshProjects();
 }
 async function refreshProjects() {
