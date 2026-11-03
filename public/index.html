@@ -134,6 +134,7 @@ function showApp(user, points) {
  $("pointsBalance").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
  $("billingPoints").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
  $("accountPlan").textContent = user.role === "admin" ? "Admin workspace" : "Free workspace";
+ navigateTo("overview",false);
  refreshProjects();
 }
 async function refreshProjects() {
@@ -430,6 +431,7 @@ $("createForm").addEventListener("submit", async (event) => {
   $("createNotice").textContent = "Project saved! Opening My projects…";
   $("topic").value = "";
   await refreshProjects();
+  navigateTo("projects");
  } catch (error) { $("createNotice").style.color = "var(--red)"; $("createNotice").textContent = error.message; }
  finally { $("createBtn").disabled = false; }
 });
