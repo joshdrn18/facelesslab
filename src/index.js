@@ -91,7 +91,7 @@ async function callAiProvider(env, provider, prompt) {
       messages
     };
     // Groq GPT-OSS spends completion tokens on reasoning unless it is disabled.
-    if (/openai\\/gpt-oss/i.test(model)) {
+    if (String(model).toLowerCase().includes("openai/gpt-oss")) {
       body.reasoning_effort = "low";
       body.include_reasoning = false;
     }
