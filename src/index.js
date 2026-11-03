@@ -198,7 +198,7 @@ async function handle(request, env) {
     return json({
       ok,
       service: "FacelessLab API",
-      version: "0.3.0",
+      version: "0.4.0",
       checks: { database, storage },
       timestamp: new Date().toISOString()
     }, ok ? 200 : 503);
@@ -208,7 +208,7 @@ async function handle(request, env) {
     return json({
       name: env.APP_NAME || "FacelessLab",
       version: "0.4.0",
-      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/generate-voice (Cloudflare Workers AI MeloTTS)", "/api/projects/:id/voice", "/api/projects/:id/voice/audio"]
+      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/script", "/api/projects/:id/generate-voice", "/api/projects/:id/voice", "/api/projects/:id/voice/audio", "/api/projects/:id/visuals", "/api/projects/:id/visuals/:generation_id/image", "/api/projects/:id/subtitles"]
     });
   }
 
