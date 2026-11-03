@@ -218,6 +218,7 @@ async function generateSceneVisual(projectId,sceneNumber,button) {
  } finally {button.disabled=false;}
 }
 
+const ffmpegInstances = Object.create(null);
 async function getBrowserFFmpeg(projectId,status) {
  if(ffmpegInstances[projectId])return ffmpegInstances[projectId];
  status.textContent="Loading FFmpeg engine (first load is about 30 MB)…";
