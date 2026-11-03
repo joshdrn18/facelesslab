@@ -138,7 +138,9 @@ async function generateScriptWithProviders(env, project) {
   const minWords = Math.round(targetWords * 0.92);
   const maxWords = Math.round(targetWords * 1.08);
   const prompt = [
-    "You are a professional short-form documentary director and storyboard artist. Create a coherent visual story, not a random image slideshow.",
+    project.style === "anime"
+      ? "You are a Japanese anime short-film director and storyboard artist. Create a coherent anime episode, not a slideshow. Design recurring characters and preserve their exact appearance across every scene."
+      : "You are a professional short-form documentary director and storyboard artist. Create a coherent visual story, not a random image slideshow.",
     `Return exactly one valid JSON object with this schema: {"title":"string","hook":"string","narration":"string","scenes":[{"scene":"number","duration_seconds":"number","voiceover":"string","visual_prompt":"string","on_screen_text":"string","transition":"string"}],"closing":"string","cta":"string","estimated_duration_seconds":"number"}.`,
     "Narration must contain " + minWords + " to " + maxWords + " spoken words (aim for " + targetWords + "). Keep it natural and avoid padding.",
     "Create 5 to 7 scenes covering the full target duration. Scene voiceovers must divide the narration in order, preserve its exact sequence, and collectively cover the whole narration.",
@@ -421,12 +423,15 @@ async function handle(request, env) {
       const visualPrompt=String(scene.visual_prompt||"").trim();
       if(!visualPrompt)return json({ok:false,error:"This scene has no visual prompt."},422);
       const clean=(value,max=260)=>String(value||"").replace(/\\s+/g," ").trim().slice(0,max);
+      const animeMode=String(project.style||"").toLowerCase()==="anime";
       const prompt=[
-        "Create ONE single cinematic film still for ONE moment. Vertical 9:16 portrait frame, photorealistic cinematic visual storytelling, natural believable anatomy, detailed environment.",
+        animeMode
+          ? "Create ONE premium Japanese 2D anime film frame, hand-drawn animation aesthetic, expressive character acting, clean detailed linework, cinematic cel shading, beautifully painted background, atmospheric lighting, consistent anime character design, vertical 9:16. Not photorealistic, not 3D."
+          : "Create ONE single cinematic film still for ONE moment. Vertical 9:16 portrait frame, photorealistic cinematic visual storytelling, natural believable anatomy, detailed environment.",
         "STORY CONTEXT: "+clean(project.topic,220)+". Film title: "+clean(script.title,100)+". Overall narration: "+clean(script.narration,420),
         "THIS SCENE (must be the main subject and action, follow literally): "+clean(scene.voiceover,240),
         "EXACT VISUAL TO DEPICT: "+clean(visualPrompt,420),
-        "CONTINUITY / ART DIRECTION: "+clean(project.style,160)+". Maintain a consistent visual world, color grade, lighting approach, era and recurring character appearance across this story. If a person appears in adjacent scenes, keep their face, hairstyle and clothing consistent.",
+        "CONTINUITY / ART DIRECTION: "+clean(project.style,160)+". "+(animeMode?"Maintain exactly the same anime character identity across scenes: face, eye design, hairstyle, hair color, outfit, proportions and palette.":"Maintain a consistent visual world, color grade, lighting approach, era and recurring character appearance across this story. If a person appears in adjacent scenes, keep their face, hairstyle and clothing consistent."),
         previousScene?"PREVIOUS MOMENT (context only; do NOT repeat its composition): "+clean(previousScene.voiceover,140):"Opening shot: establish the story world clearly.",
         nextScene?"NEXT MOMENT (foreshadow only; do NOT depict it): "+clean(nextScene.voiceover,140):"Final moment: make this feel like a meaningful closing image.",
         "STRICT NEGATIVE INSTRUCTIONS: no collage, no montage, no grid, no split screen, no panels, no contact sheet, no screenshot, no poster, no infographic, no UI, no multiple scenes, no duplicated subjects, no typography, no letters, no subtitles, no captions, no logos, no watermark, no borders. One subject/action in one coherent location and one camera shot."
