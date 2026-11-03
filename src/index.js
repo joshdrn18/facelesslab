@@ -280,7 +280,7 @@ async function handle(request, env) {
       const projectId = voiceMatch[1];
       const project = await env.DB.prepare("SELECT id, language FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
       if (!project) return json({ ok: false, error: "Project not found." }, 404);
-      if (project.language !== "en") return json({ ok: false, error: "MeloTTS is currently enabled for English projects only. Create an English project to generate this voice-over." }, 422);
+      if (!["en","id"].includes(String(project.language||"en"))) return json({ ok: false, error: "Voice-over currently supports English and Indonesian. Please create an English or Indonesian project." }, 422);
       if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "Cloudflare Workers AI binding is missing. Add an AI binding named AI to this Worker." }, 503);
       const scriptRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
       if (!scriptRow) return json({ ok: false, error: "Generate a script before creating the voice-over." }, 409);
@@ -288,18 +288,30 @@ async function handle(request, env) {
       const narration = String(script.narration || (script.scenes || []).map(s => s.voiceover || "").join(" ")).trim();
       if (!narration) return json({ ok: false, error: "The saved script has no narration text." }, 422);
       if (narration.length > 4500) return json({ ok: false, error: "Narration is too long. Keep it under 4,500 characters for now." }, 413);
+      const language = String(project.language || "en");
+      const model = language === "id" ? "xai/grok-tts" : "@cf/myshell-ai/melotts";
       const generationId = crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ provider: "cloudflare-workers-ai", model: "@cf/myshell-ai/melotts", language: "en", characters: narration.length })).run();
+      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ provider: "cloudflare-workers-ai", model, language, characters: narration.length, billing_note: language === "id" ? "Third-party TTS pricing applies" : "Workers AI MeloTTS pricing" })).run();
       try {
-        const result = await env.AI.run("@cf/myshell-ai/melotts", { prompt: narration, lang: "en" });
-        const encodedAudio = typeof result === "string" ? result : result?.audio;
-        if (!encodedAudio || typeof encodedAudio !== "string") throw new Error("MeloTTS returned no MP3 audio. Please retry.");
-        const binary = atob(encodedAudio);
-        const audio = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) audio[i] = binary.charCodeAt(i);
+        const result = language === "id"
+          ? await env.AI.run(model, { text: narration, language: "id", voice_id: "ara", text_normalization: true })
+          : await env.AI.run(model, { prompt: narration, lang: "en" });
+        const audioValue = typeof result === "string" ? result : result?.audio;
+        if (!audioValue || typeof audioValue !== "string") throw new Error("The text-to-speech model returned no audio. Please retry.");
+        let audio;
+        if (/^https:\/\//i.test(audioValue)) {
+          const audioResponse = await fetch(audioValue);
+          if (!audioResponse.ok) throw new Error("Could not retrieve the generated audio file.");
+          audio = new Uint8Array(await audioResponse.arrayBuffer());
+        } else {
+          const binary = atob(audioValue);
+          audio = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) audio[i] = binary.charCodeAt(i);
+        }
+        if (!audio.byteLength) throw new Error("The text-to-speech model returned an empty audio file.");
         const objectKey = "users/" + user.id + "/projects/" + projectId + "/voice/" + generationId + ".mp3";
         await env.MEDIA.put(objectKey, audio, { httpMetadata: { contentType: "audio/mpeg", cacheControl: "private, max-age=3600" }, customMetadata: { userId: user.id, projectId, generationId } });
-        const output = { object_key: objectKey, mime_type: "audio/mpeg", bytes: audio.byteLength, provider: "cloudflare-workers-ai", model: "@cf/myshell-ai/melotts", language: "en", characters: narration.length };
+        const output = { object_key: objectKey, mime_type: "audio/mpeg", bytes: audio.byteLength, provider: "cloudflare-workers-ai", model, language, characters: narration.length };
         await env.DB.prepare("UPDATE generations SET status='completed', output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output), generationId, user.id).run();
         return json({ ok: true, generation_id: generationId, voice: output }, 201);
       } catch (error) {
