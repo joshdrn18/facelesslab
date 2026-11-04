@@ -521,39 +521,72 @@ async function handle(request, env) {
         const saved = await env.DB.prepare("SELECT id, output_json, created_at FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
         return json({ ok: true, subtitles: saved ? JSON.parse(saved.output_json) : null, generation_id: saved?.id || null });
       }
-      const scriptRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
+      if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "Speech recognition is unavailable. Check the Workers AI binding." }, 503);
+      const scriptRow = await env.DB.prepare("SELECT id FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
       if (!scriptRow) return json({ ok: false, error: "Generate a script before creating subtitles." }, 409);
-      const script = JSON.parse(scriptRow.output_json);
-      const narration = String(script.narration || "").replace(/\s+/g, " ").trim();
-      if (!narration) return json({ ok: false, error: "The saved script has no narration." }, 422);
-      const sentences = narration.match(/[^.!?]+[.!?]?/g) || [narration];
-      const chunks = [];
-      let words = [];
-      for (const sentence of sentences) {
-        const sentenceWords = sentence.trim().split(/\s+/).filter(Boolean);
-        while (sentenceWords.length) {
-          const room = Math.max(1, 9 - words.length);
-          words.push(...sentenceWords.splice(0, room));
-          if (words.length >= 7 || !sentenceWords.length && words.length >= 4) {
-            chunks.push(words.join(" "));
-            words = [];
+      const voiceRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'voice' AND status = 'completed' AND json_extract(input_json, '$.script_generation_id') = ? ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id, scriptRow.id).first();
+      if (!voiceRow) return json({ ok: false, error: "Generate the voice-over first. Subtitles are now synchronized from the actual audio." }, 409);
+      let voiceMeta;
+      try { voiceMeta = JSON.parse(voiceRow.output_json || "{}"); } catch { voiceMeta = {}; }
+      if (!voiceMeta.object_key) return json({ ok: false, error: "The saved voice-over file could not be located. Regenerate the voice-over and try again." }, 404);
+      const audioObject = await env.MEDIA.get(voiceMeta.object_key);
+      if (!audioObject) return json({ ok: false, error: "The voice-over audio is missing from storage. Regenerate it and try again." }, 404);
+      const audioBytes = new Uint8Array(await audioObject.arrayBuffer());
+      if (!audioBytes.byteLength) return json({ ok: false, error: "The voice-over audio is empty. Regenerate it and try again." }, 422);
+      if (audioBytes.byteLength > 20 * 1024 * 1024) return json({ ok: false, error: "This voice-over is larger than the current 20 MB transcription limit." }, 413);
+      const generationId = crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'subtitles', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ source: "saved voice-over audio", timing: "audio-aligned", model: "@cf/openai/whisper" })).run();
+      try {
+        const rawResult = await env.AI.run("@cf/openai/whisper", { audio: Array.from(audioBytes) });
+        const transcription = rawResult?.response || rawResult || {};
+        const rawWords = Array.isArray(transcription.words) ? transcription.words : (Array.isArray(transcription.segments) ? transcription.segments.flatMap(segment => Array.isArray(segment.words) ? segment.words : []) : []);
+        const words = rawWords.map(item => ({ word: String(item.word || "").trim(), start: Number(item.start), end: Number(item.end) }))
+          .filter(item => item.word && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start && item.start >= 0);
+        let cues = [];
+        if (words.length) {
+          let group = [];
+          const flush = () => {
+            if (!group.length) return;
+            const start = Math.max(0, group[0].start - 0.025);
+            const end = Math.max(start + 0.12, group[group.length - 1].end + 0.045);
+            cues.push({ index: cues.length + 1, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)), text: group.map(item => item.word).join(" ").replace(/\s+([,.;!?])/g, "$1") });
+            group = [];
+          };
+          for (const item of words) {
+            const candidate = group.concat(item);
+            const candidateText = candidate.map(word => word.word).join(" ");
+            const endsSentence = /[.!?]["')\]]?$/.test(item.word);
+            if (group.length && (candidate.length > 6 || candidateText.length > 42 || (endsSentence && candidate.length >= 3))) flush();
+            group.push(item);
+            if (/[.!?]["')\]]?$/.test(item.word) && group.length >= 3) flush();
+          }
+          flush();
+        } else if (typeof transcription.vtt === "string") {
+          const parseVttTime = value => {
+            const match = value.trim().match(/(?:(\d{2}):)?(\d{2}):(\d{2})[.,](\d{3})/);
+            return match ? (Number(match[1] || 0) * 3600 + Number(match[2]) * 60 + Number(match[3]) + Number(match[4]) / 1000) : NaN;
+          };
+          const lines = transcription.vtt.replace(/^WEBVTT[^\n]*\n/i, "").split(/\n\s*\n/);
+          for (const block of lines) {
+            const rows = block.split(/\n/).map(line => line.trim()).filter(Boolean);
+            const timingIndex = rows.findIndex(line => line.includes("-->"));
+            if (timingIndex < 0) continue;
+            const times = rows[timingIndex].split("-->");
+            const cueStart = parseVttTime(times[0]), cueEnd = parseVttTime(times[1] || "");
+            const caption = rows.slice(timingIndex + 1).join(" ").trim();
+            if (caption && Number.isFinite(cueStart) && Number.isFinite(cueEnd) && cueEnd > cueStart) cues.push({ index: cues.length + 1, start: Number(cueStart.toFixed(3)), end: Number(cueEnd.toFixed(3)), text: caption });
           }
         }
+        if (!cues.length) throw new Error("Speech recognition returned no usable timestamps. Please regenerate the voice-over and retry subtitles.");
+        const duration = Number(Math.max(...cues.map(cue => cue.end)).toFixed(3));
+        const subtitleData = { format: "webvtt", timing: "audio-aligned", source: "voice-over-audio", model: "@cf/openai/whisper", duration_seconds: duration, word_count: words.length || Number(transcription.word_count) || 0, transcript: String(transcription.text || "").slice(0, 12000), cues };
+        await env.DB.prepare("UPDATE generations SET status='completed', input_json=?, output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({ source: "saved voice-over audio", timing: "audio-aligned", model: "@cf/openai/whisper", audio_bytes: audioBytes.byteLength }), JSON.stringify(subtitleData), generationId, user.id).run();
+        return json({ ok: true, subtitles: subtitleData, generation_id: generationId }, 201);
+      } catch (error) {
+        await env.DB.prepare("UPDATE generations SET status='failed', error_message=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
+        const message = String(error.message || "Speech recognition failed.");
+        return json({ ok: false, error: message }, /limit|quota|billing|credit|exceeded/i.test(message) ? 429 : 502);
       }
-      if (words.length) chunks.push(words.join(" "));
-      const totalWords = chunks.reduce((sum, chunk) => sum + chunk.split(/\s+/).length, 0);
-      const duration = Math.max(10, Number(project.duration_seconds) || 45);
-      let cursor = 0;
-      const cues = chunks.map((caption, index) => {
-        const count = caption.split(/\s+/).length;
-        const start = cursor;
-        cursor = index === chunks.length - 1 ? duration : cursor + duration * count / totalWords;
-        return { index: index + 1, start: Number(start.toFixed(3)), end: Number(cursor.toFixed(3)), text: caption };
-      });
-      const subtitleData = { format: "webvtt", timing: "estimated", duration_seconds: duration, cues };
-      const generationId = crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json, output_json) VALUES (?, ?, ?, 'subtitles', 'completed', ?, ?)").bind(generationId, projectId, user.id, JSON.stringify({ source: "script narration", timing: "estimated", duration_seconds: duration }), JSON.stringify(subtitleData)).run();
-      return json({ ok: true, subtitles: subtitleData, generation_id: generationId }, 201);
     }
 
     const existingScriptMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/script$/i);
