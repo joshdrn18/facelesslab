@@ -132,7 +132,7 @@ async function callAiProvider(env, provider, prompt) {
   }
 }
 
-async function generateScriptWithProviders(env, project) {
+async function generateScriptWithProviders(env, project, continuation = null) {
   const targetSeconds = Number(project.duration_seconds) || 45;
   const targetWords = Math.round(targetSeconds * 2.25);
   const minWords = Math.round(targetWords * 0.92);
@@ -141,7 +141,7 @@ async function generateScriptWithProviders(env, project) {
     project.style === "anime"
       ? "You are a Japanese anime short-film director and storyboard artist. Create a coherent anime episode, not a slideshow. Design recurring characters and preserve their exact appearance across every scene."
       : "You are a professional short-form documentary director and storyboard artist. Create a coherent visual story, not a random image slideshow.",
-    `Return exactly one valid JSON object with this schema: {"title":"string","hook":"string","narration":"string","scenes":[{"scene":"number","duration_seconds":"number","voiceover":"string","visual_prompt":"string","on_screen_text":"string","transition":"string"}],"closing":"string","cta":"string","estimated_duration_seconds":"number"}.`,
+    `Return exactly one valid JSON object with this schema: {"title":"string","hook":"string","narration":"string","scenes":[{"scene":"number","duration_seconds":"number","voiceover":"string","visual_prompt":"string","on_screen_text":"string","transition":"string"}],"closing":"string","cta":"string","estimated_duration_seconds":"number","series_summary":"string","character_bible":"string","ending_state":"string"}.`,
     "Narration must contain " + minWords + " to " + maxWords + " spoken words (aim for " + targetWords + "). Keep it natural and avoid padding.",
     "Create 5 to 7 scenes covering the full target duration. Scene voiceovers must divide the narration in order, preserve its exact sequence, and collectively cover the whole narration.",
     "STORYBOARD RULES: Every scene must depict the exact event, person, place, object, or action being described by that scene's voiceover. Build a logical beginning-middle-ending sequence. Each scene must be a new visual moment and materially different from the previous scene; never reuse the same image idea, pose, camera angle, or setting just to fill time.",
@@ -152,7 +152,16 @@ async function generateScriptWithProviders(env, project) {
     "LANGUAGE REQUIREMENT: Write every audience-facing element in fluent natural English only: title, hook, narration, scene voiceovers, on-screen text, closing and CTA. Do not use Indonesian, Japanese, or mixed-language text. Anime mode changes the visual art direction only; the story and narration must remain in English.",
     "Language: English",
     "Target duration: " + targetSeconds + " seconds",
-    "Visual style / art direction: " + project.style
+    "Visual style / art direction: " + project.style,
+    ...(continuation ? [
+      "SERIES CONTINUATION — EPISODE " + Number(project.episode_number || 2) + ". This is NOT a reboot, recap, alternate take, or unrelated new story. Continue the exact same story immediately after the previous episode ends. Start the title with Part " + Number(project.episode_number || 2) + ".",
+      "PREVIOUS EPISODE TITLE: " + String(continuation.previous_title || "").slice(0,160),
+      "SERIES STORY SO FAR: " + String(continuation.series_summary || continuation.previous_narration || "").slice(-2200),
+      "CHARACTER BIBLE — preserve names, faces, hairstyles, clothing, personalities and relationships exactly: " + String(continuation.character_bible || "Preserve the same established characters and designs.").slice(0,1200),
+      "EXACT ENDING STATE OF LAST EPISODE: " + String(continuation.ending_state || continuation.previous_ending_voiceover || "").slice(0,900),
+      "LAST SHOT VISUAL DESCRIPTION: " + String(continuation.previous_ending_visual_prompt || "").slice(0,800),
+      "CONTINUITY RULES: Open on the same moment, place and action where the previous episode ended. Carry forward unresolved actions and emotional stakes. Do not repeat the opening, summarize the previous episode, change character identities, outfits or visual world without story reason, or resolve the cliffhanger immediately. Advance the plot naturally. Make the final scene lead clearly into a possible next episode. Return updated series_summary, character_bible and ending_state for the next continuation."
+    ] : [])
   ].join("\n");
   const primary = {
     apiKey: env.AI_API_KEY,
@@ -199,7 +208,7 @@ async function handle(request, env) {
     return json({
       ok,
       service: "FacelessLab API",
-      version: "0.6.0",
+      version: "0.7.0",
       checks: { database, storage },
       timestamp: new Date().toISOString()
     }, ok ? 200 : 503);
@@ -208,7 +217,7 @@ async function handle(request, env) {
   if (path === "/" && method === "GET") {
     return json({
       name: env.APP_NAME || "FacelessLab",
-      version: "0.6.0",
+      version: "0.7.0",
       endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/script", "/api/projects/:id/generate-voice", "/api/projects/:id/voice", "/api/projects/:id/voice/audio", "/api/projects/:id/visuals", "/api/projects/:id/visuals/:generation_id/image", "/api/projects/:id/subtitles"]
     });
   }
@@ -351,7 +360,7 @@ async function handle(request, env) {
     if (scriptMatch && method === "POST") {
       const projectId = scriptMatch[1];
       const project = await env.DB.prepare(
-        "SELECT id, user_id, title, topic, language, duration_seconds, style FROM projects WHERE id = ? AND user_id = ?"
+        "SELECT id, user_id, title, topic, language, duration_seconds, style, parent_project_id, episode_number, continuity_json FROM projects WHERE id = ? AND user_id = ?"
       ).bind(projectId, user.id).first();
       if (!project) return json({ ok: false, error: "Project not found." }, 404);
       if (project.language !== "en") {
@@ -376,7 +385,8 @@ async function handle(request, env) {
         "INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'script', 'processing', ?)"
       ).bind(generationId, projectId, user.id, JSON.stringify({ topic: project.topic, language: project.language, duration_seconds: project.duration_seconds, style: project.style })).run();
       try {
-        const result = await generateScriptWithProviders(env, project);
+        const continuation = project.parent_project_id && project.continuity_json ? JSON.parse(project.continuity_json) : null;
+        const result = await generateScriptWithProviders(env, project, continuation);
         const script = result.script;
         if (!script || typeof script !== "object" || !Array.isArray(script.scenes) || !script.narration) {
           throw new Error("AI response is missing required script fields.");
@@ -431,6 +441,7 @@ async function handle(request, env) {
       if(!visualPrompt)return json({ok:false,error:"This scene has no visual prompt."},422);
       const clean=(value,max=260)=>String(value||"").replace(/\\s+/g," ").trim().slice(0,max);
       const animeMode=String(project.style||"").toLowerCase()==="anime";
+      const continuation=project.continuity_json?JSON.parse(project.continuity_json):null;
       const prompt=[
         animeMode
           ? "Premium Japanese 2D anime film frame, hand-drawn look, expressive characters, clean linework, cinematic cel shading, richly painted background, atmospheric lighting, consistent character design, vertical 9:16. Not photorealistic or 3D."
@@ -442,6 +453,7 @@ async function handle(request, env) {
           ? "Keep anime character face, hairstyle, colors and outfit consistent across scenes."
           : "Keep recurring characters, era, color grade and visual world consistent.",
         previousScene?"Previous scene context only: "+clean(previousScene.voiceover,70):"Establish the story world.",
+        continuation&&sceneIndex===0?"SERIES CONTINUATION: Begin at the exact ending moment of the previous episode. Previous final action: "+clean(continuation.ending_state||continuation.previous_ending_voiceover,180)+". Previous final shot description: "+clean(continuation.previous_ending_visual_prompt,220)+". Preserve the same characters and visual identity.":"",
         nextScene?"Next scene context only: "+clean(nextScene.voiceover,70):"Make this a strong final moment.",
         "One camera shot and one action. No collage, montage, grid, split screen, panels, poster, infographic, UI, text, subtitles, logos or watermark."
       ].join(" ").slice(0,1900);
@@ -517,9 +529,46 @@ async function handle(request, env) {
       return json({ ok: true, script: result ? JSON.parse(result.output_json) : null, generation_id: result?.id || null });
     }
 
+
+    const continueMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/continue$/i);
+    if (continueMatch && method === "POST") {
+      const parentId = continueMatch[1];
+      const parent = await env.DB.prepare("SELECT * FROM projects WHERE id=? AND user_id=?").bind(parentId,user.id).first();
+      if (!parent) return json({ok:false,error:"Source project not found."},404);
+      const scriptRow = await env.DB.prepare("SELECT id,output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(parentId,user.id).first();
+      if (!scriptRow) return json({ok:false,error:"Generate the source episode script before continuing it."},409);
+      const previousScript = JSON.parse(scriptRow.output_json);
+      const previousScenes = Array.isArray(previousScript.scenes)?previousScript.scenes:[];
+      const lastScene = previousScenes[previousScenes.length-1] || {};
+      const visualRows = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='visuals' AND status='completed' ORDER BY created_at DESC LIMIT 30").bind(parentId,user.id).all();
+      let endingVisual = null;
+      for (const row of (visualRows.results||[])) {
+        try { const meta=JSON.parse(row.output_json||"{}"); if(Number(meta.scene_number)===Number(lastScene.scene)) { endingVisual=meta; break; } } catch {}
+      }
+      const episodeNumber = Math.max(1,Number(parent.episode_number)||1)+1;
+      const rootProjectId = parent.parent_project_id || parent.id;
+      const rootTitle = String(parent.title||"Untitled series").replace(/\s+—\s+Part\s+\d+$/i,"");
+      const continuity = {
+        root_project_id:rootProjectId, episode_number:episodeNumber, previous_project_id:parentId,
+        previous_title:previousScript.title||parent.title,
+        previous_narration:String(previousScript.narration||"").slice(-2600),
+        previous_ending_voiceover:String(lastScene.voiceover||"").slice(0,900),
+        previous_ending_visual_prompt:String(lastScene.visual_prompt||endingVisual?.prompt||"").slice(0,1000),
+        series_summary:String(previousScript.series_summary||previousScript.narration||"").slice(-2600),
+        character_bible:String(previousScript.character_bible||"").slice(0,1400),
+        ending_state:String(previousScript.ending_state||lastScene.voiceover||"").slice(0,1000),
+        reference_image_object_key:endingVisual?.object_key||null,
+        visual_reference_available:Boolean(endingVisual?.object_key), style:parent.style, language:"en"
+      };
+      const id=crypto.randomUUID();
+      const title=rootTitle+" — Part "+episodeNumber;
+      await env.DB.prepare("INSERT INTO projects (id,user_id,title,topic,status,aspect_ratio,language,duration_seconds,style,parent_project_id,episode_number,continuity_json) VALUES (?,?,?,?,'draft','9:16','en',?,?,?,?,?)")
+        .bind(id,user.id,title,parent.topic||rootTitle,parent.duration_seconds||45,parent.style||"storytelling",parentId,episodeNumber,JSON.stringify(continuity)).run();
+      return json({ok:true,project:{id,title,topic:parent.topic,status:"draft",aspect_ratio:"9:16",language:"en",duration_seconds:parent.duration_seconds||45,style:parent.style,parent_project_id:parentId,episode_number:episodeNumber},continuation:{episode_number:episodeNumber,visual_reference_available:Boolean(endingVisual?.object_key)}},201);
+    }
     if (path === "/api/projects" && method === "GET") {
       const result = await env.DB.prepare(
-        "SELECT id, title, topic, status, aspect_ratio, language, duration_seconds, style, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY created_at DESC LIMIT 100"
+        "SELECT id, title, topic, status, aspect_ratio, language, duration_seconds, style, parent_project_id, episode_number, created_at, updated_at FROM projects WHERE user_id = ? ORDER BY created_at DESC LIMIT 100"
       ).bind(user.id).all();
       return json({ ok: true, projects: result.results || [] });
     }
