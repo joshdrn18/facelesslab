@@ -411,7 +411,7 @@ async function handle(request, env) {
       if(!row)return json({ok:false,error:"Visual not found."},404);
       const meta=JSON.parse(row.output_json), object=await env.MEDIA.get(meta.object_key);
       if(!object)return json({ok:false,error:"Image file is missing from storage."},404);
-      return new Response(object.body,{headers:{"content-type":"image/jpeg","content-length":String(meta.bytes),"cache-control":"private, no-store"}});
+      return new Response(object.body,{headers:{"content-type":meta.mime_type||"image/jpeg","content-length":String(meta.bytes),"cache-control":"private, no-store"}});
     }
 
     const visualsMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/visuals$/i);
@@ -457,19 +457,55 @@ async function handle(request, env) {
         nextScene?"Next scene context only: "+clean(nextScene.voiceover,70):"Make this a strong final moment.",
         "One camera shot and one action. No collage, montage, grid, split screen, panels, poster, infographic, UI, text, subtitles, logos or watermark."
       ].join(" ").slice(0,1900);
+      let referenceObjectKey=null,referenceSource=null;
+      if(sceneIndex>0){
+        for(let index=sceneIndex-1;index>=0;index--){
+          const priorSceneNumber=Number(scenes[index].scene);
+          const priorRow=await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='visuals' AND status='completed' AND json_extract(output_json,'$.scene_number')=? ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,priorSceneNumber).first();
+          if(priorRow){try{const priorMeta=JSON.parse(priorRow.output_json||"{}");if(priorMeta.object_key){referenceObjectKey=priorMeta.object_key;referenceSource="previous_scene_"+priorSceneNumber;break;}}catch{}}
+        }
+      }
+      if(!referenceObjectKey&&sceneIndex===0&&continuation?.reference_image_object_key){referenceObjectKey=continuation.reference_image_object_key;referenceSource="previous_episode_ending";}
       const generationId=crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'visuals','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({model:"@cf/black-forest-labs/flux-1-schnell",scene_number:sceneNumber,prompt})).run();
+      const preferredModel=referenceObjectKey?"@cf/runwayml/stable-diffusion-v1-5-img2img":"@cf/black-forest-labs/flux-1-schnell";
+      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'visuals','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({model:preferredModel,scene_number:sceneNumber,prompt,reference_object_key:referenceObjectKey,reference_source:referenceSource})).run();
       try{
-        const result=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});
-        if(!result?.image||typeof result.image!=="string")throw new Error("FLUX returned no image data.");
-        const binary=atob(result.image), bytes=new Uint8Array(binary.length);
-        for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-        const objectKey="users/"+user.id+"/projects/"+projectId+"/visuals/"+generationId+".jpg";
-        await env.MEDIA.put(objectKey,bytes,{httpMetadata:{contentType:"image/jpeg",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId,sceneNumber:String(sceneNumber)}});
-        const output={object_key:objectKey,mime_type:"image/jpeg",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:"@cf/black-forest-labs/flux-1-schnell",scene_number:sceneNumber,prompt};
+        let bytes=null,actualModel=preferredModel,continuityMode=referenceObjectKey?"image-to-image":"text-to-image",continuityFallback=null;
+        const decodeBase64=value=>{const binary=atob(value),output=new Uint8Array(binary.length);for(let index=0;index<binary.length;index++)output[index]=binary.charCodeAt(index);return output;};
+        const readImageResult=async result=>{
+          if(typeof result==="string")return decodeBase64(result);
+          if(result?.image&&typeof result.image==="string")return decodeBase64(result.image);
+          if(result?.image instanceof Uint8Array)return result.image;
+          if(result instanceof ArrayBuffer)return new Uint8Array(result);
+          if(ArrayBuffer.isView(result))return new Uint8Array(result.buffer,result.byteOffset,result.byteLength);
+          if(typeof ReadableStream!=="undefined"&&result instanceof ReadableStream)return new Uint8Array(await new Response(result).arrayBuffer());
+          throw new Error("Image model returned an unsupported image response.");
+        };
+        if(referenceObjectKey){
+          try{
+            const referenceObject=await env.MEDIA.get(referenceObjectKey);
+            if(!referenceObject)throw new Error("The saved continuity reference image is missing from R2.");
+            const referenceBytes=new Uint8Array(await referenceObject.arrayBuffer());
+            if(!referenceBytes.byteLength||referenceBytes.byteLength>5*1024*1024)throw new Error("The continuity reference image is empty or larger than 5 MB.");
+            const strength=referenceSource==="previous_episode_ending"?0.48:0.62;
+            const result=await env.AI.run("@cf/runwayml/stable-diffusion-v1-5-img2img",{
+              prompt:prompt+" Use the reference image to preserve the exact character identity, face, hairstyle, clothing, art direction and color palette. Change the pose, camera framing and background action only as required by this scene. Do not copy the previous scene composition when the new scene describes a different action.",
+              image:Array.from(referenceBytes),strength,guidance:7.5,num_steps:20,width:768,height:1344,
+              negative_prompt:"different character, changed face, changed hairstyle, changed outfit, inconsistent art style, duplicate people, collage, split screen, text, watermark"
+            });
+            bytes=await readImageResult(result);
+          }catch(referenceError){
+            continuityFallback=String(referenceError.message||referenceError).slice(0,240);
+            const fallbackResult=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});
+            bytes=await readImageResult(fallbackResult);actualModel="@cf/black-forest-labs/flux-1-schnell";continuityMode="text-fallback";
+          }
+        }else{const result=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});bytes=await readImageResult(result);}
+        if(!bytes?.byteLength)throw new Error("Image model returned an empty image.");
+        const objectKey="users/"+user.id+"/projects/"+projectId+"/visuals/"+generationId+".png";
+        await env.MEDIA.put(objectKey,bytes,{httpMetadata:{contentType:"image/png",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId,sceneNumber:String(sceneNumber),continuityMode}});
+        const output={object_key:objectKey,mime_type:"image/png",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:actualModel,scene_number:sceneNumber,prompt,continuity_mode:continuityMode,reference_source:referenceSource,reference_object_key:referenceObjectKey,continuity_fallback_error:continuityFallback};
         await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
-        return json({ok:true,generation_id:generationId,visual:{generation_id:generationId,...output}},201);
-      }catch(error){
+        return json({ok:true,generation_id:generationId,visual:{generation_id:generationId,...output}},201);      }catch(error){
         await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
         const message=String(error.message||"Visual generation failed.");
         return json({ok:false,error:message},/limit|quota|billing|exceeded/i.test(message)?429:502);
