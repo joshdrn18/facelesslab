@@ -405,7 +405,7 @@ async function renderProjectVideo(projectId,button) {
   if(window.facelessRenderedUrls[projectId])URL.revokeObjectURL(window.facelessRenderedUrls[projectId]);
   window.facelessRenderedUrls[projectId]=url;
   result.innerHTML='<video class="editor-preview" controls playsinline src="'+url+'"></video><br><a class="mini-btn editor-download" href="'+url+'" download="facelesslab-'+projectId.slice(0,8)+'.mp4">↓ Download MP4 · '+(blob.size/1024/1024).toFixed(1)+' MB</a>';
-  status.textContent="Saving a local library copy…";await saveLocalVideo(projectId,blob,totalDuration,quality);
+  status.textContent="Saving a local library copy…";try{await saveLocalVideo(projectId,blob,totalDuration,quality);}catch(saveError){console.warn("Local video library save failed:",saveError);status.textContent="✓ Rendered · local save failed: "+(saveError.message||"storage unavailable")+". Download the MP4 backup below.";button.textContent="↻ Render again";}
   if(bar)bar.style.width="100%";status.textContent="✓ Rendered · "+Math.round(totalDuration)+" sec · "+quality+"p";button.textContent="↻ Render again";
  }catch(error){console.error("FacelessLab render error:",error,error?.stack);const detail=error?.message||error?.toString?.()||"Unknown rendering error (no error message returned). Check browser console for details.";status.textContent="Render failed: "+detail;button.textContent="↻ Retry render";}
  finally{button.disabled=false;setTimeout(()=>progress?.classList.add("hidden"),1200);}
