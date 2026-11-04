@@ -286,7 +286,7 @@ async function handle(request, env) {
       const language = "en";
       if (project.language !== "en") await env.DB.prepare("UPDATE projects SET language='en', updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,user.id).run();
       if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "The configured English text-to-speech provider is unavailable. Check the Workers AI binding." }, 503);
-      const scriptRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
+      const scriptRow = await env.DB.prepare("SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
       if (!scriptRow) return json({ ok: false, error: "Generate a script before creating the voice-over." }, 409);
       const script = JSON.parse(scriptRow.output_json);
       const narration = String(script.narration || (script.scenes || []).map(s => s.voiceover || "").join(" ")).trim();
@@ -295,7 +295,7 @@ async function handle(request, env) {
       const model = "@cf/myshell-ai/melotts";
       const provider = "cloudflare-workers-ai";
       const generationId = crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ provider, model, language, characters: narration.length, billing_note: "Workers AI MeloTTS pricing" })).run();
+      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ provider, model, language, script_generation_id: scriptRow.id, characters: narration.length, billing_note: "Workers AI MeloTTS pricing" })).run();
       try {
         let audio;
         const result = await env.AI.run(model, { prompt: narration, lang: "en" });
@@ -328,7 +328,7 @@ async function handle(request, env) {
       const projectId=voiceInfoMatch[1];
       const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
       if(!project) return json({ok:false,error:"Project not found."},404);
-      const voice=await env.DB.prepare("SELECT id,output_json,created_at FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      const voice=await env.DB.prepare("SELECT id,output_json,created_at FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND status='completed' AND json_extract(input_json, '$.script_generation_id') = (SELECT id FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1) ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,projectId,user.id).first();
       return json({ok:true,voice:voice?{generation_id:voice.id,...JSON.parse(voice.output_json),created_at:voice.created_at}:null});
     }
 
@@ -337,7 +337,7 @@ async function handle(request, env) {
       const projectId=voiceAudioMatch[1];
       const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
       if(!project) return json({ok:false,error:"Project not found."},404);
-      const voice=await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      const voice=await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND status='completed' AND json_extract(input_json, '$.script_generation_id') = (SELECT id FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1) ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,projectId,user.id).first();
       if(!voice) return json({ok:false,error:"No voice-over has been generated yet."},404);
       const meta=JSON.parse(voice.output_json);
       const object=await env.MEDIA.get(meta.object_key);
