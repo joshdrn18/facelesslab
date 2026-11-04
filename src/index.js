@@ -149,7 +149,8 @@ async function generateScriptWithProviders(env, project) {
     "Never request collages, grids, split screens, contact sheets, storyboards, comic panels, screenshots, posters, infographics, UI, multiple frames, or images containing text. Each visual must be one clean full-frame scene. No text, captions, logos, borders, or watermarks in the image.",
     "Keep each on_screen_text under 8 words and each transition to a few words. Write audience-facing text in the requested language. Start with a strong 2-second hook and finish with a natural CTA. Return JSON only; no markdown or commentary.",
     "Topic: " + project.topic,
-    "Language: " + ({id:"Indonesian",en:"English",ms:"Malay"}[project.language] || "Indonesian"),
+    "LANGUAGE REQUIREMENT: Write every audience-facing element in fluent natural English only: title, hook, narration, scene voiceovers, on-screen text, closing and CTA. Do not use Indonesian, Japanese, or mixed-language text. Anime mode changes the visual art direction only; the story and narration must remain in English.",
+    "Language: English",
     "Target duration: " + targetSeconds + " seconds",
     "Visual style / art direction: " + project.style
   ].join("\n");
@@ -198,7 +199,7 @@ async function handle(request, env) {
     return json({
       ok,
       service: "FacelessLab API",
-      version: "0.5.0",
+      version: "0.6.0",
       checks: { database, storage },
       timestamp: new Date().toISOString()
     }, ok ? 200 : 503);
@@ -207,8 +208,8 @@ async function handle(request, env) {
   if (path === "/" && method === "GET") {
     return json({
       name: env.APP_NAME || "FacelessLab",
-      version: "0.4.0",
-      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/script", "/api/projects/:id/generate-voice", "/api/projects/:id/voice", "/api/projects/:id/voice/upload", "/api/projects/:id/voice/audio", "/api/projects/:id/visuals", "/api/projects/:id/visuals/:generation_id/image", "/api/projects/:id/subtitles"]
+      version: "0.6.0",
+      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/script", "/api/projects/:id/generate-voice", "/api/projects/:id/voice", "/api/projects/:id/voice/audio", "/api/projects/:id/visuals", "/api/projects/:id/visuals/:generation_id/image", "/api/projects/:id/subtitles"]
     });
   }
 
@@ -280,11 +281,10 @@ async function handle(request, env) {
     const voiceMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/generate-voice$/i);
     if (voiceMatch && method === "POST") {
       const projectId = voiceMatch[1];
-      const project = await env.DB.prepare("SELECT id, language FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
+      const project = await env.DB.prepare("SELECT id, language, style FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
       if (!project) return json({ ok: false, error: "Project not found." }, 404);
-      if (!["en","id"].includes(String(project.language||"en"))) return json({ ok: false, error: "Voice-over currently supports English and Indonesian. Please create an English or Indonesian project." }, 422);
-      const language = String(project.language || "en");
-      if (language === "id") return json({ ok: false, error: "Indonesian voice-over now uses free browser-based TTS. Open the voice-over card, copy the narration, generate a WAV in the local TTS tool, then upload it here." }, 409);
+      const language = "en";
+      if (project.language !== "en") await env.DB.prepare("UPDATE projects SET language='en', updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,user.id).run();
       if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "The configured English text-to-speech provider is unavailable. Check the Workers AI binding." }, 503);
       const scriptRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
       if (!scriptRow) return json({ ok: false, error: "Generate a script before creating the voice-over." }, 409);
@@ -320,37 +320,6 @@ async function handle(request, env) {
         await env.DB.prepare("UPDATE generations SET status='failed', error_message=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
         const message = String(error.message || "Voice generation failed.");
         return json({ ok: false, error: message }, /limit|quota|billing|credit|exceeded/i.test(message) ? 429 : 502);
-      }
-    }
-
-    const voiceUploadMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/voice\/upload$/i);
-    if (voiceUploadMatch && method === "POST") {
-      const projectId = voiceUploadMatch[1];
-      const project = await env.DB.prepare("SELECT id, language FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
-      if (!project) return json({ok:false,error:"Project not found."},404);
-      if (project.language !== "id") return json({ok:false,error:"Local browser voice upload is currently enabled for Indonesian projects."},422);
-      const mime = String(request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-      const mimeType = mime === "audio/x-wav" ? "audio/wav" : mime;
-      if (!["audio/wav","audio/mpeg"].includes(mimeType)) return json({ok:false,error:"Upload a WAV or MP3 audio file."},415);
-      const declaredSize = Number(request.headers.get("content-length") || 0);
-      if (declaredSize > 20 * 1024 * 1024) return json({ok:false,error:"Audio file is too large. Maximum size is 20 MB."},413);
-      const audio = new Uint8Array(await request.arrayBuffer());
-      if (!audio.byteLength) return json({ok:false,error:"The uploaded audio file is empty."},400);
-      if (audio.byteLength > 20 * 1024 * 1024) return json({ok:false,error:"Audio file is too large. Maximum size is 20 MB."},413);
-      if (mimeType === "audio/wav" && !(audio.length > 12 && String.fromCharCode(...audio.slice(0,4)) === "RIFF" && String.fromCharCode(...audio.slice(8,12)) === "WAVE")) return json({ok:false,error:"The WAV file appears to be invalid."},415);
-      if (mimeType === "audio/mpeg" && !(audio.length > 3 && (String.fromCharCode(...audio.slice(0,3)) === "ID3" || (audio[0] === 0xff && (audio[1] & 0xe0) === 0xe0)))) return json({ok:false,error:"The MP3 file appears to be invalid."},415);
-      const generationId = crypto.randomUUID();
-      const extension = mimeType === "audio/wav" ? "wav" : "mp3";
-      const objectKey = "users/" + user.id + "/projects/" + projectId + "/voice/" + generationId + "." + extension;
-      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'voice','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({provider:"browser-local",model:"Piper TTS",language:"id",mime_type:mimeType,bytes:audio.byteLength})).run();
-      try {
-        await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:mimeType,cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId}});
-        const output={object_key:objectKey,mime_type:mimeType,bytes:audio.byteLength,provider:"browser-local",model:"Piper TTS",language:"id"};
-        await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
-        return json({ok:true,generation_id:generationId,voice:output},201);
-      } catch(error) {
-        await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
-        throw error;
       }
     }
 
@@ -552,7 +521,7 @@ async function handle(request, env) {
       const body = await request.json().catch(() => null);
       const topic = String(body?.topic || "").trim();
       if (topic.length < 5 || topic.length > 5000) return json({ ok: false, error: "Topic must be between 5 and 5000 characters." }, 400);
-      const language = ["id", "en", "ms"].includes(body?.language) ? body.language : "id";
+      const language = "en";
       const duration = [30, 45, 60].includes(Number(body?.duration)) ? Number(body.duration) : 45;
       const styles = ["storytelling", "anime", "educational", "toplist", "motivation", "news"];
       const style = styles.includes(body?.style) ? body.style : "storytelling";
