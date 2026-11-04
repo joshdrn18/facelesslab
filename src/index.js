@@ -533,7 +533,7 @@ async function handle(request, env) {
       if (!audioObject) return json({ ok: false, error: "The voice-over audio is missing from storage. Regenerate it and try again." }, 404);
       const audioBytes = new Uint8Array(await audioObject.arrayBuffer());
       if (!audioBytes.byteLength) return json({ ok: false, error: "The voice-over audio is empty. Regenerate it and try again." }, 422);
-      if (audioBytes.byteLength > 20 * 1024 * 1024) return json({ ok: false, error: "This voice-over is larger than the current 20 MB transcription limit." }, 413);
+      if (audioBytes.byteLength > 5 * 1024 * 1024) return json({ ok: false, error: "This voice-over is larger than the current 5 MB transcription limit." }, 413);
       const generationId = crypto.randomUUID();
       await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'subtitles', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ source: "saved voice-over audio", timing: "audio-aligned", model: "@cf/openai/whisper" })).run();
       try {
