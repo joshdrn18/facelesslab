@@ -169,7 +169,7 @@ async function continueProject(projectId,button) {
   if(workspace){workspace.open=true;localStorage.setItem("facelesslab_workspace_"+nextId,"1");}
   const note=$("script-"+nextId);
   if(note && data.continuation?.visual_reference_available){
-   const banner=document.createElement("div");banner.className="empty";banner.textContent="Episode "+data.continuation.episode_number+" is linked to the previous episode. Its final scene is saved as a continuity reference.";note.prepend(banner);
+   const banner=document.createElement("div");banner.className="empty";banner.textContent="Episode "+data.continuation.episode_number+" is linked to the previous episode. Its ending scene description and character details are carried forward.";note.prepend(banner);
   }
  } catch(error) { alert(error.message||"Could not continue this video."); }
  finally {button.disabled=false;button.textContent=oldText;}
