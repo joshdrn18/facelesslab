@@ -555,7 +555,7 @@ async function handle(request, env) {
         previous_ending_voiceover:String(lastScene.voiceover||"").slice(0,900),
         previous_ending_visual_prompt:String(lastScene.visual_prompt||endingVisual?.prompt||"").slice(0,1000),
         series_summary:String(previousScript.series_summary||previousScript.narration||"").slice(-2600),
-        character_bible:String(previousScript.character_bible||"").slice(0,1400),
+        character_bible:String(previousScript.character_bible||previousScenes.map(scene=>String(scene.visual_prompt||"")).join(" | ")).slice(0,1400),
         ending_state:String(previousScript.ending_state||lastScene.voiceover||"").slice(0,1000),
         reference_image_object_key:endingVisual?.object_key||null,
         visual_reference_available:Boolean(endingVisual?.object_key), style:parent.style, language:"en"
