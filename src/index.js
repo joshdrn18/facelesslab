@@ -198,7 +198,7 @@ async function handle(request, env) {
     return json({
       ok,
       service: "FacelessLab API",
-      version: "0.4.0",
+      version: "0.5.0",
       checks: { database, storage },
       timestamp: new Date().toISOString()
     }, ok ? 200 : 503);
@@ -208,7 +208,7 @@ async function handle(request, env) {
     return json({
       name: env.APP_NAME || "FacelessLab",
       version: "0.4.0",
-      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/script", "/api/projects/:id/generate-voice", "/api/projects/:id/voice", "/api/projects/:id/voice/audio", "/api/projects/:id/visuals", "/api/projects/:id/visuals/:generation_id/image", "/api/projects/:id/subtitles"]
+      endpoints: ["/health", "/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/me", "/api/projects", "/api/projects/:id/generate-script", "/api/projects/:id/script", "/api/projects/:id/generate-voice", "/api/projects/:id/voice", "/api/projects/:id/voice/upload", "/api/projects/:id/voice/audio", "/api/projects/:id/visuals", "/api/projects/:id/visuals/:generation_id/image", "/api/projects/:id/subtitles"]
     });
   }
 
@@ -285,7 +285,6 @@ async function handle(request, env) {
       if (!["en","id"].includes(String(project.language||"en"))) return json({ ok: false, error: "Voice-over currently supports English and Indonesian. Please create an English or Indonesian project." }, 422);
       const language = String(project.language || "en");
       if (language === "id") return json({ ok: false, error: "Indonesian voice-over now uses free browser-based TTS. Open the voice-over card, copy the narration, generate a WAV in the local TTS tool, then upload it here." }, 409);
-      const useElevenLabs = false;
       if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "The configured English text-to-speech provider is unavailable. Check the Workers AI binding." }, 503);
       const scriptRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
       if (!scriptRow) return json({ ok: false, error: "Generate a script before creating the voice-over." }, 409);
