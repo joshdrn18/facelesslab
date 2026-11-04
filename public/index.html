@@ -384,8 +384,8 @@ async function renderProjectVideo(projectId,button) {
   if(captionMode!=="off"&&!subtitleData?.cues?.length)throw new Error("Generate subtitles first, or choose No subtitles.");
   const ffmpeg=await getBrowserFFmpeg(projectId,status),voiceBlob=await voiceResponse.blob();
   const voiceFile=(voiceResponse.headers.get("content-type")||"").includes("wav")?"voice.wav":"voice.mp3";
-  const audioMetaUrl=URL.createObjectURL(voiceBlob),audioMeta=new Audio();audioMeta.preload="metadata";audioMeta.src=audioMetaUrl;
-  const audioDuration=await new Promise(resolve=>{audioMeta.onloadedmetadata=()=>resolve(Number(audioMeta.duration)||0);audioMeta.onerror=()=>resolve(0);});
+  const audioMetaUrl=URL.createObjectURL(voiceBlob),audioMeta=new Audio();audioMeta.preload="metadata";
+  const audioDuration=await new Promise(resolve=>{audioMeta.onloadedmetadata=()=>resolve(Number(audioMeta.duration)||0);audioMeta.onerror=()=>resolve(0);audioMeta.src=audioMetaUrl;});
   URL.revokeObjectURL(audioMetaUrl);
   const plannedDurations=scenes.map(scene=>Math.max(1,Number(scene.duration_seconds)||Math.round((Number(script.estimated_duration_seconds)||45)/scenes.length)));
   const plannedTotal=plannedDurations.reduce((sum,value)=>sum+value,0);
