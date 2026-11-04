@@ -577,9 +577,9 @@ async function handle(request, env) {
       const previousScenes = Array.isArray(previousScript.scenes)?previousScript.scenes:[];
       const lastScene = previousScenes[previousScenes.length-1] || {};
       const visualRows = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='visuals' AND status='completed' ORDER BY created_at DESC LIMIT 30").bind(parentId,user.id).all();
-      let endingVisual = null;
+      let endingVisual = null, endingVisualSceneNumber = null;
       for (const row of (visualRows.results||[])) {
-        try { const meta=JSON.parse(row.output_json||"{}"); if(Number(meta.scene_number)===Number(lastScene.scene)) { endingVisual=meta; break; } } catch {}
+        try { const meta=JSON.parse(row.output_json||"{}"); if(!endingVisual && meta.object_key) { endingVisual=meta; endingVisualSceneNumber=Number(meta.scene_number)||null; } if(Number(meta.scene_number)===Number(lastScene.scene) && meta.object_key) { endingVisual=meta; endingVisualSceneNumber=Number(meta.scene_number)||null; break; } } catch {}
       }
       const episodeNumber = Math.max(1,Number(parent.episode_number)||1)+1;
       const rootProjectId = parent.parent_project_id || parent.id;
@@ -594,13 +594,14 @@ async function handle(request, env) {
         character_bible:String(previousScript.character_bible||previousScenes.map(scene=>String(scene.visual_prompt||"")).join(" | ")).slice(0,1400),
         ending_state:String(previousScript.ending_state||lastScene.voiceover||"").slice(0,1000),
         reference_image_object_key:endingVisual?.object_key||null,
+        reference_scene_number:endingVisualSceneNumber,
         visual_reference_available:Boolean(endingVisual?.object_key), style:parent.style, language:"en"
       };
       const id=crypto.randomUUID();
       const title=rootTitle+" — Part "+episodeNumber;
       await env.DB.prepare("INSERT INTO projects (id,user_id,title,topic,status,aspect_ratio,language,duration_seconds,style,parent_project_id,episode_number,continuity_json) VALUES (?,?,?,?,'draft','9:16','en',?,?,?,?,?)")
         .bind(id,user.id,title,parent.topic||rootTitle,parent.duration_seconds||45,parent.style||"storytelling",parentId,episodeNumber,JSON.stringify(continuity)).run();
-      return json({ok:true,project:{id,title,topic:parent.topic,status:"draft",aspect_ratio:"9:16",language:"en",duration_seconds:parent.duration_seconds||45,style:parent.style,parent_project_id:parentId,episode_number:episodeNumber},continuation:{episode_number:episodeNumber,visual_reference_available:Boolean(endingVisual?.object_key)}},201);
+      return json({ok:true,project:{id,title,topic:parent.topic,status:"draft",aspect_ratio:"9:16",language:"en",duration_seconds:parent.duration_seconds||45,style:parent.style,parent_project_id:parentId,episode_number:episodeNumber},continuation:{episode_number:episodeNumber,visual_reference_available:Boolean(endingVisual?.object_key),reference_scene_number:endingVisualSceneNumber}},201);
     }
     if (path === "/api/projects" && method === "GET") {
       const result = await env.DB.prepare(
