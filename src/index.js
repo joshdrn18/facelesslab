@@ -354,14 +354,19 @@ async function handle(request, env) {
         "SELECT id, user_id, title, topic, language, duration_seconds, style FROM projects WHERE id = ? AND user_id = ?"
       ).bind(projectId, user.id).first();
       if (!project) return json({ ok: false, error: "Project not found." }, 404);
+      if (project.language !== "en") {
+        await env.DB.prepare("UPDATE projects SET language='en', updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,user.id).run();
+        project.language = "en";
+      }
       const latest = await env.DB.prepare(
-        "SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1"
+        "SELECT id, output_json, input_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1"
       ).bind(projectId, user.id).first();
       if (latest) {
         const cachedScript = JSON.parse(latest.output_json);
+        const cachedInput = JSON.parse(latest.input_json || "{}");
         const cachedWords = String(cachedScript.narration || "").trim().split(/\s+/).filter(Boolean).length;
         const expectedWords = Math.round((Number(project.duration_seconds) || 45) * 2.25);
-        if (cachedWords >= Math.round(expectedWords * 0.92)) {
+        if (cachedInput.language === "en" && cachedWords >= Math.round(expectedWords * 0.92)) {
           return json({ ok: true, cached: true, generation_id: latest.id, script: cachedScript });
         }
         // Older short scripts are regenerated once using the stricter duration target below.
