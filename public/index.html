@@ -250,7 +250,8 @@ async function showSceneVisual(projectId, sceneNumber, meta) {
  const key=projectId+"-"+sceneNumber;
  if(visualObjectUrls[key])URL.revokeObjectURL(visualObjectUrls[key]);
  const objectUrl=URL.createObjectURL(blob);visualObjectUrls[key]=objectUrl;
- container.innerHTML='<img alt="Generated visual for scene '+sceneNumber+'" src="'+objectUrl+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-top:9px"><p class="muted">✓ Visual saved to your project · '+(meta.bytes/1024).toFixed(0)+' KB</p>';
+ const continuityLabel=meta.continuity_mode==="image-to-image"?" · matched to "+(meta.reference_source==="previous_episode_ending"?"previous episode ending":"previous scene"):meta.continuity_mode==="text-fallback"?" · generated without image reference":" · initial frame";
+ container.innerHTML='<img alt="Generated visual for scene '+sceneNumber+'" src="'+objectUrl+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-top:9px"><p class="muted">✓ Visual saved · '+(meta.bytes/1024).toFixed(0)+' KB'+continuityLabel+'</p>';
  const button=$("visual-btn-"+projectId+"-"+sceneNumber);if(button)button.textContent="↻ Regenerate visual";
 }
 async function loadSavedVisuals(projectId) {
@@ -280,7 +281,7 @@ async function generateAllSceneVisuals(projectId,button) {
 async function generateSceneVisual(projectId,sceneNumber,button) {
  const container=$("visual-result-"+projectId+"-"+sceneNumber);
  button.disabled=true;button.textContent="Generating…";
- if(container)container.innerHTML='<div class="empty">Creating this scene image with FLUX. Keep this page open…</div>';
+ if(container)container.innerHTML='<div class="empty">Creating this scene image and matching visual continuity. Keep this page open…</div>';
  try {
   const data=await api("/api/projects/"+projectId+"/visuals",{method:"POST",body:JSON.stringify({scene_number:sceneNumber})});
   await showSceneVisual(projectId,sceneNumber,data.visual);
