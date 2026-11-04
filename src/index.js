@@ -433,17 +433,18 @@ async function handle(request, env) {
       const animeMode=String(project.style||"").toLowerCase()==="anime";
       const prompt=[
         animeMode
-          ? "Create ONE premium Japanese 2D anime film frame, hand-drawn animation aesthetic, expressive character acting, clean detailed linework, cinematic cel shading, beautifully painted background, atmospheric lighting, consistent anime character design, vertical 9:16. Not photorealistic, not 3D."
-          : "Create ONE single cinematic film still for ONE moment. Vertical 9:16 portrait frame, photorealistic cinematic visual storytelling, natural believable anatomy, detailed environment.",
-        "STORY CONTEXT: "+clean(project.topic,220)+". Film title: "+clean(script.title,100)+". Overall narration: "+clean(script.narration,420),
-        "THIS SCENE (must be the main subject and action, follow literally): "+clean(scene.voiceover,240),
-        "EXACT VISUAL TO DEPICT: "+clean(visualPrompt,420),
-        "CONTINUITY / ART DIRECTION: "+clean(project.style,160)+". "+(animeMode?"Maintain exactly the same anime character identity across scenes: face, eye design, hairstyle, hair color, outfit, proportions and palette.":"Maintain a consistent visual world, color grade, lighting approach, era and recurring character appearance across this story. If a person appears in adjacent scenes, keep their face, hairstyle and clothing consistent."),
-        previousScene?"PREVIOUS MOMENT (context only; do NOT repeat its composition): "+clean(previousScene.voiceover,140):"Opening shot: establish the story world clearly.",
-        nextScene?"NEXT MOMENT (foreshadow only; do NOT depict it): "+clean(nextScene.voiceover,140):"Final moment: make this feel like a meaningful closing image.",
-        "STRICT NEGATIVE INSTRUCTIONS: no collage, no montage, no grid, no split screen, no panels, no contact sheet, no screenshot, no poster, no infographic, no UI, no multiple scenes, no duplicated subjects, no typography, no letters, no subtitles, no captions, no logos, no watermark, no borders. One subject/action in one coherent location and one camera shot."
-      ].join(" ");
-      if(prompt.length>2048)return json({ok:false,error:"Visual prompt is too long."},422);
+          ? "Premium Japanese 2D anime film frame, hand-drawn look, expressive characters, clean linework, cinematic cel shading, richly painted background, atmospheric lighting, consistent character design, vertical 9:16. Not photorealistic or 3D."
+          : "Cinematic photorealistic film still, one coherent moment, natural anatomy, detailed environment, dramatic natural lighting, vertical 9:16.",
+        "STORY: "+clean(project.topic,120)+". TITLE: "+clean(script.title,60)+".",
+        "SCENE ACTION: "+clean(scene.voiceover,180),
+        "DEPICT THIS VISUAL: "+clean(visualPrompt,360),
+        animeMode
+          ? "Keep anime character face, hairstyle, colors and outfit consistent across scenes."
+          : "Keep recurring characters, era, color grade and visual world consistent.",
+        previousScene?"Previous scene context only: "+clean(previousScene.voiceover,70):"Establish the story world.",
+        nextScene?"Next scene context only: "+clean(nextScene.voiceover,70):"Make this a strong final moment.",
+        "One camera shot and one action. No collage, montage, grid, split screen, panels, poster, infographic, UI, text, subtitles, logos or watermark."
+      ].join(" ").slice(0,1900);
       const generationId=crypto.randomUUID();
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'visuals','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({model:"@cf/black-forest-labs/flux-1-schnell",scene_number:sceneNumber,prompt})).run();
       try{
