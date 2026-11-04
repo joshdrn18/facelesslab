@@ -333,6 +333,29 @@ async function deleteLocalVideo(id){if(!confirm("Delete this video from this bro
 async function importLocalVideo(file){const d=await videoDB(),row={id:crypto.randomUUID(),owner:String(currentUser?.email||"guest").toLowerCase(),title:file.name.replace(/\.mp4$/i,""),blob:file,size:file.size,duration:0,quality:0,createdAt:Date.now()};await new Promise((ok,no)=>{const tx=d.transaction("videos","readwrite");tx.objectStore("videos").add(row);tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});d.close();refreshVideoLibrary();}
 document.addEventListener("change",e=>{if(e.target?.id==="libraryImport"){Array.from(e.target.files||[]).forEach(f=>importLocalVideo(f).catch(err=>alert(err.message)));e.target.value="";}});
 
+async function makeCaptionFrame(imageBlob,caption,width,height){
+ const bitmap=await createImageBitmap(imageBlob);
+ const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+ const ctx=canvas.getContext("2d",{alpha:false});
+ const scale=Math.max(width/bitmap.width,height/bitmap.height),w=bitmap.width*scale,h=bitmap.height*scale;
+ ctx.fillStyle="#080b12";ctx.fillRect(0,0,width,height);
+ ctx.drawImage(bitmap,(width-w)/2,(height-h)/2,w,h);bitmap.close();
+ const text=String(caption||"").replace(/\s+/g," ").trim();
+ if(text){
+  const fontSize=Math.max(22,Math.round(width*0.047)),maxWidth=width*0.84,lineHeight=Math.round(fontSize*1.24);
+  ctx.font="800 "+fontSize+"px Arial, sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+  const words=text.split(" "),lines=[];let line="";
+  for(const word of words){const test=line?line+" "+word:word;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=word;}else line=test;}
+  if(line)lines.push(line);
+  const shown=lines.slice(0,3),boxHeight=shown.length*lineHeight+Math.round(fontSize*0.85),boxWidth=Math.min(width*0.92,Math.max(...shown.map(t=>ctx.measureText(t).width))+fontSize*1.1);
+  const x=(width-boxWidth)/2,y=height-Math.round(height*0.105)-boxHeight;
+  ctx.fillStyle="rgba(4,7,14,0.78)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,Math.round(fontSize*0.24));ctx.fill();
+  ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.95)";ctx.fillStyle="#ffffff";
+  shown.forEach((t,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;ctx.strokeText(t,width/2,ty,maxWidth);ctx.fillText(t,width/2,ty,maxWidth);});
+ }
+ const blob=await new Promise((resolve,reject)=>canvas.toBlob(v=>v?resolve(v):reject(new Error("Could not create caption frame.")),"image/jpeg",0.92));
+ return new Uint8Array(await blob.arrayBuffer());
+}
 async function renderProjectVideo(projectId,button) {
  const status=$("editor-status-"+projectId),progress=$("editor-progress-"+projectId),bar=progress?.querySelector("span"),result=$("editor-result-"+projectId);
  const script=window.facelessScripts?.[projectId];
@@ -341,62 +364,71 @@ async function renderProjectVideo(projectId,button) {
  if(!scenes.length){status.textContent="No scenes found.";return;}
  button.disabled=true;button.textContent="Preparing…";progress?.classList.remove("hidden");if(bar)bar.style.width="2%";result.innerHTML="";
  try{
-  status.textContent="Checking saved voice-over and scene visuals…";
+  status.textContent="Checking saved voice-over, visuals and subtitles…";
   const [voiceResponse,visualData,subtitleResponse]=await Promise.all([
    fetch(API_BASE+"/api/projects/"+projectId+"/voice/audio",{headers:{authorization:"Bearer "+token}}),
    api("/api/projects/"+projectId+"/visuals"),api("/api/projects/"+projectId+"/subtitles")
   ]);
-  if(!voiceResponse.ok)throw new Error("Generate the voice-over for this project language first.");
+  if(!voiceResponse.ok)throw new Error("Generate the voice-over for this project first.");
   const visualMap=new Map((visualData.visuals||[]).map(v=>[Number(v.scene_number),v]));
   const missing=scenes.filter(scene=>!visualMap.has(Number(scene.scene)));
   for(let i=0;i<missing.length;i++){
-   const scene=missing[i],sceneNumber=Number(scene.scene);
-   status.textContent="Generating missing visual "+(i+1)+" of "+missing.length+" · Scene "+sceneNumber+"…";
-   const sceneButton=$("visual-btn-"+projectId+"-"+sceneNumber);
+   const scene=missing[i],sceneNumber=Number(scene.scene),sceneButton=$("visual-btn-"+projectId+"-"+sceneNumber);
+   status.textContent="Generating missing visual "+(i+1)+" of "+missing.length+"…";
    if(!sceneButton)throw new Error("Visual control for scene "+sceneNumber+" was not found. Reopen the script and try again.");
-   const visual=await generateSceneVisual(projectId,sceneNumber,sceneButton);
-   visualMap.set(sceneNumber,visual);
-   if(bar)bar.style.width=(5+Math.round((i+1)/Math.max(1,missing.length)*5))+"%";
+   visualMap.set(sceneNumber,await generateSceneVisual(projectId,sceneNumber,sceneButton));
   }
   const subtitleData=subtitleResponse.subtitles||window.facelessSubtitles?.[projectId];
   const captionMode=$("editor-captions-"+projectId)?.value||"burn";
   if(captionMode!=="off"&&!subtitleData?.cues?.length)throw new Error("Generate subtitles first, or choose No subtitles.");
-  const ffmpeg=await getBrowserFFmpeg(projectId,status);
-  const voiceBlob=await voiceResponse.blob();
+  const ffmpeg=await getBrowserFFmpeg(projectId,status),voiceBlob=await voiceResponse.blob();
   const voiceFile=(voiceResponse.headers.get("content-type")||"").includes("wav")?"voice.wav":"voice.mp3";
   await ffmpeg.writeFile(voiceFile,new Uint8Array(await voiceBlob.arrayBuffer()));
-  if(bar)bar.style.width="12%";
-  const concat=[];let totalDuration=0;
+  const quality=Number($("editor-quality-"+projectId)?.value)||720,frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
+  const cues=(subtitleData?.cues||[]).map(c=>({start:Math.max(0,Number(c.start)||0),end:Math.max(0,Number(c.end)||0),text:String(c.text||"").trim()})).filter(c=>c.end>c.start&&c.text);
+  const concat=[];let totalDuration=0,segmentNumber=0;
   for(let i=0;i<scenes.length;i++){
-   const scene=scenes[i],meta=visualMap.get(Number(scene.scene));
-   const imageResponse=await fetch(API_BASE+"/api/projects/"+projectId+"/visuals/"+meta.generation_id+"/image",{headers:{authorization:"Bearer "+token}});
+   const scene=scenes[i],meta=visualMap.get(Number(scene.scene)),imageResponse=await fetch(API_BASE+"/api/projects/"+projectId+"/visuals/"+meta.generation_id+"/image",{headers:{authorization:"Bearer "+token}});
    if(!imageResponse.ok)throw new Error("Could not download image for scene "+scene.scene+".");
+   const imageBlob=await imageResponse.blob(),duration=Math.max(1,Number(scene.duration_seconds)||Math.round((Number(script.estimated_duration_seconds)||45)/scenes.length)),sceneStart=totalDuration,sceneEnd=sceneStart+duration;
    const filename="scene_"+String(i).padStart(3,"0")+".jpg";
-   await ffmpeg.writeFile(filename,new Uint8Array(await (await imageResponse.blob()).arrayBuffer()));
-   const duration=Math.max(1,Number(scene.duration_seconds)||Math.round((Number(script.estimated_duration_seconds)||45)/scenes.length));
-   totalDuration+=duration;concat.push("file '"+filename+"'","duration "+duration.toFixed(3));
+   if(captionMode==="burn"){
+    const boundaries=[sceneStart,sceneEnd];
+    cues.forEach(c=>{if(c.start>sceneStart&&c.start<sceneEnd)boundaries.push(c.start);if(c.end>sceneStart&&c.end<sceneEnd)boundaries.push(c.end);});
+    boundaries.sort((a,b)=>a-b);
+    const unique=boundaries.filter((v,j)=>j===0||v-boundaries[j-1]>0.04);
+    for(let j=0;j<unique.length-1;j++){
+     const from=unique[j],to=unique[j+1],mid=(from+to)/2,active=cues.filter(c=>c.start<=mid&&c.end>mid).map(c=>c.text).join(" ");
+     const segmentFile="caption_segment_"+String(segmentNumber++).padStart(4,"0")+".jpg";
+     status.textContent="Burning captions · scene "+(i+1)+" of "+scenes.length+"…";
+     await ffmpeg.writeFile(segmentFile,await makeCaptionFrame(imageBlob,active,frameWidth,frameHeight));
+     concat.push("file '"+segmentFile+"'","duration "+(to-from).toFixed(3));
+    }
+   }else{
+    await ffmpeg.writeFile(filename,new Uint8Array(await imageBlob.arrayBuffer()));
+    concat.push("file '"+filename+"'","duration "+duration.toFixed(3));
+   }
+   totalDuration=sceneEnd;
    if(bar)bar.style.width=(12+Math.round((i+1)/scenes.length*28))+"%";
    status.textContent="Preparing scene "+(i+1)+" of "+scenes.length+"…";
   }
-  concat.push("file 'scene_"+String(scenes.length-1).padStart(3,"0")+".jpg'");
+  if(!concat.length)throw new Error("No video segments were prepared.");
+  const lastFile=concat[concat.length-2].match(/file '([^']+)'/)[1];
+  concat.push("file '"+lastFile+"'");
   await ffmpeg.writeFile("scenes.txt",new TextEncoder().encode(concat.join("\n")+"\n"));
-  if(captionMode!=="off"){
-   const srt=subtitleData.cues.map((cue,i)=>(i+1)+"\n"+formatSubtitleTime(cue.start,",")+" --> "+formatSubtitleTime(cue.end,",")+"\n"+cue.text).join("\n\n");
+  if(captionMode==="soft"){
+   const srt=cues.map((cue,i)=>(i+1)+"\n"+formatSubtitleTime(cue.start,",")+" --> "+formatSubtitleTime(cue.end,",")+"\n"+cue.text).join("\n\n");
    await ffmpeg.writeFile("captions.srt",new TextEncoder().encode(srt));
   }
-  if(bar)bar.style.width="45%";status.textContent="Rendering MP4 in your browser. Keep this tab open…";
-  const quality=Number($("editor-quality-"+projectId)?.value)||720;
-  const frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
+  if(bar)bar.style.width="48%";status.textContent=captionMode==="burn"?"Rendering video with permanently burned-in captions…":"Rendering MP4 in your browser. Keep this tab open…";
   const args=["-y","-f","concat","-safe","0","-i","scenes.txt","-i",voiceFile];
   if(captionMode==="soft")args.push("-i","captions.srt");
   const motionFilter="scale="+frameWidth+":"+frameHeight+":force_original_aspect_ratio=increase,crop="+frameWidth+":"+frameHeight+",fps=30,zoompan=z='min(zoom+0.00035,1.075)':x='(iw-iw/zoom)/2+sin(on/95)*7':y='(ih-ih/zoom)/2+cos(on/115)*7':d=1:s="+frameWidth+"x"+frameHeight+":fps=30,fade=t=in:st=0:d=0.35";
-  if(captionMode==="burn")args.push("-vf",motionFilter+",subtitles=captions.srt:force_style='FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2,Shadow=0,Alignment=2,MarginV=90'");
-  else args.push("-vf",motionFilter);
-  args.push("-map","0:v:0","-map","1:a:0","-r","30","-c:v","libx264","-preset","ultrafast","-crf","27","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-t",String(totalDuration),"-shortest");
+  args.push("-vf",motionFilter,"-map","0:v:0","-map","1:a:0","-r","30","-c:v","libx264","-preset","ultrafast","-crf","27","-pix_fmt","yuv420p","-c:a","aac","-b:a","128k","-t",String(totalDuration),"-shortest");
   if(captionMode==="soft")args.push("-map","2:s:0","-c:s","mov_text");
   args.push("-movflags","+faststart","output.mp4");
   const exitCode=await ffmpeg.exec(args);
-  if(exitCode!==0)throw new Error("FFmpeg exited with code "+exitCode+". Check the selected subtitle mode and source media.");
+  if(exitCode!==0)throw new Error("FFmpeg exited with code "+exitCode+".");
   if(bar)bar.style.width="92%";
   const output=await ffmpeg.readFile("output.mp4");
   if(!output||!output.length)throw new Error("FFmpeg produced an empty video.");
@@ -405,9 +437,12 @@ async function renderProjectVideo(projectId,button) {
   if(window.facelessRenderedUrls[projectId])URL.revokeObjectURL(window.facelessRenderedUrls[projectId]);
   window.facelessRenderedUrls[projectId]=url;
   result.innerHTML='<video class="editor-preview" controls playsinline src="'+url+'"></video><br><a class="mini-btn editor-download" href="'+url+'" download="facelesslab-'+projectId.slice(0,8)+'.mp4">↓ Download MP4 · '+(blob.size/1024/1024).toFixed(1)+' MB</a>';
-  status.textContent="Saving a local library copy…";try{await saveLocalVideo(projectId,blob,totalDuration,quality);}catch(saveError){console.warn("Local video library save failed:",saveError);status.textContent="✓ Rendered · local save failed: "+(saveError.message||"storage unavailable")+". Download the MP4 backup below.";button.textContent="↻ Render again";}
-  if(bar)bar.style.width="100%";status.textContent="✓ Rendered · "+Math.round(totalDuration)+" sec · "+quality+"p";button.textContent="↻ Render again";
- }catch(error){console.error("FacelessLab render error:",error,error?.stack);const detail=error?.message||error?.toString?.()||"Unknown rendering error (no error message returned). Check browser console for details.";status.textContent="Render failed: "+detail;button.textContent="↻ Retry render";}
+  status.textContent="Saving a local library copy…";
+  try{await saveLocalVideo(projectId,blob,totalDuration,quality);}catch(saveError){console.warn("Local video library save failed:",saveError);status.textContent="✓ Rendered · local save failed: "+(saveError.message||"storage unavailable")+". Download the MP4 backup below.";}
+  if(bar)bar.style.width="100%";
+  status.textContent="✓ Rendered with "+(captionMode==="burn"?"burned-in subtitles":captionMode==="soft"?"optional subtitle track":"no subtitles")+" · "+Math.round(totalDuration)+" sec · "+quality+"p";
+  button.textContent="↻ Render again";
+ }catch(error){console.error("FacelessLab render error:",error,error?.stack);const detail=error?.message||error?.toString?.()||"Unknown rendering error. Check browser console for details.";status.textContent="Render failed: "+detail;button.textContent="↻ Retry render";}
  finally{button.disabled=false;setTimeout(()=>progress?.classList.add("hidden"),1200);}
 }
 
