@@ -213,6 +213,36 @@ async function processScriptQueueMessage(message, env) {
  }
 }
 
+async function processVoiceQueueMessage(message, env) {
+ const job=message.body||{},generationId=String(job.generation_id||""),projectId=String(job.project_id||""),userId=String(job.user_id||"");
+ if(job.type!=="generate_voice"||!generationId||!projectId||!userId){message.ack();return;}
+ const row=await env.DB.prepare("SELECT g.id,g.status,g.input_json FROM generations g JOIN projects p ON p.id=g.project_id WHERE g.id=? AND g.project_id=? AND g.user_id=? AND p.user_id=? AND g.stage='voice'").bind(generationId,projectId,userId,userId).first();
+ if(!row||["completed","failed"].includes(row.status)){message.ack();return;}
+ try{
+  const input=JSON.parse(row.input_json||"{}"),scriptRow=await env.DB.prepare("SELECT output_json FROM generations WHERE id=? AND project_id=? AND user_id=? AND stage='script' AND status='completed'").bind(input.script_generation_id,projectId,userId).first();
+  if(!scriptRow)throw new Error("The source script is no longer available.");
+  const script=JSON.parse(scriptRow.output_json),narration=String(script.narration||(script.scenes||[]).map(s=>s.voiceover||"").join(" ")).trim();
+  if(!narration||narration.length>4500)throw new Error("Narration is empty or exceeds the current 4,500 character limit.");
+  await env.DB.prepare("UPDATE generations SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(generationId,userId).run();
+  const model="@cf/myshell-ai/melotts",provider="cloudflare-workers-ai",result=await env.AI.run(model,{prompt:narration,lang:"en"}),audioValue=typeof result==="string"?result:result?.audio;
+  if(!audioValue||typeof audioValue!=="string")throw new Error("The text-to-speech model returned no audio.");
+  let audio;
+  if(/^https:\/\//i.test(audioValue)){const response=await fetch(audioValue);if(!response.ok)throw new Error("Could not retrieve the generated audio file.");audio=new Uint8Array(await response.arrayBuffer());}
+  else{const binary=atob(audioValue);audio=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)audio[i]=binary.charCodeAt(i);}
+  if(!audio.byteLength)throw new Error("The text-to-speech model returned an empty audio file.");
+  const objectKey="users/"+userId+"/projects/"+projectId+"/voice/"+generationId+".mp3";
+  await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:"audio/mpeg",cacheControl:"private, max-age=3600"},customMetadata:{userId,projectId,generationId}});
+  const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,provider,model,language:"en",characters:narration.length};
+  await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,userId).run();
+  console.log(JSON.stringify({event:"background_voice_completed",generation_id:generationId,project_id:projectId}));message.ack();
+ }catch(error){
+  const detail=String(error?.message||error).slice(0,500),attempts=Number(message.attempts||1);
+  console.error(JSON.stringify({event:"background_voice_attempt_failed",generation_id:generationId,attempts,error:detail}));
+  if(attempts>=3){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(detail,generationId,userId).run();message.ack();}
+  else message.retry({delaySeconds:Math.min(60,attempts*15)});
+ }
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -316,57 +346,34 @@ async function handle(request, env) {
 
 
     const voiceMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/generate-voice$/i);
-    if (voiceMatch && method === "POST") {
-      const projectId = voiceMatch[1];
-      const project = await env.DB.prepare("SELECT id, language, style FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
-      if (!project) return json({ ok: false, error: "Project not found." }, 404);
-      const language = "en";
-      if (project.language !== "en") await env.DB.prepare("UPDATE projects SET language='en', updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,user.id).run();
-      if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "The configured English text-to-speech provider is unavailable. Check the Workers AI binding." }, 503);
-      const scriptRow = await env.DB.prepare("SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
-      if (!scriptRow) return json({ ok: false, error: "Generate a script before creating the voice-over." }, 409);
-      const script = JSON.parse(scriptRow.output_json);
-      const narration = String(script.narration || (script.scenes || []).map(s => s.voiceover || "").join(" ")).trim();
-      if (!narration) return json({ ok: false, error: "The saved script has no narration text." }, 422);
-      if (narration.length > 4500) return json({ ok: false, error: "Narration is too long. Keep it under 4,500 characters for now." }, 413);
-      const model = "@cf/myshell-ai/melotts";
-      const provider = "cloudflare-workers-ai";
-      const generationId = crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'voice', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ provider, model, language, script_generation_id: scriptRow.id, characters: narration.length, billing_note: "Workers AI MeloTTS pricing" })).run();
-      try {
-        let audio;
-        const result = await env.AI.run(model, { prompt: narration, lang: "en" });
-        const audioValue = typeof result === "string" ? result : result?.audio;
-        if (!audioValue || typeof audioValue !== "string") throw new Error("The text-to-speech model returned no audio. Please retry.");
-        if (/^https:\/\//i.test(audioValue)) {
-          const audioResponse = await fetch(audioValue);
-          if (!audioResponse.ok) throw new Error("Could not retrieve the generated audio file.");
-          audio = new Uint8Array(await audioResponse.arrayBuffer());
-        } else {
-          const binary = atob(audioValue);
-          audio = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) audio[i] = binary.charCodeAt(i);
-        }
-        if (!audio.byteLength) throw new Error("The text-to-speech model returned an empty audio file.");
-        const objectKey = "users/" + user.id + "/projects/" + projectId + "/voice/" + generationId + ".mp3";
-        await env.MEDIA.put(objectKey, audio, { httpMetadata: { contentType: "audio/mpeg", cacheControl: "private, max-age=3600" }, customMetadata: { userId: user.id, projectId, generationId } });
-        const output = { object_key: objectKey, mime_type: "audio/mpeg", bytes: audio.byteLength, provider, model, language, characters: narration.length };
-        await env.DB.prepare("UPDATE generations SET status='completed', output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output), generationId, user.id).run();
-        return json({ ok: true, generation_id: generationId, voice: output }, 201);
-      } catch (error) {
-        await env.DB.prepare("UPDATE generations SET status='failed', error_message=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
-        const message = String(error.message || "Voice generation failed.");
-        return json({ ok: false, error: message }, /limit|quota|billing|credit|exceeded/i.test(message) ? 429 : 502);
-      }
+    if(voiceMatch&&method==="POST"){
+      const projectId=voiceMatch[1],project=await env.DB.prepare("SELECT id,language,style FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      if(!env.JOBS||typeof env.JOBS.send!=="function")return json({ok:false,error:"Background job queue is not configured yet."},503);
+      if(!env.AI||typeof env.AI.run!=="function")return json({ok:false,error:"Workers AI text-to-speech is unavailable."},503);
+      const scriptRow=await env.DB.prepare("SELECT id,output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      if(!scriptRow)return json({ok:false,error:"Generate a script before creating the voice-over."},409);
+      const script=JSON.parse(scriptRow.output_json),narration=String(script.narration||(script.scenes||[]).map(s=>s.voiceover||"").join(" ")).trim();
+      if(!narration)return json({ok:false,error:"The saved script has no narration text."},422);
+      if(narration.length>4500)return json({ok:false,error:"Narration is too long. Keep it under 4,500 characters."},413);
+      const pending=await env.DB.prepare("SELECT id,status FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND json_extract(input_json,'$.script_generation_id')=? AND status IN ('queued','processing') ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,scriptRow.id).first();
+      if(pending)return json({ok:true,queued:true,generation_id:pending.id,status:pending.status},202);
+      const generationId=crypto.randomUUID(),model="@cf/myshell-ai/melotts",provider="cloudflare-workers-ai";
+      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,billing_note:"Workers AI MeloTTS pricing"};
+      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'voice','queued',?)").bind(generationId,projectId,user.id,JSON.stringify(input)).run();
+      try{await env.JOBS.send({type:"generate_voice",generation_id:generationId,project_id:projectId,user_id:user.id});}
+      catch(error){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();throw error;}
+      return json({ok:true,queued:true,generation_id:generationId,status:"queued"},202);
     }
 
     const voiceInfoMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/voice$/i);
-    if (voiceInfoMatch && method === "GET") {
-      const projectId=voiceInfoMatch[1];
-      const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
-      if(!project) return json({ok:false,error:"Project not found."},404);
-      const voice=await env.DB.prepare("SELECT id,output_json,created_at FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND status='completed' AND json_extract(input_json, '$.script_generation_id') = (SELECT id FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1) ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,projectId,user.id).first();
-      return json({ok:true,voice:voice?{generation_id:voice.id,...JSON.parse(voice.output_json),created_at:voice.created_at}:null});
+    if(voiceInfoMatch&&method==="GET"){
+      const projectId=voiceInfoMatch[1],project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      const script=await env.DB.prepare("SELECT id FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      if(!script)return json({ok:true,voice:null,status:"empty"});
+      const row=await env.DB.prepare("SELECT id,status,output_json,error_message,created_at FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND json_extract(input_json,'$.script_generation_id')=? ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,script.id).first();
+      return json({ok:true,voice:row?.status==="completed"&&row.output_json?{generation_id:row.id,...JSON.parse(row.output_json),created_at:row.created_at}:null,generation_id:row?.id||null,status:row?.status||"empty",error:row?.error_message||null});
     }
 
     const voiceAudioMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/voice\/audio$/i);
@@ -696,7 +703,7 @@ async function runScheduledMaintenance(env, scheduledTime) {
 
 export default {
   async queue(batch, env) {
-    for (const message of batch.messages) await processScriptQueueMessage(message, env);
+    for (const message of batch.messages) { if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else await processScriptQueueMessage(message, env); }
   },
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runScheduledMaintenance(env, controller.scheduledTime).catch(error => {
