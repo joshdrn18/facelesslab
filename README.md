@@ -7,7 +7,8 @@ AI-assisted faceless video creation platform. FacelessLab turns a topic or idea 
 - Cloudflare Workers: API (`src/index.js`)
 - Cloudflare D1: application data (`migrations/`)
 - Cloudflare R2: generated media assets
-- Background rendering: separate job runner/queue integration (planned)
+- Cloudflare Queues: asynchronous script-generation jobs with retry handling and a dead-letter queue
+- Browser FFmpeg: local MP4 rendering (cloud/background video rendering remains a later phase)
 
 ## Local development
 Install Wrangler, then run the API:
@@ -18,13 +19,16 @@ npm run dev:api
 ```
 
 The API currently exposes:
-- `GET /health` — service health check
+- `GET /health` — checks API, D1, R2 and the queue binding
 - `GET /` — API information
+- `POST /api/projects/:id/generate-script` — enqueue script generation
+- `GET /api/projects/:id/script` — retrieve script and background job status
 
 ## Cloudflare setup
 1. Create a D1 database named `facelesslab-db`.
 2. Create an R2 bucket named `facelesslab-media`.
 3. Put the D1 database ID in `wrangler.toml`.
+4. Create the `facelesslab-jobs` and `facelesslab-jobs-dlq` queues, then configure the `JOBS` producer binding and queue consumer as shown in `wrangler.toml`.
 4. Deploy the Worker with `npm run deploy:api`.
 5. Create a Pages project connected to this repository. Set the build output directory to `public`; no build command is required.
 
