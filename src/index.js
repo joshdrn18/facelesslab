@@ -186,6 +186,33 @@ async function generateScriptWithProviders(env, project, continuation = null) {
   throw new Error("AI provider is not configured. Add AI_API_KEY and AI_MODEL to Worker secrets/variables.");
 }
 
+async function processScriptQueueMessage(message, env) {
+ const job=message.body||{}, generationId=String(job.generation_id||""), projectId=String(job.project_id||""), userId=String(job.user_id||"");
+ if(job.type!=="generate_script"||!generationId||!projectId||!userId){message.ack();return;}
+ const row=await env.DB.prepare("SELECT g.id,g.status,p.id AS project_id,p.title,p.topic,p.language,p.duration_seconds,p.style,p.parent_project_id,p.episode_number,p.continuity_json FROM generations g JOIN projects p ON p.id=g.project_id WHERE g.id=? AND g.project_id=? AND g.user_id=? AND p.user_id=? AND g.stage='script'").bind(generationId,projectId,userId,userId).first();
+ if(!row||["completed","failed"].includes(row.status)){message.ack();return;}
+ try{
+  await env.DB.prepare("UPDATE generations SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=? AND status IN ('queued','processing')").bind(generationId,userId).run();
+  await env.DB.prepare("UPDATE projects SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,userId).run();
+  const project={...row,user_id:userId};
+  const continuation=project.parent_project_id&&project.continuity_json?JSON.parse(project.continuity_json):null;
+  const result=await generateScriptWithProviders(env,project,continuation),script=result.script;
+  if(!script||typeof script!=="object"||!Array.isArray(script.scenes)||!script.narration)throw new Error("AI response is missing required script fields.");
+  await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({...script,_provider:result.provider}),generationId,userId).run();
+  await env.DB.prepare("UPDATE projects SET status='completed',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,userId).run();
+  console.log(JSON.stringify({event:"background_script_completed",generation_id:generationId,project_id:projectId}));
+  message.ack();
+ }catch(error){
+  const detail=String(error?.message||error).slice(0,500),attempts=Number(message.attempts||1);
+  console.error(JSON.stringify({event:"background_script_attempt_failed",generation_id:generationId,attempts,error:detail}));
+  if(attempts>=3){
+   await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(detail,generationId,userId).run();
+   await env.DB.prepare("UPDATE projects SET status='failed',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,userId).run();
+   message.ack();
+  }else message.retry({delaySeconds:Math.min(60,attempts*15)});
+ }
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -196,6 +223,7 @@ async function handle(request, env) {
   if (path === "/health" && method === "GET") {
     let database = false;
     let storage = false;
+    const queue = Boolean(env.JOBS && typeof env.JOBS.send === "function");
     try {
       await env.DB.prepare("SELECT 1 AS ok").first();
       database = true;
@@ -204,12 +232,12 @@ async function handle(request, env) {
       await env.MEDIA.list({ limit: 1 });
       storage = true;
     } catch {}
-    const ok = database && storage;
+    const ok = database && storage && queue;
     return json({
       ok,
       service: "FacelessLab API",
       version: "0.8.0",
-      checks: { database, storage },
+      checks: { database, storage, queue },
       timestamp: new Date().toISOString()
     }, ok ? 200 : 503);
   }
@@ -358,49 +386,30 @@ async function handle(request, env) {
 
     const scriptMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/generate-script$/i);
     if (scriptMatch && method === "POST") {
-      const projectId = scriptMatch[1];
-      const project = await env.DB.prepare(
-        "SELECT id, user_id, title, topic, language, duration_seconds, style, parent_project_id, episode_number, continuity_json FROM projects WHERE id = ? AND user_id = ?"
-      ).bind(projectId, user.id).first();
-      if (!project) return json({ ok: false, error: "Project not found." }, 404);
-      if (project.language !== "en") {
-        await env.DB.prepare("UPDATE projects SET language='en', updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,user.id).run();
-        project.language = "en";
+      const projectId=scriptMatch[1];
+      const project=await env.DB.prepare("SELECT id,user_id,title,topic,language,duration_seconds,style,parent_project_id,episode_number,continuity_json FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      if(!env.JOBS||typeof env.JOBS.send!=="function")return json({ok:false,error:"Background queue unavailable."},503);
+      if(project.language!=="en"){await env.DB.prepare("UPDATE projects SET language='en',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,user.id).run();project.language="en";}
+      const latest=await env.DB.prepare("SELECT id,status,output_json,input_json,error_message FROM generations WHERE project_id=? AND user_id=? AND stage='script' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      if(latest?.status==="completed"&&latest.output_json){
+        const cachedScript=JSON.parse(latest.output_json),cachedInput=JSON.parse(latest.input_json||"{}");
+        const cachedWords=String(cachedScript.narration||"").trim().split(/\s+/).filter(Boolean).length;
+        const expectedWords=Math.round((Number(project.duration_seconds)||45)*2.25);
+        if(cachedInput.language==="en"&&cachedWords>=Math.round(expectedWords*.92))return json({ok:true,cached:true,generation_id:latest.id,script:cachedScript,status:"completed"});
       }
-      const latest = await env.DB.prepare(
-        "SELECT id, output_json, input_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1"
-      ).bind(projectId, user.id).first();
-      if (latest) {
-        const cachedScript = JSON.parse(latest.output_json);
-        const cachedInput = JSON.parse(latest.input_json || "{}");
-        const cachedWords = String(cachedScript.narration || "").trim().split(/\s+/).filter(Boolean).length;
-        const expectedWords = Math.round((Number(project.duration_seconds) || 45) * 2.25);
-        if (cachedInput.language === "en" && cachedWords >= Math.round(expectedWords * 0.92)) {
-          return json({ ok: true, cached: true, generation_id: latest.id, script: cachedScript });
-        }
-        // Older short scripts are regenerated once using the stricter duration target below.
+      if(latest&&["queued","processing"].includes(latest.status))return json({ok:true,queued:true,generation_id:latest.id,status:latest.status},202);
+      const generationId=crypto.randomUUID();
+      const input={topic:project.topic,language:project.language,duration_seconds:project.duration_seconds,style:project.style,queued_at:new Date().toISOString()};
+      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'script','queued',?)").bind(generationId,projectId,user.id,JSON.stringify(input)).run();
+      await env.DB.prepare("UPDATE projects SET status='queued',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,user.id).run();
+      try{await env.JOBS.send({type:"generate_script",generation_id:generationId,project_id:projectId,user_id:user.id});}
+      catch(error){
+        await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
+        await env.DB.prepare("UPDATE projects SET status='failed',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,user.id).run();
+        throw error;
       }
-      const generationId = crypto.randomUUID();
-      await env.DB.prepare(
-        "INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'script', 'processing', ?)"
-      ).bind(generationId, projectId, user.id, JSON.stringify({ topic: project.topic, language: project.language, duration_seconds: project.duration_seconds, style: project.style })).run();
-      try {
-        const continuation = project.parent_project_id && project.continuity_json ? JSON.parse(project.continuity_json) : null;
-        const result = await generateScriptWithProviders(env, project, continuation);
-        const script = result.script;
-        if (!script || typeof script !== "object" || !Array.isArray(script.scenes) || !script.narration) {
-          throw new Error("AI response is missing required script fields.");
-        }
-        await env.DB.prepare(
-          "UPDATE generations SET status = 'completed', output_json = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?"
-        ).bind(JSON.stringify({ ...script, _provider: result.provider }), generationId, user.id).run();
-        return json({ ok: true, cached: false, generation_id: generationId, script: { ...script, _provider: result.provider } }, 201);
-      } catch (error) {
-        await env.DB.prepare(
-          "UPDATE generations SET status = 'failed', error_message = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?"
-        ).bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
-        return json({ ok: false, error: String(error.message || "Script generation failed.") }, 502);
-      }
+      return json({ok:true,queued:true,generation_id:generationId,status:"queued"},202);
     }
     const visualImageMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/visuals\/([a-f0-9-]+)\/image$/i);
     if (visualImageMatch && method === "GET") {
@@ -590,14 +599,13 @@ async function handle(request, env) {
     }
 
     const existingScriptMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/script$/i);
-    if (existingScriptMatch && method === "GET") {
-      const projectId = existingScriptMatch[1];
-      const result = await env.DB.prepare(
-        "SELECT id, output_json, created_at FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1"
-      ).bind(projectId, user.id).first();
-      return json({ ok: true, script: result ? JSON.parse(result.output_json) : null, generation_id: result?.id || null });
+    if(existingScriptMatch&&method==="GET"){
+      const projectId=existingScriptMatch[1];
+      const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      const result=await env.DB.prepare("SELECT id,status,output_json,error_message,created_at FROM generations WHERE project_id=? AND user_id=? AND stage='script' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      return json({ok:true,script:result?.status==="completed"&&result.output_json?JSON.parse(result.output_json):null,generation_id:result?.id||null,status:result?.status||"empty",error:result?.error_message||null,created_at:result?.created_at||null});
     }
-
 
     const continueMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/continue$/i);
     if (continueMatch && method === "POST") {
@@ -687,6 +695,9 @@ async function runScheduledMaintenance(env, scheduledTime) {
 }
 
 export default {
+  async queue(batch, env) {
+    for (const message of batch.messages) await processScriptQueueMessage(message, env);
+  },
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runScheduledMaintenance(env, controller.scheduledTime).catch(error => {
       console.error(JSON.stringify({
