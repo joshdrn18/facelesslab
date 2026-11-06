@@ -207,7 +207,18 @@ function renderScript(script, projectId) {
 }
 
 async function loadSavedVoice(projectId) {
- try { const data=await api("/api/projects/"+projectId+"/voice"); if(!data.voice)return; const result=$("voice-result-"+projectId); const button=$("voice-btn-"+projectId); if(result) await showVoiceAudio(projectId,result,data.voice); if(button)button.textContent="↻ Regenerate voice-over"; } catch(error){console.warn("Could not load saved voice:",error.message);}
+ try {
+  const data=await api("/api/projects/"+projectId+"/voice");
+  const result=$("voice-result-"+projectId),button=$("voice-btn-"+projectId);
+  if(["queued","processing"].includes(data.status)){
+   if(result)result.innerHTML='<div class="empty">Voice-over is '+escapeHtml(data.status)+' in the background…</div>';
+   if(button){button.disabled=true;button.textContent="Generating audio…";}
+   resumeVoicePolling(projectId);return;
+  }
+  if(!data.voice)return;
+  if(result)await showVoiceAudio(projectId,result,data.voice);
+  if(button)button.textContent="↻ Regenerate voice-over";
+ }catch(error){console.warn("Could not load saved voice:",error.message);}
 }
 async function showVoiceAudio(projectId,container,meta) {
  const response=await fetch(API_BASE+"/api/projects/"+projectId+"/voice/audio",{headers:{authorization:"Bearer "+token}});
@@ -217,12 +228,44 @@ async function showVoiceAudio(projectId,container,meta) {
  const extension=(meta.mime_type||response.headers.get("content-type")||"").includes("wav")?"wav":"mp3";
  container.innerHTML='<details class="voice-result-details"><summary>✓ Voice-over ready · '+(meta.bytes/1024).toFixed(0)+' KB <span>Show audio</span></summary><div class="voice-result"><audio controls preload="metadata" src="'+objectUrl+'"></audio><a class="mini-btn" style="display:inline-block;text-decoration:none;margin-top:9px" href="'+objectUrl+'" download="facelesslab-voice-'+escapeHtml(projectId.slice(0,8))+'.'+extension+'">↓ Download '+extension.toUpperCase()+'</a></div></details>';
 }
+async function waitForVoiceJob(projectId,button){
+ const result=$("voice-result-"+projectId);
+ for(let attempt=0;attempt<240;attempt++){
+  await new Promise(resolve=>setTimeout(resolve,2500));
+  const data=await api("/api/projects/"+projectId+"/voice");
+  if(data.status==="completed"&&data.voice){
+   if(result)await showVoiceAudio(projectId,result,data.voice);
+   if(button){button.disabled=false;button.textContent="↻ Regenerate voice-over";}
+   return data.voice;
+  }
+  if(data.status==="failed")throw new Error(data.error||"Voice-over generation failed. You can retry this step.");
+  if(result)result.innerHTML='<div class="empty">Voice-over is '+escapeHtml(data.status||"queued")+' in the background. You can leave this page; it keeps running.</div>';
+ }
+ if(result)result.innerHTML='<div class="empty">Voice-over is still processing. Refresh this project in a moment to see the result.</div>';
+ return null;
+}
+function resumeVoicePolling(projectId){
+ window.facelessVoicePolls=window.facelessVoicePolls||{};
+ if(window.facelessVoicePolls[projectId])return;
+ const button=$("voice-btn-"+projectId);
+ window.facelessVoicePolls[projectId]=waitForVoiceJob(projectId,button).catch(error=>{
+  const result=$("voice-result-"+projectId);if(result)result.innerHTML='<div class="empty">'+escapeHtml(error.message||error)+'</div>';
+  if(button){button.disabled=false;button.textContent="↻ Retry voice-over";}
+ }).finally(()=>{delete window.facelessVoicePolls[projectId];});
+}
 async function generateVoice(projectId,button) {
  const result=$("voice-result-"+projectId);
- button.disabled=true;button.textContent="Generating audio…";result.innerHTML='<div class="empty">Creating your English AI voice-over. Please keep this page open…</div>';
- try{const data=await api("/api/projects/"+projectId+"/generate-voice",{method:"POST",body:JSON.stringify({})});await showVoiceAudio(projectId,result,data.voice);button.textContent="↻ Regenerate voice-over";}
- catch(error){result.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';button.textContent="↻ Retry voice-over";}
- finally{button.disabled=false;}
+ button.disabled=true;button.textContent="Queued…";
+ result.innerHTML='<div class="empty">Adding your English voice-over to the background queue…</div>';
+ try{
+  const data=await api("/api/projects/"+projectId+"/generate-voice",{method:"POST",body:JSON.stringify({})});
+  if(data.voice){await showVoiceAudio(projectId,result,data.voice);button.textContent="↻ Regenerate voice-over";return;}
+  result.innerHTML='<div class="empty">Voice-over job accepted. It will continue even if you leave this page.</div>';
+  await waitForVoiceJob(projectId,button);
+ }catch(error){
+  result.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';
+  button.textContent="↻ Retry voice-over";
+ }finally{button.disabled=false;}
 }
 
 function formatSubtitleTime(seconds, separator) {
