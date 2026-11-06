@@ -663,7 +663,38 @@ async function handle(request, env) {
   return json({ ok: false, error: "Not found" }, 404);
 }
 
+async function runScheduledMaintenance(env, scheduledTime) {
+  const now = Math.floor(Date.now() / 1000);
+  const staleBefore = now - 30 * 60;
+
+  // Recover jobs abandoned by an isolate termination or provider timeout.
+  // They become visibly failed so the user can safely retry them.
+  const staleJobs = await env.DB.prepare(
+    "UPDATE generations SET status='failed', error_message=COALESCE(error_message, 'Job timed out before completion. Please retry this step.'), updated_at=? WHERE status='processing' AND updated_at < ?"
+  ).bind(now, staleBefore).run();
+
+  // Remove expired session hashes; active sessions are unaffected.
+  const expiredSessions = await env.DB.prepare(
+    "DELETE FROM user_sessions WHERE expires_at <= ?"
+  ).bind(now).run();
+
+  console.log(JSON.stringify({
+    event: "scheduled_maintenance_completed",
+    scheduled_at: new Date(scheduledTime || now * 1000).toISOString(),
+    stale_jobs_recovered: Number(staleJobs.meta?.changes || 0),
+    expired_sessions_removed: Number(expiredSessions.meta?.changes || 0)
+  }));
+}
+
 export default {
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runScheduledMaintenance(env, controller.scheduledTime).catch(error => {
+      console.error(JSON.stringify({
+        event: "scheduled_maintenance_failed",
+        error: String(error?.message || error).slice(0, 500)
+      }));
+    }));
+  },
   async fetch(request, env) {
     const origin = request.headers.get("origin");
     const allowedOrigin = env.APP_ORIGIN || "*";
@@ -681,6 +712,12 @@ export default {
       for (const [key, value] of Object.entries(headers)) finalHeaders.set(key, value);
       return new Response(response.body, { status: response.status, headers: finalHeaders });
     } catch (error) {
+      console.error(JSON.stringify({
+        event: "request_failed",
+        path: new URL(request.url).pathname,
+        method: request.method,
+        error: String(error?.message || error).slice(0, 500)
+      }));
       return json({ ok: false, error: "Internal server error", detail: env.APP_ENV === "development" ? String(error?.stack || error) : undefined }, 500, headers);
     }
   }
