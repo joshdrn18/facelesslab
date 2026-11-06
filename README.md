@@ -7,7 +7,7 @@ AI-assisted faceless video creation platform. FacelessLab turns a topic or idea 
 - Cloudflare Workers: API (`src/index.js`)
 - Cloudflare D1: application data (`migrations/`)
 - Cloudflare R2: generated media assets
-- Cloudflare Queues: asynchronous script-generation jobs with retry handling and a dead-letter queue
+- Cloudflare Queues: asynchronous script and voice-over jobs with retry handling and a dead-letter queue
 - Browser FFmpeg: local MP4 rendering (cloud/background video rendering remains a later phase)
 
 ## Local development
