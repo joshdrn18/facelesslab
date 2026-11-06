@@ -29,8 +29,8 @@ The API currently exposes:
 2. Create an R2 bucket named `facelesslab-media`.
 3. Put the D1 database ID in `wrangler.toml`.
 4. Create the `facelesslab-jobs` and `facelesslab-jobs-dlq` queues, then configure the `JOBS` producer binding and queue consumer as shown in `wrangler.toml`.
-4. Deploy the Worker with `npm run deploy:api`.
-5. Create a Pages project connected to this repository. Set the build output directory to `public`; no build command is required.
+5. Deploy the Worker with `npm run deploy:api`.
+6. Create a Pages project connected to this repository. Set the build output directory to `public`; no build command is required.
 
 Do not put provider API keys in frontend code. Add secrets to the Worker with `wrangler secret put SECRET_NAME`.
 
