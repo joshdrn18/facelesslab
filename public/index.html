@@ -377,7 +377,15 @@ async function renderProjectVideo(projectId,button) {
    const scene=missing[i],sceneNumber=Number(scene.scene),sceneButton=$("visual-btn-"+projectId+"-"+sceneNumber);
    status.textContent="Generating missing visual "+(i+1)+" of "+missing.length+"…";
    if(!sceneButton)throw new Error("Visual control for scene "+sceneNumber+" was not found. Reopen the script and try again.");
-   visualMap.set(sceneNumber,await generateSceneVisual(projectId,sceneNumber,sceneButton));
+   try{
+    visualMap.set(sceneNumber,await generateSceneVisual(projectId,sceneNumber,sceneButton));
+   }catch(visualError){
+    const visualMessage=String(visualError?.message||visualError);
+    if(/8007|NSFW|prompt contains/i.test(visualMessage)){
+     throw new Error("Scene "+sceneNumber+" visual was blocked by the image provider's safety filter (8007). This can be a false positive. Open this scene's Visual direction, rewrite it as a clearly non-explicit visual description, then generate the visual again. Original provider message: "+visualMessage);
+    }
+    throw new Error("Scene "+sceneNumber+" visual generation failed: "+visualMessage);
+   }
   }
   const subtitleData=subtitleResponse.subtitles||window.facelessSubtitles?.[projectId];
   const captionMode=$("editor-captions-"+projectId)?.value||"burn";
