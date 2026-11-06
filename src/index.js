@@ -79,14 +79,14 @@ async function callAiProvider(env, provider, prompt) {
   };
   const model = provider.model || "gpt-4o-mini";
   const messages = [
-    { role: "system", content: "You are a professional short-form video scriptwriter. Return one valid JSON object only. Do not use markdown fences or add commentary. Use double quotes and escape any quotes inside strings." },
+    { role: "system", content: "You are an expert YouTube storyteller, documentary writer, audience-retention editor, and metadata strategist. Write vivid, natural, original spoken English with varied vocabulary and sentence rhythm. Avoid repetitive wording, generic AI phrases, filler, fake suspense, and unsupported claims. Optimize for viewer satisfaction and honest discoverability. Return one valid JSON object only; no markdown fences or commentary." },
     { role: "user", content: prompt }
   ];
 
   async function requestJson(useJsonMode, tokenLimit = 3500) {
     const body = {
       model,
-      temperature: 0.4,
+      temperature: 0.68,
       max_completion_tokens: tokenLimit,
       messages
     };
@@ -141,13 +141,17 @@ async function generateScriptWithProviders(env, project, continuation = null) {
     project.style === "anime"
       ? "You are a Japanese anime short-film director and storyboard artist. Create a coherent anime episode, not a slideshow. Design recurring characters and preserve their exact appearance across every scene."
       : "You are a professional short-form documentary director and storyboard artist. Create a coherent visual story, not a random image slideshow.",
-    `Return exactly one valid JSON object with this schema: {"title":"string","hook":"string","narration":"string","scenes":[{"scene":"number","duration_seconds":"number","voiceover":"string","visual_prompt":"string","on_screen_text":"string","transition":"string"}],"closing":"string","cta":"string","estimated_duration_seconds":"number","series_summary":"string","character_bible":"string","ending_state":"string"}.`,
+    `Return exactly one valid JSON object with this schema: {"title":"string","hook":"string","narration":"string","scenes":[{"scene":"number","duration_seconds":"number","voiceover":"string","visual_prompt":"string","on_screen_text":"string","transition":"string"}],"closing":"string","cta":"string","estimated_duration_seconds":"number","series_summary":"string","character_bible":"string","ending_state":"string","youtube_title_options":["string","string","string"],"youtube_description":"string","youtube_tags":["string"],"hashtags":["string"],"thumbnail_text":"string","pinned_comment":"string"}.`,
     "Narration must contain " + minWords + " to " + maxWords + " spoken words (aim for " + targetWords + "). Keep it natural and avoid padding.",
+    "VOCABULARY: Use broad, precise, varied vocabulary suited to the topic. Mix short punchy lines with longer flowing sentences. Prefer concrete verbs, specific nouns, sensory detail, fresh comparisons and conversational phrasing. Vary sentence openings, transitions and sentence rhythm. Avoid thesaurus stuffing, cliches, filler, repeated adjectives, repeated rhetorical questions and robotic phrases such as Imagine this, In this video, Let us dive in. Every sentence must add a fact, image, emotion or forward movement.",
+    "RETENTION: Open with a concrete curiosity gap or striking detail in the first sentence. Establish why viewers should care immediately. Build a clear progression with escalating discoveries, meaningful stakes, pattern interrupts and satisfying payoffs. Do not reveal the full payoff in the opening. Avoid fake cliffhangers, empty hype and repetitive summaries. End with a memorable takeaway and a brief natural CTA.",
+    "FACTUAL INTEGRITY: Never invent statistics, quotations, studies, dates, named sources or historical details. Phrase uncertainty cautiously. Do not present speculation as fact. Titles must be compelling but truthful, not deceptive clickbait.",
+    "YOUTUBE PUBLISHING PACK: Provide 3 distinct concise title options. Write a useful description with a strong first 2 lines, concise summary, relevant context and natural CTA; no keyword stuffing. Provide 8–15 relevant search tags as plain phrases without #, 3–5 relevant hashtags with #, thumbnail_text of 2–5 punchy mobile-readable words that does not simply repeat the title, and a pinned_comment that invites a genuine response.",
     "Create 5 to 7 scenes covering the full target duration. Scene voiceovers must divide the narration in order, preserve its exact sequence, and collectively cover the whole narration.",
     "STORYBOARD RULES: Every scene must depict the exact event, person, place, object, or action being described by that scene's voiceover. Build a logical beginning-middle-ending sequence. Each scene must be a new visual moment and materially different from the previous scene; never reuse the same image idea, pose, camera angle, or setting just to fill time.",
     "VISUAL PROMPT RULES: Write each visual_prompt as a concrete image-generation instruction describing one specific photographic/cinematic moment, including subject, action, setting, and shot framing. Make prompts specific and distinct, not vague mood words. Keep recurring people recognizably consistent across scenes by repeating concise identity, age range, hairstyle, clothing, and other non-sensitive visual details when relevant. Keep the overall art direction, color palette, lighting, and realism consistent across the whole story.",
     "Never request collages, grids, split screens, contact sheets, storyboards, comic panels, screenshots, posters, infographics, UI, multiple frames, or images containing text. Each visual must be one clean full-frame scene. No text, captions, logos, borders, or watermarks in the image.",
-    "Keep each on_screen_text under 8 words and each transition to a few words. Write audience-facing text in the requested language. Start with a strong 2-second hook and finish with a natural CTA. Return JSON only; no markdown or commentary.",
+    "Keep each on_screen_text under 8 words and each transition to a few words. Scene voiceovers must preserve the narration sequence exactly, covering every sentence once without omissions or duplication. Keep narration smooth for TTS: clean punctuation, pronounceable names, no stage directions, emoji, markdown or bracketed sound effects. Start with a strong 2-second hook and finish with a natural CTA. Return JSON only; no markdown or commentary.",
     "Topic: " + project.topic,
     "LANGUAGE REQUIREMENT: Write every audience-facing element in fluent natural English only: title, hook, narration, scene voiceovers, on-screen text, closing and CTA. Do not use Indonesian, Japanese, or mixed-language text. Anime mode changes the visual art direction only; the story and narration must remain in English.",
     "Language: English",
