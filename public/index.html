@@ -32,7 +32,8 @@
 .main[data-view="library"] #overviewHero,.main[data-view="library"] .stats,.main[data-view="library"] #mainWorkspace,.main[data-view="library"] #projects,.main[data-view="library"] #billingPanel{display:none!important}
 .nav a.active{background:#25213d;color:#fff;box-shadow:inset 2px 0 #a18aff}
 @media(max-width:600px){.side{display:block;position:sticky;top:0;z-index:5;padding:9px 12px;border-right:0;border-bottom:1px solid var(--line)}.side .brand{padding:0 5px 7px;margin-bottom:4px}.side .brand .logo{width:28px;height:28px}.side .navlabel,.sidebottom{display:none}.side nav{display:flex;gap:5px;overflow-x:auto}.side .nav a{white-space:nowrap;padding:8px 10px;margin:0;font-size:12px}.main{padding-top:18px}}
-.project-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;gap:9px;margin:0 0 14px}.project-toolbar input,.project-toolbar select{padding:10px 12px}.billing-panel{margin-top:0}.billing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:15px}.billing-grid .stat{margin:0}.billing-panel .content-card h3{margin:8px 0}.billing-panel .content-card p{color:#b9c4d7;line-height:1.7}@media(max-width:600px){.project-toolbar{grid-template-columns:1fr 1fr}.project-toolbar input,.project-toolbar button{grid-column:1/-1}.billing-grid{grid-template-columns:1fr}}</style>
+.project-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;gap:9px;margin:0 0 14px}.project-toolbar input,.project-toolbar select{padding:10px 12px}.billing-panel{margin-top:0}.billing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:15px}.billing-grid .stat{margin:0}.billing-panel .content-card h3{margin:8px 0}.billing-panel .content-card p{color:#b9c4d7;line-height:1.7}@media(max-width:600px){.project-toolbar{grid-template-columns:1fr 1fr}.project-toolbar input,.project-toolbar button{grid-column:1/-1}.billing-grid{grid-template-columns:1fr}}.health-pill{display:flex;align-items:center;gap:7px;margin-top:5px;font-size:10px;color:#aebbd0}.health-pill span{width:7px;height:7px;border-radius:50%;background:#d4a95b;box-shadow:0 0 0 3px #d4a95b20}.health-pill[data-state="ok"]{color:#8fe0c4}.health-pill[data-state="ok"] span{background:#62d6a7;box-shadow:0 0 0 3px #62d6a720}.health-pill[data-state="error"]{color:#ff9ba4}.health-pill[data-state="error"] span{background:#ff818d;box-shadow:0 0 0 3px #ff818d20}@media(max-width:600px){.userbox{gap:8px}.health-pill{font-size:9px}}
+</style>
 </head>
 <body>
 <section id="authScreen" class="auth-wrap">
@@ -52,7 +53,7 @@
 <div id="appScreen" class="app hidden">
  <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · MVP 0.2</div></aside>
  <main class="main">
-  <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div></div><div class="avatar" id="avatar">FL</div><button class="secondary" id="logoutBtn">Log out</button></div></header>
+  <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div><div id="systemHealth" class="health-pill" role="status" aria-live="polite"><span></span>Checking core systems…</div></div><div class="avatar" id="avatar">FL</div><button class="secondary" id="logoutBtn">Log out</button></div></header>
   <section class="hero" id="overviewHero"><div><div class="eyebrow">CREATE WITHOUT A CAMERA</div><h2>Your next video starts with an idea.</h2><p>Generate scripts, voiceovers, visuals and subtitles in one workflow.</p></div><button class="primary" onclick="document.querySelector('#topic').focus()">＋ Create a video</button></section>
   <section class="stats"><div class="stat"><span>Total projects</span><strong id="projectCount">0</strong></div><div class="stat"><span>Videos generated</span><strong id="videoCount">0</strong></div><div class="stat" id="points"><span>Available points</span><strong id="pointsBalance">0</strong></div></section>
   <div class="workspace" id="mainWorkspace">
@@ -84,6 +85,8 @@ document.addEventListener('toggle',function(event){
 let token = localStorage.getItem("facelesslab_token") || "";
 let authMode = "login";
 let currentUser = null;
+let healthCheckTimer = null;
+let healthCheckBusy = false;
 let activeVoiceProject = "";
 const voiceAudioUrls = {};
 function setAuthMode(mode) {
@@ -124,6 +127,23 @@ window.addEventListener("hashchange",()=>navigateTo(location.hash.slice(1),false
 $("projectSearch").addEventListener("input", renderProjectList);
 $("projectSort").addEventListener("change", renderProjectList);
 $("refreshProjectsBtn").addEventListener("click", async () => { const b=$("refreshProjectsBtn"); b.disabled=true; b.textContent="Refreshing…"; await refreshProjects(); b.disabled=false; b.textContent="↻ Refresh"; });
+
+async function checkCoreHealth(){
+ const el=$("systemHealth");
+ if(!el||healthCheckBusy||!token)return;
+ healthCheckBusy=true;
+ try{
+  const response=await fetch(API_BASE+"/health",{cache:"no-store",signal:AbortSignal.timeout(8000)});
+  const data=await response.json().catch(()=>({}));
+  if(response.ok&&data.ok&&data.checks?.database&&data.checks?.storage){
+   el.dataset.state="ok";el.title="Database and media storage are responding.";el.innerHTML="<span></span>Core systems online";
+  }else{
+   el.dataset.state="error";el.title="One or more core services did not pass the health check.";el.innerHTML="<span></span>Service needs attention";
+  }
+ }catch(error){
+  el.dataset.state="error";el.title="The API health endpoint could not be reached.";el.innerHTML="<span></span>API unreachable";
+ }finally{healthCheckBusy=false;}
+}
 
 function showApp(user, points) {
  currentUser = user;
