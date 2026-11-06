@@ -24,9 +24,6 @@ bucket_name = "facelesslab-media"
 [ai]
 binding = "AI"
 
-[triggers]
-crons = ["*/15 * * * *"]
-
 [observability]
 enabled = true
 
