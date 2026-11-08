@@ -302,11 +302,18 @@ function formatSubtitleTime(seconds, separator) {
  const millis = ms % 1000;
  return String(hours).padStart(2,"0")+":"+String(minutes).padStart(2,"0")+":"+String(secs).padStart(2,"0")+separator+String(millis).padStart(3,"0");
 }
+function highlightSubtitlePreview(value) {
+ const text=String(value||"").trim(),stop=new Set(["the","and","for","that","with","this","from","have","your","you","are","was","were","they","then","than","into","about","just","like","what","when","where","which","will","would","could","should","there","their","also","only","very","more","some","been","being"]);
+ const impact=new Set(["secret","never","always","danger","warning","mistake","truth","powerful","hidden","shocking","incredible","impossible","survive","survived","destroy","instantly","suddenly","finally","strongest","fastest","biggest","worst","best","proof","million","billion","free","wrong","right","fear","death","life","win","lost","found"]);
+ const words=text.split(/\s+/),eligible=words.map((word,index)=>({word,index,key:word.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9']+$/g,"")})).filter(x=>x.key&&!stop.has(x.key));
+ const chosen=eligible.find(x=>impact.has(x.key))||eligible.filter(x=>x.key.length>=4).sort((a,b)=>b.key.length-a.key.length)[0]||eligible[0];
+ return words.map((word,index)=>index===chosen?.index?'<span style="color:#facc15;text-shadow:0 1px 8px rgba(250,204,21,.28)">'+escapeHtml(word)+'</span>':escapeHtml(word)).join(" ");
+}
 function renderSubtitleResult(projectId, subtitleData) {
  const result=$("subtitle-result-"+projectId);
  if(!result || !subtitleData)return;
  const cues=subtitleData.cues||[];
- const preview=cues.slice(0,5).map(c=>'<div class="scene-card" style="padding:13px 12px;background:linear-gradient(145deg,#101827,#080d17);border:1px solid rgba(255,255,255,.09);border-radius:12px;margin-top:8px"><small style="color:#7dd3fc;font-variant-numeric:tabular-nums">'+formatSubtitleTime(c.start,",")+' → '+formatSubtitleTime(c.end,",")+'</small><div style="margin-top:9px;min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 10px;background:rgba(0,0,0,.28);border-radius:8px"><p style="margin:0;color:#fff;font-size:clamp(16px,3vw,21px);font-weight:900;line-height:1.2;letter-spacing:.015em;text-shadow:0 2px 5px rgba(0,0,0,.9);text-transform:uppercase">'+escapeHtml(c.text)+'</p></div></div>').join("");
+ const preview=cues.slice(0,5).map(c=>'<div class="scene-card" style="padding:13px 12px;background:linear-gradient(145deg,#101827,#080d17);border:1px solid rgba(255,255,255,.09);border-radius:12px;margin-top:8px"><small style="color:#7dd3fc;font-variant-numeric:tabular-nums">'+formatSubtitleTime(c.start,",")+' → '+formatSubtitleTime(c.end,",")+'</small><div style="margin-top:9px;min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 10px;background:rgba(0,0,0,.28);border-radius:8px"><p style="margin:0;color:#fff;font-size:clamp(16px,3vw,21px);font-weight:900;line-height:1.2;letter-spacing:.015em;text-shadow:0 2px 5px rgba(0,0,0,.9);text-transform:uppercase">'+highlightSubtitlePreview(c.text)+'</p></div></div>').join("");
  const timingLabel=subtitleData.timing==="audio-aligned"?"Voice-synced · "+(subtitleData.word_count||0)+" words":"Estimated timing";
  result.innerHTML='<div class="muted" style="font-size:11px;margin-top:10px">✓ '+cues.length+' caption lines · '+Number(subtitleData.duration_seconds||0).toFixed(1)+'s audio · '+timingLabel+'</div>'+preview+(cues.length>5?'<p class="muted" style="font-size:11px">+ '+(cues.length-5)+' more caption lines</p>':"")+'<button class="mini-btn" style="margin-top:9px" onclick="downloadSubtitles(\''+projectId+'\')">↓ Download .SRT</button>';
  window.facelessSubtitles=window.facelessSubtitles||{};
@@ -432,16 +439,21 @@ async function makeCaptionFrame(imageBlob,caption,width,height){
  ctx.drawImage(bitmap,(width-w)/2,(height-h)/2,w,h);bitmap.close();
  const text=String(caption||"").replace(/\s+/g," ").trim();
  if(text){
-  const fontSize=Math.max(22,Math.round(width*0.047)),maxWidth=width*0.84,lineHeight=Math.round(fontSize*1.24);
-  ctx.font="800 "+fontSize+"px Arial, sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
-  const words=text.split(" "),lines=[];let line="";
-  for(const word of words){const test=line?line+" "+word:word;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=word;}else line=test;}
-  if(line)lines.push(line);
-  const shown=lines.slice(0,2),boxHeight=shown.length*lineHeight+Math.round(fontSize*0.72),boxWidth=Math.min(width*0.90,Math.max(...shown.map(t=>ctx.measureText(t).width))+fontSize*0.9);
+  const fontSize=Math.max(22,Math.round(width*0.047)),maxWidth=width*0.84,lineHeight=Math.round(fontSize*1.28);
+  const stopWords=new Set(["the","and","for","that","with","this","from","have","your","you","are","was","were","they","them","then","than","into","onto","about","just","like","what","when","where","which","while","will","would","could","should","there","their","here","over","under","also","only","very","more","some","been","being","it's","that's"]);
+  const impactWords=new Set(["secret","never","always","danger","warning","mistake","truth","powerful","hidden","shocking","incredible","impossible","survive","survived","destroy","destroyed","instantly","suddenly","finally","strongest","fastest","biggest","worst","best","real","proof","million","billion","free","wrong","right","fear","death","life","win","lost","found"]);
+  const tokens=text.split(/\s+/).filter(Boolean);
+  const ranked=tokens.map((word,index)=>({word,index,clean:word.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9']+$/g,"")})).filter(item=>item.clean&&!stopWords.has(item.clean));
+  const chosen=ranked.find(item=>impactWords.has(item.clean))||ranked.filter(item=>item.clean.length>=4).sort((a,b)=>b.clean.length-a.clean.length)[0]||ranked[0];
+  const lines=[];let line=[];
+  for(const token of tokens){const test=line.concat(token),testWidth=test.reduce((sum,w,i)=>sum+ctx.measureText(w).width+(i?fontSize*0.32:0),0);if(testWidth>maxWidth&&line.length){lines.push(line);line=[token];}else line=test;}
+  if(line.length)lines.push(line);
+  const shown=lines.slice(0,2),measureLine=items=>items.reduce((sum,w,i)=>sum+ctx.measureText(w).width+(i?fontSize*0.32:0),0);
+  const boxHeight=shown.length*lineHeight+Math.round(fontSize*0.72),boxWidth=Math.min(width*0.90,Math.max(...shown.map(measureLine))+fontSize*0.9);
   const x=(width-boxWidth)/2,y=height-Math.round(height*0.155)-boxHeight;
-  ctx.fillStyle="rgba(4,7,14,0.78)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,Math.round(fontSize*0.24));ctx.fill();
-  ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.95)";ctx.fillStyle="#ffffff";
-  shown.forEach((t,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;ctx.strokeText(t,width/2,ty,maxWidth);ctx.fillText(t,width/2,ty,maxWidth);});
+  ctx.fillStyle="rgba(4,7,14,0.82)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,Math.round(fontSize*0.24));ctx.fill();
+  ctx.textAlign="left";ctx.textBaseline="middle";ctx.lineJoin="round";ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.98)";
+  shown.forEach((items,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;let cursor=(width-measureLine(items))/2;items.forEach(word=>{const isHighlight=chosen&&word===chosen.word;const size=isHighlight?fontSize*1.09:fontSize;ctx.font=(isHighlight?"900 ":"800 ")+size+"px Arial, sans-serif";const wordWidth=ctx.measureText(word).width;ctx.fillStyle=isHighlight?"#facc15":"#ffffff";ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=3;ctx.strokeText(word,cursor,ty);ctx.fillText(word,cursor,ty);ctx.shadowBlur=0;cursor+=wordWidth+fontSize*0.32;});});
  }
  const blob=await new Promise((resolve,reject)=>canvas.toBlob(v=>v?resolve(v):reject(new Error("Could not create caption frame.")),"image/jpeg",0.92));
  return new Uint8Array(await blob.arrayBuffer());
