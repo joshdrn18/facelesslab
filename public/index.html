@@ -557,14 +557,17 @@ async function renderProjectVideo(projectId,button) {
   const output=await ffmpeg.readFile("output.mp4");
   if(!output||!output.length)throw new Error("FFmpeg produced an empty video.");
   const blob=new Blob([output],{type:"video/mp4"}),url=URL.createObjectURL(blob);
+  const renderedMetaUrl=url,renderedMetaVideo=document.createElement("video");renderedMetaVideo.preload="metadata";
+  const renderedDuration=await new Promise(resolve=>{renderedMetaVideo.onloadedmetadata=()=>resolve(Number.isFinite(renderedMetaVideo.duration)?renderedMetaVideo.duration:0);renderedMetaVideo.onerror=()=>resolve(0);renderedMetaVideo.src=renderedMetaUrl;});
   window.facelessRenderedUrls=window.facelessRenderedUrls||{};
   if(window.facelessRenderedUrls[projectId])URL.revokeObjectURL(window.facelessRenderedUrls[projectId]);
   window.facelessRenderedUrls[projectId]=url;
   result.innerHTML='<video class="editor-preview" controls playsinline src="'+url+'"></video><br><a class="mini-btn editor-download" href="'+url+'" download="facelesslab-'+projectId.slice(0,8)+'.mp4">↓ Download MP4 · '+(blob.size/1024/1024).toFixed(1)+' MB</a>';
   status.textContent="Saving a local library copy…";
-  try{await saveLocalVideo(projectId,blob,totalDuration,quality);}catch(saveError){console.warn("Local video library save failed:",saveError);status.textContent="✓ Rendered · local save failed: "+(saveError.message||"storage unavailable")+". Download the MP4 backup below.";}
+  try{await saveLocalVideo(projectId,blob,renderedDuration||totalDuration,quality);}catch(saveError){console.warn("Local video library save failed:",saveError);status.textContent="✓ Rendered · local save failed: "+(saveError.message||"storage unavailable")+". Download the MP4 backup below.";}
   if(bar)bar.style.width="100%";
-  status.textContent="✓ Rendered with "+(captionMode==="burn"?"burned-in subtitles":captionMode==="soft"?"optional subtitle track":"no subtitles")+" · "+Math.round(totalDuration)+" sec · "+quality+"p"+(audioDuration>0?" · synced to voice length":"");
+  const durationNote=renderedDuration>0&&audioDuration>0&&Math.abs(renderedDuration-audioDuration)>0.75?" · ⚠ duration differs from voice by "+Math.abs(renderedDuration-audioDuration).toFixed(2)+" sec":(audioDuration>0?" · audio duration checked":"");
+  status.textContent="✓ Rendered with "+(captionMode==="burn"?"burned-in subtitles":captionMode==="soft"?"optional subtitle track":"no subtitles")+" · "+Math.round(renderedDuration||totalDuration)+" sec · "+quality+"p"+durationNote;
   button.textContent="↻ Render again";
  }catch(error){console.error("FacelessLab render error:",error,error?.stack);const detail=error?.message||error?.toString?.()||"Unknown rendering error. Check browser console for details.";status.textContent="Render failed: "+detail;button.textContent="↻ Retry render";}
  finally{button.disabled=false;setTimeout(()=>progress?.classList.add("hidden"),1200);}
