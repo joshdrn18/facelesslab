@@ -498,8 +498,13 @@ async function renderProjectVideo(projectId,button) {
   const audioDuration=await new Promise(resolve=>{audioMeta.onloadedmetadata=()=>resolve(Number(audioMeta.duration)||0);audioMeta.onerror=()=>resolve(0);audioMeta.src=audioMetaUrl;});
   URL.revokeObjectURL(audioMetaUrl);
   const plannedDurations=scenes.map(scene=>Math.max(1,Number(scene.duration_seconds)||Math.round((Number(script.estimated_duration_seconds)||45)/scenes.length)));
+  const sceneVoiceoverWords=scenes.map(scene=>(String(scene.voiceover||"").trim().match(/\S+/g)||[]).length);
+  const totalSceneVoiceoverWords=sceneVoiceoverWords.reduce((sum,value)=>sum+value,0);
   const plannedTotal=plannedDurations.reduce((sum,value)=>sum+value,0);
   const timelineScale=audioDuration>0&&plannedTotal>0?audioDuration/plannedTotal:1;
+  const sceneDurations=audioDuration>0&&totalSceneVoiceoverWords>0
+   ?sceneVoiceoverWords.map(words=>audioDuration*words/totalSceneVoiceoverWords)
+   :plannedDurations.map(duration=>duration*timelineScale);
   await ffmpeg.writeFile(voiceFile,new Uint8Array(await voiceBlob.arrayBuffer()));
   const quality=Number($("editor-quality-"+projectId)?.value)||720,frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
   const cues=(subtitleData?.cues||[]).map(c=>({start:Math.max(0,Number(c.start)||0),end:Math.max(0,Number(c.end)||0),text:String(c.text||"").trim()})).filter(c=>c.end>c.start&&c.text);
@@ -507,7 +512,7 @@ async function renderProjectVideo(projectId,button) {
   for(let i=0;i<scenes.length;i++){
    const scene=scenes[i],meta=visualMap.get(Number(scene.scene)),imageResponse=await fetch(API_BASE+"/api/projects/"+projectId+"/visuals/"+meta.generation_id+"/image",{headers:{authorization:"Bearer "+token}});
    if(!imageResponse.ok)throw new Error("Could not download image for scene "+scene.scene+".");
-   const imageBlob=await imageResponse.blob(),duration=plannedDurations[i]*timelineScale,sceneStart=totalDuration,sceneEnd=sceneStart+duration;
+   const imageBlob=await imageResponse.blob(),duration=sceneDurations[i],sceneStart=totalDuration,sceneEnd=sceneStart+duration;
    const filename="scene_"+String(i).padStart(3,"0")+".jpg";
    if(captionMode==="burn"){
     const boundaries=[sceneStart,sceneEnd];
