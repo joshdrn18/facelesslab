@@ -502,7 +502,7 @@ async function renderProjectVideo(projectId,button) {
   const totalSceneVoiceoverWords=sceneVoiceoverWords.reduce((sum,value)=>sum+value,0);
   const plannedTotal=plannedDurations.reduce((sum,value)=>sum+value,0);
   const timelineScale=audioDuration>0&&plannedTotal>0?audioDuration/plannedTotal:1;
-  const sceneDurations=audioDuration>0&&totalSceneVoiceoverWords>0
+  const sceneDurations=audioDuration>0&&sceneVoiceoverWords.every(words=>words>0)&&totalSceneVoiceoverWords>0
    ?sceneVoiceoverWords.map(words=>audioDuration*words/totalSceneVoiceoverWords)
    :plannedDurations.map(duration=>duration*timelineScale);
   await ffmpeg.writeFile(voiceFile,new Uint8Array(await voiceBlob.arrayBuffer()));
