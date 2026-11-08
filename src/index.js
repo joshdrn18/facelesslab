@@ -577,21 +577,27 @@ async function handle(request, env) {
           .filter(item => item.word && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start && item.start >= 0);
         let cues = [];
         if (words.length) {
+          // Build compact, phrase-level captions from Whisper word timestamps.
+          // Keep real word timing; never estimate per-word timing from a sentence.
           let group = [];
           const flush = () => {
             if (!group.length) return;
             const start = Math.max(0, group[0].start - 0.025);
-            const end = Math.max(start + 0.12, group[group.length - 1].end + 0.045);
-            cues.push({ index: cues.length + 1, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)), text: group.map(item => item.word).join(" ").replace(/\s+([,.;!?])/g, "$1") });
+            const end = Math.max(start + 0.18, group[group.length - 1].end + 0.055);
+            const text = group.map(item => item.word).join(" ").replace(/\s+([,.;!?])/g, "$1").replace(/\s+([’'])/g, "$1");
+            cues.push({ index: cues.length + 1, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)), text });
             group = [];
           };
           for (const item of words) {
             const candidate = group.concat(item);
-            const candidateText = candidate.map(word => word.word).join(" ");
-            const endsSentence = /[.!?]["')\]]?$/.test(item.word);
-            if (group.length && (candidate.length > 6 || candidateText.length > 42 || (endsSentence && candidate.length >= 3))) flush();
+            const candidateText = candidate.map(word => word.word).join(" ").replace(/\s+([,.;!?])/g, "$1");
+            const gap = group.length ? Math.max(0, item.start - group[group.length - 1].end) : 0;
+            const phraseEnds = /[.!?]["')\]]?$/.test(item.word);
+            const tooLong = candidate.length > 5 || candidateText.length > 34;
+            const tooSlow = group.length && item.end - group[0].start > 2.35;
+            if (group.length && (tooLong || tooSlow || gap > 0.42 || (phraseEnds && candidate.length >= 2))) flush();
             group.push(item);
-            if (/[.!?]["')\]]?$/.test(item.word) && group.length >= 3) flush();
+            if (phraseEnds && group.length >= 2) flush();
           }
           flush();
         } else if (typeof transcription.vtt === "string") {
