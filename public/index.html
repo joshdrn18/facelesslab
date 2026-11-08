@@ -306,7 +306,7 @@ function renderSubtitleResult(projectId, subtitleData) {
  const result=$("subtitle-result-"+projectId);
  if(!result || !subtitleData)return;
  const cues=subtitleData.cues||[];
- const preview=cues.slice(0,5).map(c=>'<div class="scene-card"><small>'+formatSubtitleTime(c.start,",")+' → '+formatSubtitleTime(c.end,",")+'</small><p>'+escapeHtml(c.text)+'</p></div>').join("");
+ const preview=cues.slice(0,5).map(c=>'<div class="scene-card" style="padding:13px 12px;background:linear-gradient(145deg,#101827,#080d17);border:1px solid rgba(255,255,255,.09);border-radius:12px;margin-top:8px"><small style="color:#7dd3fc;font-variant-numeric:tabular-nums">'+formatSubtitleTime(c.start,",")+' → '+formatSubtitleTime(c.end,",")+'</small><div style="margin-top:9px;min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 10px;background:rgba(0,0,0,.28);border-radius:8px"><p style="margin:0;color:#fff;font-size:clamp(16px,3vw,21px);font-weight:900;line-height:1.2;letter-spacing:.015em;text-shadow:0 2px 5px rgba(0,0,0,.9);text-transform:uppercase">'+escapeHtml(c.text)+'</p></div></div>').join("");
  const timingLabel=subtitleData.timing==="audio-aligned"?"Voice-synced · "+(subtitleData.word_count||0)+" words":"Estimated timing";
  result.innerHTML='<div class="muted" style="font-size:11px;margin-top:10px">✓ '+cues.length+' caption lines · '+Number(subtitleData.duration_seconds||0).toFixed(1)+'s audio · '+timingLabel+'</div>'+preview+(cues.length>5?'<p class="muted" style="font-size:11px">+ '+(cues.length-5)+' more caption lines</p>':"")+'<button class="mini-btn" style="margin-top:9px" onclick="downloadSubtitles(\''+projectId+'\')">↓ Download .SRT</button>';
  window.facelessSubtitles=window.facelessSubtitles||{};
@@ -437,8 +437,8 @@ async function makeCaptionFrame(imageBlob,caption,width,height){
   const words=text.split(" "),lines=[];let line="";
   for(const word of words){const test=line?line+" "+word:word;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=word;}else line=test;}
   if(line)lines.push(line);
-  const shown=lines.slice(0,3),boxHeight=shown.length*lineHeight+Math.round(fontSize*0.85),boxWidth=Math.min(width*0.92,Math.max(...shown.map(t=>ctx.measureText(t).width))+fontSize*1.1);
-  const x=(width-boxWidth)/2,y=height-Math.round(height*0.105)-boxHeight;
+  const shown=lines.slice(0,2),boxHeight=shown.length*lineHeight+Math.round(fontSize*0.72),boxWidth=Math.min(width*0.90,Math.max(...shown.map(t=>ctx.measureText(t).width))+fontSize*0.9);
+  const x=(width-boxWidth)/2,y=height-Math.round(height*0.155)-boxHeight;
   ctx.fillStyle="rgba(4,7,14,0.78)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,Math.round(fontSize*0.24));ctx.fill();
   ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.95)";ctx.fillStyle="#ffffff";
   shown.forEach((t,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;ctx.strokeText(t,width/2,ty,maxWidth);ctx.fillText(t,width/2,ty,maxWidth);});
