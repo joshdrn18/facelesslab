@@ -462,21 +462,34 @@ async function handle(request, env) {
       const clean=(value,max=260)=>String(value||"").replace(/\\s+/g," ").trim().slice(0,max);
       const animeMode=String(project.style||"").toLowerCase()==="anime";
       const continuation=project.continuity_json?JSON.parse(project.continuity_json):null;
+      const shotDirections=[
+        "ESTABLISHING WIDE SHOT: reveal the location and scale; subject small within a richly detailed environment.",
+        "MEDIUM ACTION SHOT: bring the main subject closer; capture a decisive physical action with a clear focal point.",
+        "INTIMATE CLOSE-UP: emphasize a meaningful expression, object or tactile detail; shallow depth of field.",
+        "LOW-ANGLE DYNAMIC SHOT: give the key subject presence; use strong foreground depth and directional movement.",
+        "OVER-THE-SHOULDER OR POV SHOT: place the viewer inside the moment; reveal what the subject is seeing.",
+        "ATMOSPHERIC WIDE SHOT: show consequences or a change in the environment; use layered foreground, middle ground and background.",
+        "EMOTIONAL FINAL SHOT: create a memorable visual payoff that resolves this scene without adding unrelated objects."
+      ];
+      const shotDirection=shotDirections[(sceneIndex>=0?sceneIndex:0)%shotDirections.length];
       const prompt=[
         animeMode
           ? "Premium Japanese 2D anime film frame, hand-drawn look, expressive characters, clean linework, cinematic cel shading, richly painted background, atmospheric lighting, consistent character design, vertical 9:16. Not photorealistic or 3D."
-          : "Cinematic photorealistic film still, one coherent moment, natural anatomy, detailed environment, dramatic natural lighting, vertical 9:16.",
+          : "High-end cinematic photorealistic film still, believable natural anatomy, physically plausible environment, rich production design, motivated dramatic lighting, vertical 9:16.",
         "STORY: "+clean(project.topic,120)+". TITLE: "+clean(script.title,60)+".",
-        "SCENE ACTION: "+clean(scene.voiceover,180),
-        "DEPICT THIS VISUAL: "+clean(visualPrompt,360),
+        "EXACT MOMENT TO ILLUSTRATE: "+clean(scene.voiceover,240),
+        "DIRECTOR'S VISUAL BRIEF: "+clean(visualPrompt,480),
+        "SHOT DESIGN: "+shotDirection,
+        "COMPOSITION: One instantly readable focal subject. Strong foreground, middle-ground and background separation. Intentional negative space. Subject placement and silhouette must read clearly on a phone screen. Show the described action at its most visually informative instant.",
+        "CAMERA AND LIGHT: Use a deliberate cinematic camera distance and angle, natural perspective, controlled depth of field, motivated key light, subtle rim light where appropriate, and a coherent color grade. Avoid flat centered passport-like framing.",
         animeMode
-          ? "Keep anime character face, hairstyle, colors and outfit consistent across scenes."
-          : "Keep recurring characters, era, color grade and visual world consistent.",
-        previousScene?"Previous scene context only: "+clean(previousScene.voiceover,70):"Establish the story world.",
-        continuation&&sceneIndex===0?"SERIES CONTINUATION: Begin at the exact ending moment of the previous episode. Previous final action: "+clean(continuation.ending_state||continuation.previous_ending_voiceover,180)+". Previous final shot description: "+clean(continuation.previous_ending_visual_prompt,220)+". Preserve the same characters and visual identity.":"",
-        nextScene?"Next scene context only: "+clean(nextScene.voiceover,70):"Make this a strong final moment.",
-        "One camera shot and one action. No collage, montage, grid, split screen, panels, poster, infographic, UI, text, subtitles, logos or watermark."
-      ].join(" ").slice(0,1900);
+          ? "Maintain the same anime character identity, face shape, eye design, hairstyle, colors and outfit. Keep linework, cel shading and background painting consistent."
+          : "Maintain recurring character identity, age appearance, wardrobe, era, location logic, lens language and color grade. Keep anatomy, hands, objects and architecture plausible.",
+        previousScene?"PREVIOUS BEAT (continuity only): "+clean(previousScene.voiceover,90)+". Advance the story; do not repeat its action, pose or composition.":"OPENING BEAT: establish the story world with a strong visual question.",
+        continuation&&sceneIndex===0?"SERIES CONTINUATION: Start from the previous episode's exact ending state. Previous action: "+clean(continuation.ending_state||continuation.previous_ending_voiceover,180)+". Previous shot: "+clean(continuation.previous_ending_visual_prompt,220)+". Preserve identity and world continuity.":"",
+        nextScene?"NEXT BEAT (context only): "+clean(nextScene.voiceover,90)+". Foreshadow subtly without depicting a later event.":"FINAL BEAT: deliver a clear visual payoff that supports the narration.",
+        "STRICT: one location, one camera frame, one primary action and one instant in time. Do not depict events absent from the narration. No collage, montage, grid, split screen, panels, poster, infographic, UI, text, captions, subtitles, logos, borders or watermark. Avoid generic stock-photo posing, repeated compositions, extra limbs, malformed hands, duplicate subjects and visual clutter."
+      ].filter(Boolean).join(" ").slice(0,2600);
       let referenceObjectKey=null,referenceSource=null;
       if(sceneIndex>0){
         for(let index=sceneIndex-1;index>=0;index--){
