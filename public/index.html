@@ -492,11 +492,14 @@ async function renderProjectVideo(projectId,button) {
   const subtitleData=subtitleResponse.subtitles||window.facelessSubtitles?.[projectId];
   const captionMode=$("editor-captions-"+projectId)?.value||"burn";
   if(captionMode!=="off"&&!subtitleData?.cues?.length)throw new Error("Generate subtitles first, or choose No subtitles.");
-  const ffmpeg=await getBrowserFFmpeg(projectId,status),voiceBlob=await voiceResponse.blob();
+  const voiceBlob=await voiceResponse.blob();
+  if(!voiceBlob.size)throw new Error("The saved voice-over file is empty. Regenerate the voice-over before rendering.");
   const voiceFile=(voiceResponse.headers.get("content-type")||"").includes("wav")?"voice.wav":"voice.mp3";
   const audioMetaUrl=URL.createObjectURL(voiceBlob),audioMeta=new Audio();audioMeta.preload="metadata";
-  const audioDuration=await new Promise(resolve=>{audioMeta.onloadedmetadata=()=>resolve(Number(audioMeta.duration)||0);audioMeta.onerror=()=>resolve(0);audioMeta.src=audioMetaUrl;});
+  const audioDuration=await new Promise(resolve=>{audioMeta.onloadedmetadata=()=>resolve(Number.isFinite(audioMeta.duration)?audioMeta.duration:0);audioMeta.onerror=()=>resolve(0);audioMeta.src=audioMetaUrl;});
   URL.revokeObjectURL(audioMetaUrl);
+  if(!(audioDuration>0))throw new Error("The voice-over file could not be read as playable audio. Regenerate the voice-over, then retry rendering.");
+  const ffmpeg=await getBrowserFFmpeg(projectId,status);
   const plannedDurations=scenes.map(scene=>Math.max(1,Number(scene.duration_seconds)||Math.round((Number(script.estimated_duration_seconds)||45)/scenes.length)));
   const sceneVoiceoverWords=scenes.map(scene=>(String(scene.voiceover||"").trim().match(/\S+/g)||[]).length);
   const totalSceneVoiceoverWords=sceneVoiceoverWords.reduce((sum,value)=>sum+value,0);
