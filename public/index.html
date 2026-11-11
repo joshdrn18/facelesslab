@@ -103,12 +103,22 @@ function setAuthMode(mode) {
  $("authNotice").textContent = "";
 }
 async function api(path, options = {}) {
- const headers = { "content-type": "application/json", ...(options.headers || {}) };
+ const { timeoutMs, ...fetchOptions } = options;
+ const headers = { "content-type": "application/json", ...(fetchOptions.headers || {}) };
  if (token) headers.authorization = "Bearer " + token;
- const response = await fetch(API_BASE + path, { ...options, headers });
- const data = await response.json().catch(() => ({}));
- if (!response.ok) throw new Error(data.error || "Request failed (" + response.status + ")");
- return data;
+ const controller = new AbortController();
+ const timeout = Number(timeoutMs) > 0 ? setTimeout(() => controller.abort(), Number(timeoutMs)) : null;
+ try {
+  const response = await fetch(API_BASE + path, { ...fetchOptions, headers, signal: fetchOptions.signal || controller.signal });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Request failed (" + response.status + ")");
+  return data;
+ } catch(error) {
+  if (controller.signal.aborted) throw new Error("Request timed out after " + Math.round(Number(timeoutMs)/1000) + " seconds. The image may still finish on the server. Reload the project to check saved visuals before retrying.");
+  throw error;
+ } finally {
+  if (timeout) clearTimeout(timeout);
+ }
 }
 function escapeHtml(value) {
  return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
@@ -383,7 +393,7 @@ async function generateSceneVisual(projectId,sceneNumber,button) {
  button.disabled=true;button.textContent="Generating…";
  if(container)container.innerHTML='<div class="empty">Creating this scene image and matching visual continuity. Keep this page open…</div>';
  try {
-  const data=await api("/api/projects/"+projectId+"/visuals",{method:"POST",body:JSON.stringify({scene_number:sceneNumber})});
+  const data=await api("/api/projects/"+projectId+"/visuals",{method:"POST",body:JSON.stringify({scene_number:sceneNumber}),timeoutMs:150000});
   await showSceneVisual(projectId,sceneNumber,data.visual);
   return data.visual;
  } catch(error) {
