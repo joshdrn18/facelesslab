@@ -489,7 +489,10 @@ async function handle(request, env) {
         continuation&&sceneIndex===0?"SERIES CONTINUATION: Start from the previous episode's exact ending state. Previous action: "+clean(continuation.ending_state||continuation.previous_ending_voiceover,180)+". Previous shot: "+clean(continuation.previous_ending_visual_prompt,220)+". Preserve identity and world continuity.":"",
         nextScene?"NEXT BEAT (context only): "+clean(nextScene.voiceover,90)+". Foreshadow subtly without depicting a later event.":"FINAL BEAT: deliver a clear visual payoff that supports the narration.",
         "STRICT: one location, one camera frame, one primary action and one instant in time. Do not depict events absent from the narration. No collage, montage, grid, split screen, panels, poster, infographic, UI, text, captions, subtitles, logos, borders or watermark. Avoid generic stock-photo posing, repeated compositions, extra limbs, malformed hands, duplicate subjects and visual clutter."
-      ].filter(Boolean).join(" ").slice(0,2600);
+      ].filter(Boolean).join(" ").slice(0,1700);
+      // Keep every Workers AI prompt below the provider's 2,048-character limit,
+      // including the extra continuity instructions used by image-to-image.
+      const continuityPrompt=(prompt+" Use the reference image to preserve the exact character identity, face, hairstyle, clothing, art direction and color palette. Change pose, camera framing and background action for this scene; do not repeat the previous composition.").slice(0,2048);
       let referenceObjectKey=null,referenceSource=null;
       if(sceneIndex>0){
         for(let index=sceneIndex-1;index>=0;index--){
@@ -522,7 +525,7 @@ async function handle(request, env) {
             if(!referenceBytes.byteLength||referenceBytes.byteLength>5*1024*1024)throw new Error("The continuity reference image is empty or larger than 5 MB.");
             const strength=referenceSource==="previous_episode_ending"?0.48:0.62;
             const result=await env.AI.run("@cf/runwayml/stable-diffusion-v1-5-img2img",{
-              prompt:prompt+" Use the reference image to preserve the exact character identity, face, hairstyle, clothing, art direction and color palette. Change the pose, camera framing and background action only as required by this scene. Do not copy the previous scene composition when the new scene describes a different action.",
+              prompt:continuityPrompt,
               image:Array.from(referenceBytes),strength,guidance:7.5,num_steps:20,width:768,height:1344,
               negative_prompt:"different character, changed face, changed hairstyle, changed outfit, inconsistent art style, duplicate people, collage, split screen, text, watermark"
             });
