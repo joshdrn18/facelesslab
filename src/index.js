@@ -356,9 +356,10 @@ async function handle(request, env) {
     const backupCollection = "/api/video-backups";
     if (path === backupCollection && method === "GET") {
       const prefix = "users/" + user.id + "/rendered-backups/";
-      const listed = await env.MEDIA.list({ prefix, limit: 100, include: ["customMetadata"] });
-      const backups = (listed.objects || []).map(object => ({ id: object.key.slice(prefix.length).replace(/\.mp4$/i, ""), title: object.customMetadata?.title || "FacelessLab video", size: object.size, created_at: object.uploaded ? new Date(object.uploaded).toISOString() : null, duration: Number(object.customMetadata?.duration || 0), quality: Number(object.customMetadata?.quality || 0) }));
-      return json({ ok: true, backups, truncated: Boolean(listed.truncated) });
+      const listed = await env.MEDIA.list({ prefix, limit: 1000, include: ["customMetadata"] });
+      const backups = (listed.objects || []).map(object => ({ id: object.key.slice(prefix.length).replace(/\.mp4$/i, ""), title: object.customMetadata?.title || "FacelessLab video", size: object.size, created_at: object.uploaded ? new Date(object.uploaded).toISOString() : null, duration: Number(object.customMetadata?.duration || 0), quality: Number(object.customMetadata?.quality || 0) })).sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+      const listed_bytes = backups.reduce((total, backup) => total + Number(backup.size || 0), 0);
+      return json({ ok: true, backups, count: backups.length, listed_bytes, truncated: Boolean(listed.truncated) });
     }
     if (path === backupCollection && method === "POST") {
       const contentLength = Number(request.headers.get("content-length") || 0);
