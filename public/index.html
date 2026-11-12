@@ -653,6 +653,14 @@ async function refreshPublishing(){
   if(jobsEl)jobsEl.innerHTML=jobs.length?jobs.map(j=>'<article class="cloud-backup-row"><b>'+escapeHtml(j.title)+'</b><small>'+escapeHtml(j.platform.toUpperCase())+' · '+escapeHtml(j.status)+' · '+new Date(j.created_at*1000).toLocaleString()+'</small><small>'+escapeHtml(j.account_name||"Connected account")+'</small>'+(j.error_message?'<small>'+escapeHtml(j.error_message)+'</small>':'')+((j.status==="draft"||j.status==="failed")?'<button class="primary" type="button" onclick="publishDraftNow(\''+j.id+'\')">Publish now</button><button class="secondary" type="button" onclick="deletePublishDraft(\''+j.id+'\')">Delete draft</button>':'')+(j.provider_url?'<a class="mini-btn" href="'+escapeHtml(j.provider_url)+'" target="_blank" rel="noopener">Open post</a>':'')+'</article>').join(""):'<div class="empty">No publishing drafts yet. Prepare one from a Cloud backup above.</div>';
  }catch(error){if(jobsEl)jobsEl.innerHTML='<div class="empty">'+escapeHtml(error.message||"Could not load publishing details.")+'</div>';}
 }
+function syncPublishPrivacyOptions(){
+ const platform=$("publishPlatform")?.value,privacy=$("publishPrivacy");if(!privacy)return;
+ const current=privacy.value;
+ privacy.innerHTML=platform==="tiktok"?'<option value="private">Only me</option><option value="public">Everyone (requires TikTok app approval)</option>':'<option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>';
+ privacy.value=[...privacy.options].some(o=>o.value===current)?current:"private";
+}
+$("publishPlatform")?.addEventListener("change",syncPublishPrivacyOptions);
+syncPublishPrivacyOptions();
 async function connectSocial(platform){
  const button=$("connect"+(platform==="youtube"?"Youtube":"Tiktok"));if(button){button.disabled=true;button.textContent="Preparing secure connection…";}
  try{const data=await api("/api/publishing/connect/"+platform,{method:"POST",body:"{}"});if(!data.authorization_url)throw new Error("Authorization URL was not returned.");location.href=data.authorization_url;}
