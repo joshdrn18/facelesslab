@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "src/index.js"
+      - "public/index.html"
+      - "scripts/check-inline-js.mjs"
       - ".github/workflows/validate-api.yml"
   workflow_dispatch:
 
@@ -21,4 +23,7 @@ jobs:
         with:
           node-version: 22
       - name: Validate Worker JavaScript syntax
-        run: node --check src/index.js
+        run: |
+          node --check src/index.js
+          node scripts/check-inline-js.mjs
+          node --check .facelesslab-inline-check.js
