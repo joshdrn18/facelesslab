@@ -281,7 +281,7 @@ async function tokenCryptoKey(env) {
   if(raw.length!==32)throw new Error("PUBLISH_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.");
   return crypto.subtle.importKey("raw",raw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
 }
-async function encryptSocialToken(env,value) {
+async async function encryptSocialToken(env,value) {
   const iv=crypto.getRandomValues(new Uint8Array(12)),key=await tokenCryptoKey(env);
   const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,encoder.encode(String(value||"")));
   const combined=new Uint8Array(iv.length+encrypted.byteLength);combined.set(iv);combined.set(new Uint8Array(encrypted),iv.length);
@@ -1202,9 +1202,11 @@ export default {
   },
   async fetch(request, env) {
     const origin = request.headers.get("origin");
-    const allowedOrigin = env.APP_ORIGIN || "*";
+    const appOrigin = env.APP_ORIGIN || "https://facelesslab.pages.dev";
+    const previewOriginAllowed = /^https:\/\/[a-z0-9-]+\.facelesslab\.pages\.dev$/i.test(origin || "");
+    const originAllowed = !origin || origin === appOrigin || previewOriginAllowed;
     const headers = {
-      "access-control-allow-origin": allowedOrigin === "*" ? "*" : (origin === allowedOrigin ? origin : allowedOrigin),
+      ...(origin && originAllowed ? { "access-control-allow-origin": origin } : {}),
       "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
       "access-control-allow-headers": "content-type, authorization, x-video-title, x-video-duration, x-video-quality",
       "access-control-max-age": "86400",
