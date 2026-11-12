@@ -33,6 +33,80 @@
 .nav a.active{background:#25213d;color:#fff;box-shadow:inset 2px 0 #a18aff}
 @media(max-width:600px){.side{display:block;position:sticky;top:0;z-index:5;padding:9px 12px;border-right:0;border-bottom:1px solid var(--line)}.side .brand{padding:0 5px 7px;margin-bottom:4px}.side .brand .logo{width:28px;height:28px}.side .navlabel,.sidebottom{display:none}.side nav{display:flex;gap:5px;overflow-x:auto}.side .nav a{white-space:nowrap;padding:8px 10px;margin:0;font-size:12px}.main{padding-top:18px}}
 .project-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 180px auto;gap:9px;margin:0 0 14px}.project-toolbar input,.project-toolbar select{padding:10px 12px}.billing-panel{margin-top:0}.billing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:15px}.billing-grid .stat{margin:0}.billing-panel .content-card h3{margin:8px 0}.billing-panel .content-card p{color:#b9c4d7;line-height:1.7}@media(max-width:600px){.project-toolbar{grid-template-columns:1fr 1fr}.project-toolbar input,.project-toolbar button{grid-column:1/-1}.billing-grid{grid-template-columns:1fr}}.health-pill{display:flex;align-items:center;gap:7px;margin-top:5px;font-size:10px;color:#aebbd0}.health-pill span{width:7px;height:7px;border-radius:50%;background:#d4a95b;box-shadow:0 0 0 3px #d4a95b20}.health-pill[data-state="ok"]{color:#8fe0c4}.health-pill[data-state="ok"] span{background:#62d6a7;box-shadow:0 0 0 3px #62d6a720}.health-pill[data-state="error"]{color:#ff9ba4}.health-pill[data-state="error"] span{background:#ff818d;box-shadow:0 0 0 3px #ff818d20}@media(max-width:600px){.userbox{gap:8px}.health-pill{font-size:9px}}
+
+/* FacelessLab UI refresh — compact premium workspace */
+:root{--panel-strong:#151d2d;--line-soft:rgba(145,160,190,.16);--glow:rgba(161,138,255,.16)}
+body{background:radial-gradient(ellipse at 78% -12%,rgba(113,91,190,.22),transparent 34%),radial-gradient(ellipse at 4% 38%,rgba(48,118,135,.08),transparent 30%),#090b12}
+.app{grid-template-columns:248px minmax(0,1fr)}
+.side{position:sticky;top:0;height:100vh;align-self:start;overflow-y:auto;background:rgba(11,15,25,.94);backdrop-filter:blur(18px);border-right:1px solid var(--line-soft);padding:24px 16px}
+.side .brand{font-size:19px;letter-spacing:-.5px}
+.nav a{font-size:13px;font-weight:600;transition:background .18s ease,color .18s ease,transform .18s ease}
+.nav a:hover{transform:translateX(2px)}
+.nav a.active{background:linear-gradient(100deg,rgba(161,138,255,.19),rgba(112,229,220,.06));box-shadow:inset 2px 0 #a18aff}
+.main{max-width:1500px;padding-top:30px;padding-bottom:48px}
+.top{align-items:flex-start;margin-bottom:24px}
+.top h1{font-size:26px;letter-spacing:-1.1px}
+.top .eyebrow{font-size:9px}
+.userbox{padding:8px 10px;border:1px solid var(--line-soft);border-radius:13px;background:rgba(18,24,38,.72)}
+.avatar{border:1px solid rgba(161,138,255,.25)}
+.hero{position:relative;overflow:hidden;padding:25px 28px;border-color:rgba(161,138,255,.28);background:linear-gradient(112deg,rgba(44,34,78,.94),rgba(20,29,45,.96) 68%,rgba(19,43,49,.72));box-shadow:0 18px 50px rgba(0,0,0,.13)}
+.hero:after{content:"";position:absolute;width:220px;height:220px;right:8%;top:-145px;border-radius:50%;border:1px solid rgba(188,174,255,.13);box-shadow:0 0 0 24px rgba(188,174,255,.025),0 0 0 52px rgba(188,174,255,.02);pointer-events:none}
+.hero>div,.hero>button{position:relative;z-index:1}
+.hero h2{font-size:23px;letter-spacing:-.5px}
+.stats{gap:12px;margin-bottom:22px}
+.stat{position:relative;overflow:hidden;padding:15px 17px;border-color:var(--line-soft);background:linear-gradient(145deg,rgba(22,30,46,.96),rgba(15,20,32,.96));transition:border-color .2s,transform .2s}
+.stat:hover{border-color:rgba(161,138,255,.38);transform:translateY(-2px)}
+.stat strong{font-size:23px;letter-spacing:-.6px}
+.workspace{gap:14px}
+.panel{border-color:var(--line-soft);background:linear-gradient(145deg,rgba(20,27,42,.98),rgba(14,19,30,.98));box-shadow:0 12px 35px rgba(0,0,0,.08)}
+.panel h3{letter-spacing:-.2px}
+#createPanel textarea{min-height:112px;resize:vertical;line-height:1.6}
+input,select,textarea{border-color:#303b52;background:#0c121e;transition:border-color .18s,box-shadow .18s}
+input:focus,select:focus,textarea:focus{border-color:#9c87f4;box-shadow:0 0 0 3px rgba(161,138,255,.12)}
+button{transition:filter .18s,transform .18s,border-color .18s}
+button:hover{filter:brightness(1.08)}
+button:active{transform:translateY(1px)}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a18aff;outline-offset:3px}
+.primary{box-shadow:0 7px 22px rgba(145,125,255,.13)}
+.secondary{border-color:#35415a;background:#1a2435}
+.sectionhead{margin-top:27px}
+.sectionhead h3{letter-spacing:-.3px}
+.project-toolbar{grid-template-columns:minmax(0,1fr) 170px auto}
+.project{background:linear-gradient(110deg,#141d2d,#101725);border-color:var(--line-soft)}
+.project:hover,.production-card:hover,.content-card:hover{border-color:rgba(161,138,255,.3)}
+.production-card,.content-card,.scene-details,.library-storage{border-color:var(--line-soft)}
+.footer{padding-top:12px;border-top:1px solid var(--line-soft)}
+@media(max-width:850px){
+ .app{grid-template-columns:1fr}
+ .side{display:block;position:sticky;top:0;z-index:30;height:auto;max-height:none;padding:9px 18px;border-right:0;border-bottom:1px solid var(--line-soft)}
+ .side .brand{padding:0 5px 8px;margin:0;font-size:17px}
+ .side .brand .logo{width:29px;height:29px}
+ .side .navlabel,.sidebottom{display:none}
+ .side nav{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+ .side nav::-webkit-scrollbar{display:none}
+ .side .nav a{white-space:nowrap;padding:8px 11px;margin:0;font-size:12px}
+ .main{padding:22px clamp(16px,3vw,28px) 38px}
+}
+@media(max-width:600px){
+ .main{padding:17px 13px 30px}
+ .top{display:flex;flex-direction:column;gap:13px;margin-bottom:18px}
+ .top h1{font-size:22px;line-height:1.2}
+ .userbox{width:100%;justify-content:space-between}
+ .hero{padding:20px;border-radius:14px;gap:14px}
+ .hero h2{font-size:20px}
+ .hero .primary{width:100%}
+ .stats{gap:8px;margin-bottom:17px}
+ .stat{padding:12px}
+ .stat strong{font-size:21px}
+ .workspace{gap:11px}
+ .panel{padding:15px}
+ .project-toolbar{grid-template-columns:1fr 1fr}
+ .project-toolbar input,.project-toolbar button{grid-column:1/-1}
+ .sectionhead{align-items:flex-start;gap:10px}
+ .sectionhead>.secondary{white-space:nowrap}
+}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
 </style>
 </head>
 <body>
@@ -51,7 +125,7 @@
  </div>
 </section>
 <div id="appScreen" class="app hidden">
- <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · MVP 0.2</div></aside>
+ <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
  <main class="main">
   <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div><div id="systemHealth" class="health-pill" role="status" aria-live="polite"><span></span>Checking core systems…</div></div><div class="avatar" id="avatar">FL</div><button class="secondary" id="logoutBtn">Log out</button></div></header>
   <section class="hero" id="overviewHero"><div><div class="eyebrow">CREATE WITHOUT A CAMERA</div><h2>Your next video starts with an idea.</h2><p>Generate scripts, voiceovers, visuals and subtitles in one workflow.</p></div><button class="primary" onclick="document.querySelector('#topic').focus()">＋ Create a video</button></section>
@@ -64,7 +138,7 @@
      <div class="actions"><button class="primary" id="createBtn" type="submit">Save project →</button><button class="secondary" type="reset">Clear</button></div><div class="notice" id="createNotice" role="status"></div>
     </form>
    </section>
-   <section class="panel" id="workflowPanel"><h3>How it works</h3><p>One idea, a complete short-form video.</p><div class="steps"><div class="step"><div class="num">1</div><div><b>AI script</b><small>Hook, narration and scene plan</small></div><span class="tag">Ready</span></div><div class="step"><div class="num">2</div><div><b>Voiceover</b><small>Natural AI narration</small></div><span class="tag">Available</span></div><div class="step"><div class="num">3</div><div><b>Visuals & subtitles</b><small>Scenes matched to your script</small></div><span class="tag">Beta</span></div><div class="step"><div class="num">4</div><div><b>Video rendering</b><small>Vertical 9:16 export</small></div><span class="tag">Beta</span></div></div></section>
+   <section class="panel" id="workflowPanel"><h3>How it works</h3><p>One idea, a complete short-form video.</p><div class="steps"><div class="step"><div class="num">1</div><div><b>AI script</b><small>Hook, narration and scene plan</small></div><span class="tag">Ready</span></div><div class="step"><div class="num">2</div><div><b>Voiceover</b><small>Natural AI narration</small></div><span class="tag">Available</span></div><div class="step"><div class="num">3</div><div><b>Visuals & subtitles</b><small>Scenes matched to your script</small></div><span class="tag">Ready</span></div><div class="step"><div class="num">4</div><div><b>Video rendering</b><small>Vertical 9:16 export</small></div><span class="tag">Ready</span></div></div></section>
   </div>
   <section id="projects"><div class="sectionhead"><div><h3>My projects</h3><span class="muted" style="font-size:12px">Saved to your account</span></div><button class="secondary" type="button" onclick="navigateTo('create')">＋ New project</button></div><div class="project-toolbar"><input id="projectSearch" type="search" placeholder="Search projects…" aria-label="Search projects"><select id="projectSort" aria-label="Sort projects"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select><button class="secondary" type="button" id="refreshProjectsBtn">↻ Refresh</button></div><div id="projectList" class="project-list"><div class="empty">Loading projects…</div></div></section>
   <section id="videoLibrary" class="panel"><div class="sectionhead"><div><h3>Rendered videos</h3><p class="muted">Saved on this browser only. MP4 files are not uploaded to Cloudflare.</p></div><button class="secondary" type="button" onclick="refreshVideoLibrary()">↻ Refresh</button></div><div class="library-storage" id="libraryStorage">Checking local storage…</div><div class="actions" style="margin:12px 0"><label class="secondary mini-btn" for="libraryImport">＋ Import MP4 backup</label><input id="libraryImport" type="file" accept="video/mp4,.mp4" multiple hidden></div><div id="libraryList" class="project-list"><div class="empty">Loading local videos…</div></div><p class="production-note">Videos stay in this browser profile. Clearing this website’s storage, resetting the browser, or losing this device can erase them. Download backups to keep a separate copy.</p></section>
