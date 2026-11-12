@@ -836,7 +836,7 @@ async function handle(request, env) {
         }
         if (!cues.length) throw new Error("Speech recognition returned no usable timestamps. Please regenerate the voice-over and retry subtitles.");
         const whisperTranscript = String(transcription.text || cues.map(cue => cue.text).join(" ")).trim();
-        const normalizeForMatch = value => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\\s+/).filter(token => token.length > 1);
+        const normalizeForMatch = value => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(token => token.length > 1);
         const expectedTokens = normalizeForMatch(sourceNarration);
         const heardTokens = normalizeForMatch(whisperTranscript);
         const heardSet = new Set(heardTokens);
