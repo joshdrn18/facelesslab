@@ -18,6 +18,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Validate Worker JavaScript syntax
+        run: node --check src/index.js
+
       - name: Install Wrangler
         run: npm install --no-save wrangler@4
 
