@@ -676,6 +676,13 @@ async function handle(request, env) {
           if(priorRow){try{const priorMeta=JSON.parse(priorRow.output_json||"{}");if(priorMeta.object_key){referenceObjectKey=priorMeta.object_key;referenceSource="previous_scene_"+priorSceneNumber;break;}}catch{}}
         }
       }
+      // For a scene focused on one named character, prefer that character's own R2 reference portrait.
+      let selectedCharacterReferenceId=null;
+      if(sceneCharacters.length===1&&sceneCharacters[0].character_reference_object_key){
+        referenceObjectKey=sceneCharacters[0].character_reference_object_key;
+        referenceSource="individual_character_reference";
+        selectedCharacterReferenceId=sceneCharacters[0].id;
+      }
       const generationId=crypto.randomUUID();
       const preferredModel=referenceObjectKey?"@cf/runwayml/stable-diffusion-v1-5-img2img":"@cf/black-forest-labs/flux-1-schnell";
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'visuals','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({model:preferredModel,scene_number:sceneNumber,prompt,reference_object_key:referenceObjectKey,reference_source:referenceSource})).run();
@@ -717,7 +724,7 @@ async function handle(request, env) {
         // Scene one becomes the persistent character-reference frame. Reuse it instead of
         // generating an extra portrait, keeping image-generation cost and storage low.
         const characterReferenceObjectKey=referenceObjectKey||objectKey;
-        const output={object_key:objectKey,mime_type:"image/png",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:actualModel,scene_number:sceneNumber,prompt,continuity_mode:continuityMode,reference_source:referenceSource,reference_object_key:referenceObjectKey,reference_strength:referenceStrength,character_reference_object_key:characterReferenceObjectKey,character_reference_source:referenceObjectKey?"reused_existing_anchor":"scene_1_anchor",continuity_fallback_error:continuityFallback};
+        const output={object_key:objectKey,mime_type:"image/png",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:actualModel,scene_number:sceneNumber,prompt,continuity_mode:continuityMode,reference_source:referenceSource,reference_object_key:referenceObjectKey,reference_strength:referenceStrength,character_reference_object_key:characterReferenceObjectKey,character_reference_source:referenceSource==="individual_character_reference"?"individual_character_reference":referenceObjectKey?"reused_existing_anchor":"scene_1_anchor",character_reference_id:selectedCharacterReferenceId,continuity_fallback_error:continuityFallback};
         await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
         return json({ok:true,generation_id:generationId,visual:{generation_id:generationId,...output}},201);      }catch(error){
         await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
