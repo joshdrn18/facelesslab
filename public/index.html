@@ -631,7 +631,7 @@ async function makeCaptionFrame(imageBlob,caption,width,height){
   let fontSize=Math.max(20,Math.round(width*0.047)),maxWidth=width*0.88,lineHeight;
   const stopWords=new Set(["the","and","for","that","with","this","from","have","your","you","are","was","were","they","them","then","than","into","onto","about","just","like","what","when","where","which","while","will","would","could","should","there","their","here","over","under","also","only","very","more","some","been","being","it's","that's"]);
   const impactWords=new Set(["secret","never","always","danger","warning","mistake","truth","powerful","hidden","shocking","incredible","impossible","survive","survived","destroy","destroyed","instantly","suddenly","finally","strongest","fastest","biggest","worst","best","real","proof","million","billion","free","wrong","right","fear","death","life","win","lost","found"]);
-  const tokens=text.split(/\\s+/).filter(Boolean);
+  const tokens=text.split(/\s+/).filter(Boolean);
   const ranked=tokens.map((word,index)=>({word,index,clean:word.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9']+$/g,"")})).filter(item=>item.clean&&!stopWords.has(item.clean));
   const chosen=ranked.find(item=>impactWords.has(item.clean))||ranked.filter(item=>item.clean.length>=4).sort((a,b)=>b.clean.length-a.clean.length)[0]||ranked[0];
   const wrap=()=>{
@@ -642,10 +642,10 @@ async function makeCaptionFrame(imageBlob,caption,width,height){
    return lines;
   };
   let lines=wrap();
-  while(lines.length>4&&fontSize>Math.max(17,Math.round(width*0.032))){fontSize-=1;lines=wrap();}
-  const shown=lines.slice(0,4),measureLine=items=>items.reduce((sum,w,i)=>{const emphasized=chosen&&w===chosen.word;ctx.font=(emphasized?"900 ":"800 ")+(emphasized?fontSize*1.08:fontSize)+"px Arial, sans-serif";return sum+ctx.measureText(w).width+(i?fontSize*0.28:0);},0);
+  while(lines.length>3&&fontSize>Math.max(15,Math.round(width*0.026))){fontSize-=1;lines=wrap();}
+  const shown=lines,measureLine=items=>items.reduce((sum,w,i)=>{const emphasized=chosen&&w===chosen.word;ctx.font=(emphasized?"900 ":"800 ")+(emphasized?fontSize*1.08:fontSize)+"px Arial, sans-serif";return sum+ctx.measureText(w).width+(i?fontSize*0.28:0);},0);
   const boxHeight=shown.length*lineHeight+Math.round(fontSize*0.72),boxWidth=Math.min(width*0.94,Math.max(...shown.map(measureLine))+fontSize*0.9);
-  const x=(width-boxWidth)/2,y=height-Math.round(height*0.13)-boxHeight;
+  const x=(width-boxWidth)/2,y=Math.max(Math.round(height*0.07),height-Math.round(height*0.13)-boxHeight);
   ctx.fillStyle="rgba(4,7,14,0.84)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,Math.round(fontSize*0.24));ctx.fill();
   ctx.textAlign="left";ctx.textBaseline="middle";ctx.lineJoin="round";ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.98)";
   shown.forEach((items,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;let cursor=(width-measureLine(items))/2;items.forEach(word=>{const isHighlight=chosen&&word===chosen.word;const size=isHighlight?fontSize*1.08:fontSize;ctx.font=(isHighlight?"900 ":"800 ")+size+"px Arial, sans-serif";const wordWidth=ctx.measureText(word).width;ctx.fillStyle=isHighlight?"#facc15":"#ffffff";ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=3;ctx.strokeText(word,cursor,ty);ctx.fillText(word,cursor,ty);ctx.shadowBlur=0;cursor+=wordWidth+fontSize*0.28;});});
