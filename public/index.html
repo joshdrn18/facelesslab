@@ -107,6 +107,16 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
 }
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
+
+/* Profile and account settings */
+.profile-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.75fr);gap:14px;align-items:start}
+.profile-avatar-card{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--line-soft);border-radius:12px;background:linear-gradient(120deg,#211d39,#141d2b)}
+.profile-avatar-large{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(135deg,#a18aff,#5c54d8);color:#fff;font-size:21px;font-weight:850;box-shadow:0 8px 22px #8e76ff30}
+.profile-info-list{display:grid;gap:11px}.profile-info-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:12px}.profile-info-row:last-child{border:0}.profile-info-row span{color:var(--muted)}.profile-note{font-size:11px;color:var(--muted);line-height:1.6;margin:12px 0 0}
+.main[data-view="profile"] #overviewHero,.main[data-view="profile"] .stats,.main[data-view="profile"] #mainWorkspace,.main[data-view="profile"] #projects,.main[data-view="profile"] #billingPanel,.main[data-view="profile"] #videoLibrary{display:none!important}
+.main[data-view="profile"] #profilePanel{display:block!important}
+@media(max-width:700px){.profile-layout{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -125,7 +135,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
  </div>
 </section>
 <div id="appScreen" class="app hidden">
- <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
+ <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
  <main class="main">
   <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div><div id="systemHealth" class="health-pill" role="status" aria-live="polite"><span></span>Checking core systems…</div></div><div class="avatar" id="avatar">FL</div><button class="secondary" id="logoutBtn">Log out</button></div></header>
   <section class="hero" id="overviewHero"><div><div class="eyebrow">CREATE WITHOUT A CAMERA</div><h2>Your next video starts with an idea.</h2><p>Generate scripts, voiceovers, visuals and subtitles in one workflow.</p></div><button class="primary" onclick="document.querySelector('#topic').focus()">＋ Create a video</button></section>
@@ -142,6 +152,30 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
   </div>
   <section id="projects"><div class="sectionhead"><div><h3>My projects</h3><span class="muted" style="font-size:12px">Saved to your account</span></div><button class="secondary" type="button" onclick="navigateTo('create')">＋ New project</button></div><div class="project-toolbar"><input id="projectSearch" type="search" placeholder="Search projects…" aria-label="Search projects"><select id="projectSort" aria-label="Sort projects"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select><button class="secondary" type="button" id="refreshProjectsBtn">↻ Refresh</button></div><div id="projectList" class="project-list"><div class="empty">Loading projects…</div></div></section>
   <section id="videoLibrary" class="panel"><div class="sectionhead"><div><h3>Rendered videos</h3><p class="muted">Saved on this browser only. MP4 files are not uploaded to Cloudflare.</p></div><button class="secondary" type="button" onclick="refreshVideoLibrary()">↻ Refresh</button></div><div class="library-storage" id="libraryStorage">Checking local storage…</div><div class="actions" style="margin:12px 0"><label class="secondary mini-btn" for="libraryImport">＋ Import MP4 backup</label><input id="libraryImport" type="file" accept="video/mp4,.mp4" multiple hidden></div><div id="libraryList" class="project-list"><div class="empty">Loading local videos…</div></div><p class="production-note">Videos stay in this browser profile. Clearing this website’s storage, resetting the browser, or losing this device can erase them. Download backups to keep a separate copy.</p></section>
+  <section id="profilePanel" class="panel billing-panel" style="display:none">
+   <div class="sectionhead"><div><h3>Profile & account settings</h3><p class="muted">Manage the basic details shown in your workspace.</p></div><span class="status">Account</span></div>
+   <div class="profile-layout">
+    <div class="content-card">
+     <div class="profile-avatar-card"><div class="profile-avatar-large" id="profileAvatar">FL</div><div><b id="profileCardName">Creator</b><div class="muted" style="font-size:11px">FacelessLab account</div></div></div>
+     <form id="profileForm" style="margin-top:16px">
+      <label class="field" for="profileDisplayName">Display name</label>
+      <input id="profileDisplayName" maxlength="80" required placeholder="Your display name">
+      <label class="field" for="profileEmail">Email address</label>
+      <input id="profileEmail" type="email" readonly aria-readonly="true">
+      <div class="actions"><button class="primary" id="saveProfileBtn" type="submit">Save changes</button></div>
+      <div class="notice" id="profileNotice" role="status" aria-live="polite"></div>
+     </form>
+    </div>
+    <div class="content-card">
+     <span class="content-label">ACCOUNT INFORMATION</span>
+     <div class="profile-info-list" style="margin-top:10px">
+      <div class="profile-info-row"><span>Account type</span><b id="profileRole">Member</b></div>
+      <div class="profile-info-row"><span>Sign-in email</span><b id="profileEmailSummary" style="overflow-wrap:anywhere;text-align:right">—</b></div>
+     </div>
+     <p class="profile-note">Your email address is read-only. Profile photo uploads and password changes are not enabled yet; this page currently supports display-name updates.</p>
+    </div>
+   </div>
+  </section>
   <section id="billingPanel" class="panel billing-panel"><div class="sectionhead"><div><h3>Points & billing</h3><p class="muted">Manage your FacelessLab usage and account.</p></div><span class="status">Account</span></div><div class="billing-grid"><article class="stat"><span>Available points</span><strong id="billingPoints">0</strong></article><article class="stat"><span>Projects created</span><strong id="billingProjects">0</strong></article><article class="stat"><span>Completed projects</span><strong id="billingVideos">0</strong></article></div><div class="content-card"><span class="content-label">CURRENT ACCESS</span><h3 id="accountPlan">Free workspace</h3><p id="billingDescription">Your workspace is active. Point top-ups and payment checkout are not enabled yet; no payment will be taken from this page.</p><div class="actions"><button class="secondary" type="button" onclick="refreshProjects()">↻ Refresh usage</button><button class="primary" type="button" onclick="navigateTo('create')">Create a video →</button></div></div><p class="production-note">Payment methods and point top-ups will appear here after a verified checkout and point ledger are connected.</p></section>
   <div class="footer">FacelessLab · Your ideas deserve to be seen.</div>
  </main>
@@ -199,7 +233,7 @@ function escapeHtml(value) {
 }
 
 function navigateTo(view,updateHash=true){
- const allowed=["overview","create","projects","library","billing"];if(!allowed.includes(view))view="overview";
+ const allowed=["overview","create","projects","library","billing","profile"];if(!allowed.includes(view))view="overview";
  const main=document.querySelector(".main");if(main)main.dataset.view=view;
  document.querySelectorAll(".nav a[data-view]").forEach(a=>a.classList.toggle("active",a.dataset.view===view));
  if(updateHash&&location.hash!=="#"+view)history.replaceState(null,"","#"+view);
@@ -237,6 +271,12 @@ function showApp(user, points) {
  $("userName").textContent = name;
  $("userEmail").textContent = user.email;
  $("avatar").textContent = name.slice(0,2).toUpperCase();
+ if($("profileDisplayName"))$("profileDisplayName").value=name;
+ if($("profileEmail"))$("profileEmail").value=user.email||"";
+ if($("profileEmailSummary"))$("profileEmailSummary").textContent=user.email||"—";
+ if($("profileCardName"))$("profileCardName").textContent=name;
+ if($("profileAvatar"))$("profileAvatar").textContent=name.slice(0,2).toUpperCase();
+ if($("profileRole"))$("profileRole").textContent=user.role==="admin"?"Administrator":"Member";
  $("pointsBalance").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
  $("billingPoints").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
  $("accountPlan").textContent = user.role === "admin" ? "Admin workspace" : "Free workspace";
@@ -759,6 +799,22 @@ $("authForm").addEventListener("submit", async (event) => {
   showApp(account.user, account.points);
  } catch (error) { $("authNotice").textContent = error.message; }
  finally { $("authSubmit").disabled = false; }
+});
+$("profileForm").addEventListener("submit", async (event) => {
+ event.preventDefault();
+ const button=$("saveProfileBtn"),notice=$("profileNotice"),displayName=$("profileDisplayName").value.trim();
+ if(!displayName){notice.textContent="Please enter a display name.";return;}
+ button.disabled=true;button.textContent="Saving…";notice.textContent="";notice.style.color="";
+ try{
+  const result=await api("/api/profile",{method:"POST",body:JSON.stringify({display_name:displayName})});
+  currentUser=result.user;
+  const name=result.user.display_name||result.user.email.split("@")[0];
+  $("userName").textContent=name;$("avatar").textContent=name.slice(0,2).toUpperCase();
+  $("profileCardName").textContent=name;$("profileAvatar").textContent=name.slice(0,2).toUpperCase();
+  $("profileDisplayName").value=name;
+  notice.style.color="#8fe0c4";notice.textContent="Profile updated successfully.";
+ }catch(error){notice.style.color="";notice.textContent=error.message;}
+ finally{button.disabled=false;button.textContent="Save changes";}
 });
 $("logoutBtn").addEventListener("click", async () => {
  try { await api("/api/auth/logout", { method: "POST" }); } catch {}
