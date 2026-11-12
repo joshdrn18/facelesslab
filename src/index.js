@@ -343,6 +343,16 @@ async function handle(request, env) {
   if (path.startsWith("/api/")) {
     const user = await getUser(request, env);
     if (!user) return json({ ok: false, error: "Authentication required." }, 401);
+    if (path === "/api/profile" && method === "POST") {
+      const body = await request.json().catch(() => null);
+      const displayName = String(body?.display_name || "").trim();
+      if (!displayName) return json({ ok: false, error: "Display name cannot be empty." }, 400);
+      if (displayName.length > 80) return json({ ok: false, error: "Display name must be 80 characters or fewer." }, 400);
+      await env.DB.prepare("UPDATE users SET display_name = ? WHERE id = ?").bind(displayName, user.id).run();
+      const updated = await env.DB.prepare("SELECT id, email, display_name, role FROM users WHERE id = ?").bind(user.id).first();
+      return json({ ok: true, user: publicUser(updated) });
+    }
+
     if (path === "/api/me" && method === "GET") {
       const wallet = await env.DB.prepare("SELECT balance FROM wallets WHERE user_id = ?").bind(user.id).first();
       return json({ ok: true, user: publicUser(user), points: user.role === "admin" ? null : (wallet?.balance ?? 0), unlimited_points: user.role === "admin" });
