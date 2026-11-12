@@ -114,7 +114,10 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
 .profile-avatar-large{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(135deg,#a18aff,#5c54d8);color:#fff;font-size:21px;font-weight:850;box-shadow:0 8px 22px #8e76ff30}
 .profile-info-list{display:grid;gap:11px}.profile-info-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:12px}.profile-info-row:last-child{border:0}.profile-info-row span{color:var(--muted)}.profile-note{font-size:11px;color:var(--muted);line-height:1.6;margin:12px 0 0}
 .main[data-view="profile"] #overviewHero,.main[data-view="profile"] .stats,.main[data-view="profile"] #mainWorkspace,.main[data-view="profile"] #projects,.main[data-view="profile"] #billingPanel,.main[data-view="profile"] #videoLibrary{display:none!important}
-.main[data-view="profile"] #profilePanel{display:block!important}\n.main[data-view="publishing"] #overviewHero,.main[data-view="publishing"] .stats,.main[data-view="publishing"] #mainWorkspace,.main[data-view="publishing"] #projects,.main[data-view="publishing"] #videoLibrary,.main[data-view="publishing"] #billingPanel,.main[data-view="publishing"] #profilePanel{display:none!important}\n.main[data-view="publishing"] #publishingPanel{display:block!important}\n@media(max-width:700px){#publishingPanel .grid-two{grid-template-columns:1fr!important}}
+.main[data-view="profile"] #profilePanel{display:block!important}
+.main[data-view="publishing"] #overviewHero,.main[data-view="publishing"] .stats,.main[data-view="publishing"] #mainWorkspace,.main[data-view="publishing"] #projects,.main[data-view="publishing"] #videoLibrary,.main[data-view="publishing"] #billingPanel,.main[data-view="publishing"] #profilePanel{display:none!important}
+.main[data-view="publishing"] #publishingPanel{display:block!important}
+@media(max-width:700px){#publishingPanel .grid-two{grid-template-columns:1fr!important}}
 @media(max-width:700px){.profile-layout{grid-template-columns:1fr}}
 
 </style>
@@ -249,7 +252,8 @@ function navigateTo(view,updateHash=true){
  const allowed=["overview","create","projects","library","publishing","billing","profile"];if(!allowed.includes(view))view="overview";
  const main=document.querySelector(".main");if(main)main.dataset.view=view;
  document.querySelectorAll(".nav a[data-view]").forEach(a=>a.classList.toggle("active",a.dataset.view===view));
- if(view==="publishing")refreshPublishing().catch(()=>{});\n if(updateHash&&location.hash!=="#"+view)history.replaceState(null,"","#"+view);
+ if(view==="publishing")refreshPublishing().catch(()=>{});
+ if(updateHash&&location.hash!=="#"+view)history.replaceState(null,"","#"+view);
  window.scrollTo({top:0,behavior:"smooth"});
 }
 document.querySelectorAll(".nav a[data-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();navigateTo(a.dataset.view);}));
