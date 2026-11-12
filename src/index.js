@@ -849,13 +849,31 @@ async function handle(request, env) {
         // Prefer the approved script over visibly corrupted captions.
         if (sourceNarration && matchScore < 0.72) {
           const sentences = sourceNarration.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map(value => value.trim()).filter(Boolean) || [sourceNarration];
-          const totalWords = sentences.reduce((sum, sentence) => sum + normalizeForMatch(sentence).length, 0) || 1;
+          // Keep fallback captions compact and phone-readable instead of showing a whole
+          // narration sentence at once. Preserve punctuation on the final phrase.
+          const phrases = [];
+          for (const sentence of sentences) {
+            const tokens = sentence.match(/\\S+/g) || [];
+            let group = [];
+            for (const token of tokens) {
+              const candidate = group.concat(token);
+              const candidateText = candidate.join(" ");
+              if (group.length && (candidate.length > 4 || candidateText.length > 30)) {
+                phrases.push(group.join(" "));
+                group = [token];
+              } else {
+                group = candidate;
+              }
+            }
+            if (group.length) phrases.push(group.join(" "));
+          }
+          const totalWords = phrases.reduce((sum, phrase) => sum + normalizeForMatch(phrase).length, 0) || 1;
           let elapsed = 0;
-          cues = sentences.map((sentence, index) => {
-            const wordsInSentence = normalizeForMatch(sentence).length;
+          cues = phrases.map((phrase, index) => {
+            const wordsInPhrase = normalizeForMatch(phrase).length;
             const start = elapsed;
-            elapsed += whisperDuration * wordsInSentence / totalWords;
-            return { index: index + 1, start: Number(start.toFixed(3)), end: Number(elapsed.toFixed(3)), text: sentence };
+            elapsed += whisperDuration * wordsInPhrase / totalWords;
+            return { index: index + 1, start: Number(start.toFixed(3)), end: Number(elapsed.toFixed(3)), text: phrase };
           }).filter(cue => cue.end > cue.start);
           if (cues.length) cues[cues.length - 1].end = whisperDuration;
           subtitleSource = "script-fallback-low-whisper-confidence";
