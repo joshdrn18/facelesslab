@@ -474,8 +474,9 @@ async function showSceneVisual(projectId, sceneNumber, meta) {
  const key=projectId+"-"+sceneNumber;
  if(visualObjectUrls[key])URL.revokeObjectURL(visualObjectUrls[key]);
  const objectUrl=URL.createObjectURL(blob);visualObjectUrls[key]=objectUrl;
- const continuityLabel=meta.continuity_mode==="image-to-image"?" · matched to "+(meta.reference_source==="previous_episode_ending"?"previous episode ending":"previous scene"):meta.continuity_mode==="text-fallback"?" · generated without image reference":" · initial frame";
- container.innerHTML='<img alt="Generated visual for scene '+sceneNumber+'" src="'+objectUrl+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-top:9px"><p class="muted">✓ Visual saved · '+(meta.bytes/1024).toFixed(0)+' KB'+continuityLabel+'</p>';
+ const continuityLabel=meta.continuity_mode==="image-to-image"?"Matched to "+(meta.reference_source==="previous_episode_ending"?"previous episode ending":"previous scene"):meta.continuity_mode==="text-fallback"?"Generated without image reference":"Initial frame";
+ const continuityNotice=meta.continuity_mode==="text-fallback"?'<p class="muted" style="color:#b45309">⚠ Character continuity may differ because the image-reference model was unavailable. Retry this visual to try matching the previous scene.</p>':"";
+ container.innerHTML='<img alt="Generated visual for scene '+sceneNumber+'" src="'+objectUrl+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-top:9px"><p class="muted">✓ Visual saved · '+(meta.bytes/1024).toFixed(0)+' KB · '+continuityLabel+'</p>'+continuityNotice;
  const button=$("visual-btn-"+projectId+"-"+sceneNumber);if(button)button.textContent="↻ Regenerate visual";
 }
 async function loadSavedVisuals(projectId) {
