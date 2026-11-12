@@ -764,8 +764,11 @@ async function handle(request, env) {
         return json({ ok: true, subtitles: saved ? JSON.parse(saved.output_json) : null, generation_id: saved?.id || null });
       }
       if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "Speech recognition is unavailable. Check the Workers AI binding." }, 503);
-      const scriptRow = await env.DB.prepare("SELECT id FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
+      const scriptRow = await env.DB.prepare("SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
       if (!scriptRow) return json({ ok: false, error: "Generate a script before creating subtitles." }, 409);
+      let sourceScript = {};
+      try { sourceScript = JSON.parse(scriptRow.output_json || "{}"); } catch { sourceScript = {}; }
+      const sourceNarration = String(sourceScript.narration || (sourceScript.scenes || []).map(scene => scene.voiceover || "").join(" ")).trim();
       const voiceRow = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'voice' AND status = 'completed' AND json_extract(input_json, '$.script_generation_id') = ? ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id, scriptRow.id).first();
       if (!voiceRow) return json({ ok: false, error: "Generate the voice-over first. Subtitles are now synchronized from the actual audio." }, 409);
       let voiceMeta;
@@ -832,9 +835,35 @@ async function handle(request, env) {
           }
         }
         if (!cues.length) throw new Error("Speech recognition returned no usable timestamps. Please regenerate the voice-over and retry subtitles.");
+        const whisperTranscript = String(transcription.text || cues.map(cue => cue.text).join(" ")).trim();
+        const normalizeForMatch = value => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(/\\s+/).filter(token => token.length > 1);
+        const expectedTokens = normalizeForMatch(sourceNarration);
+        const heardTokens = normalizeForMatch(whisperTranscript);
+        const heardSet = new Set(heardTokens);
+        const matchedTokens = expectedTokens.filter(token => heardSet.has(token)).length;
+        const matchScore = expectedTokens.length ? matchedTokens / expectedTokens.length : 1;
+        const whisperDuration = Number(Math.max(...cues.map(cue => cue.end)).toFixed(3));
+        let subtitleSource = "whisper-audio";
+        let timingMode = "audio-aligned";
+        // Bad ASR can produce plausible timestamps but completely wrong words.
+        // Prefer the approved script over visibly corrupted captions.
+        if (sourceNarration && matchScore < 0.72) {
+          const sentences = sourceNarration.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map(value => value.trim()).filter(Boolean) || [sourceNarration];
+          const totalWords = sentences.reduce((sum, sentence) => sum + normalizeForMatch(sentence).length, 0) || 1;
+          let elapsed = 0;
+          cues = sentences.map((sentence, index) => {
+            const wordsInSentence = normalizeForMatch(sentence).length;
+            const start = elapsed;
+            elapsed += whisperDuration * wordsInSentence / totalWords;
+            return { index: index + 1, start: Number(start.toFixed(3)), end: Number(elapsed.toFixed(3)), text: sentence };
+          }).filter(cue => cue.end > cue.start);
+          if (cues.length) cues[cues.length - 1].end = whisperDuration;
+          subtitleSource = "script-fallback-low-whisper-confidence";
+          timingMode = "estimated-from-script-and-audio-duration";
+        }
         const duration = Number(Math.max(...cues.map(cue => cue.end)).toFixed(3));
-        const subtitleData = { format: "webvtt", timing: "audio-aligned", source: "voice-over-audio", model: "@cf/openai/whisper", duration_seconds: duration, word_count: words.length || Number(transcription.word_count) || 0, transcript: String(transcription.text || "").slice(0, 12000), cues };
-        await env.DB.prepare("UPDATE generations SET status='completed', input_json=?, output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({ source: "saved voice-over audio", timing: "audio-aligned", model: "@cf/openai/whisper", audio_bytes: audioBytes.byteLength }), JSON.stringify(subtitleData), generationId, user.id).run();
+        const subtitleData = { format: "webvtt", timing: timingMode, source: subtitleSource, model: "@cf/openai/whisper", duration_seconds: duration, word_count: words.length || Number(transcription.word_count) || 0, transcript: whisperTranscript.slice(0, 12000), script_match_score: Number(matchScore.toFixed(3)), quality_check: matchScore < 0.72 ? "low-whisper-match-script-fallback-used" : "whisper-transcript-accepted", cues };
+        await env.DB.prepare("UPDATE generations SET status='completed', input_json=?, output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({ source: "saved voice-over audio", timing: timingMode, model: "@cf/openai/whisper", audio_bytes: audioBytes.byteLength, script_match_score: Number(matchScore.toFixed(3)), subtitle_source: subtitleSource }), JSON.stringify(subtitleData), generationId, user.id).run();
         return json({ ok: true, subtitles: subtitleData, generation_id: generationId }, 201);
       } catch (error) {
         await env.DB.prepare("UPDATE generations SET status='failed', error_message=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
