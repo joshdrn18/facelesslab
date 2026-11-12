@@ -565,23 +565,36 @@ async function handle(request, env) {
     const charactersMatch=path.match(/^\/api\/projects\/([a-f0-9-]+)\/characters$/i);
     if(charactersMatch&&method==="POST"){
       const projectId=charactersMatch[1];
-      const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
-      if(!project)return json({ok:false,error:"Project not found."},404);
-      const body=await request.json().catch(()=>null),characters=Array.isArray(body?.characters)?body.characters:[];
-      if(characters.length>8)return json({ok:false,error:"A project can have up to 8 character profiles."},400);
-      const row=await env.DB.prepare("SELECT id,output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
-      if(!row)return json({ok:false,error:"Generate a script before editing character profiles."},409);
-      const script=JSON.parse(row.output_json||"{}");
-      const previousCharacters=new Map((script.characters||[]).map(c=>[String(c.id||""),c]));
-      script.characters=characters.map((c,i)=>{
-        const id=String(c?.id||("character-"+(i+1))).toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"").slice(0,80)||("character-"+(i+1));
-        const previous=previousCharacters.get(id)||{};
-        const next={...previous,id,name:String(c?.name||"").trim().slice(0,80),role:String(c?.role||"").trim().slice(0,180),visual_identity:String(c?.visual_identity||"").trim().slice(0,600),signature_outfit:String(c?.signature_outfit||"").trim().slice(0,350),distinctive_features:String(c?.distinctive_features||"").trim().slice(0,350)};
-        if(next.visual_identity!==previous.visual_identity||next.signature_outfit!==previous.signature_outfit||next.distinctive_features!==previous.distinctive_features){delete next.character_reference_object_key;delete next.character_reference_generated_at;}
-        return next;
-      }).filter(c=>c.name&&c.visual_identity);
-      await env.DB.prepare("UPDATE generations SET output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(script),row.id,user.id).run();
-      return json({ok:true,characters:script.characters});
+      try{
+        const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+        if(!project)return json({ok:false,error:"Project not found."},404);
+        const body=await request.json().catch(()=>null);
+        if(!body||!Array.isArray(body.characters))return json({ok:false,error:"Character profile data is missing or invalid. Please reload and try again."},400);
+        const characters=body.characters.filter(c=>c&&typeof c==="object"&&!Array.isArray(c));
+        if(characters.length>8)return json({ok:false,error:"A project can have up to 8 character profiles."},400);
+        if(!characters.length)return json({ok:false,error:"No character profiles were provided. Nothing was changed."},400);
+        const row=await env.DB.prepare("SELECT id,output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+        if(!row)return json({ok:false,error:"Generate a script before editing character profiles."},409);
+        let script;
+        try{script=JSON.parse(row.output_json||"{}");}catch{throw new Error("The saved script data is damaged. Your character edits were not saved.");}
+        if(!script||typeof script!=="object"||Array.isArray(script))throw new Error("The saved script data is invalid. Your character edits were not saved.");
+        const previousCharacters=new Map((Array.isArray(script.characters)?script.characters:[]).filter(c=>c&&typeof c==="object").map(c=>[String(c.id||""),c]));
+        const normalized=characters.map((c,i)=>{
+          const id=String(c.id||("character-"+(i+1))).toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"").slice(0,80)||("character-"+(i+1));
+          const previous=previousCharacters.get(id)||{};
+          const next={...previous,id,name:String(c.name||"").trim().slice(0,80),role:String(c.role||"").trim().slice(0,180),visual_identity:String(c.visual_identity||"").trim().slice(0,600),signature_outfit:String(c.signature_outfit||"").trim().slice(0,350),distinctive_features:String(c.distinctive_features||"").trim().slice(0,350)};
+          if(next.visual_identity!==String(previous.visual_identity||"")||next.signature_outfit!==String(previous.signature_outfit||"")||next.distinctive_features!==String(previous.distinctive_features||"")){delete next.character_reference_object_key;delete next.character_reference_generated_at;}
+          return next;
+        }).filter(c=>c.name&&c.visual_identity);
+        if(!normalized.length)return json({ok:false,error:"Each character needs both a name and a visual identity."},400);
+        script.characters=normalized;
+        const saved=await env.DB.prepare("UPDATE generations SET output_json=?,updated_at=unixepoch() WHERE id=? AND project_id=? AND user_id=? AND stage='script'").bind(JSON.stringify(script),row.id,projectId,user.id).run();
+        if(Number(saved.meta?.changes||0)<1)return json({ok:false,error:"The character profiles could not be written. Please reload the project and try again."},409);
+        return json({ok:true,characters:script.characters});
+      }catch(error){
+        console.error(JSON.stringify({event:"save_character_profiles_failed",project_id:projectId,error:String(error?.message||error).slice(0,500)}));
+        return json({ok:false,error:"Could not save character profiles: "+String(error?.message||"database error").slice(0,240)},500);
+      }
     }
 
     const visualImageMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/visuals\/([a-f0-9-]+)\/image$/i);
