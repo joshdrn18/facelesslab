@@ -374,9 +374,18 @@ async function handle(request, env) {
       title = title.slice(0, 160);
       const duration = Math.max(0, Number(request.headers.get("x-video-duration") || 0));
       const quality = Math.max(0, Number(request.headers.get("x-video-quality") || 0));
-      let receivedBytes = 0;
-      const limitedBody = request.body.pipeThrough(new TransformStream({ transform(chunk, controller) { receivedBytes += chunk.byteLength; if (receivedBytes > maxBytes) throw new Error("Cloud backup supports MP4 files up to 90 MB per file."); controller.enqueue(chunk); } }));
-      const object = await env.MEDIA.put(prefix + id + ".mp4", limitedBody, { httpMetadata: { contentType: "video/mp4", cacheControl: "private, no-store" }, customMetadata: { title, duration: String(duration), quality: String(quality), ownerId: user.id } });
+      let object;
+      try {
+        // Pass the original request stream directly to R2. Wrapping it in a
+        // TransformStream can hide its known length and cause R2 to reject the upload.
+        object = await env.MEDIA.put(prefix + id + ".mp4", request.body, {
+          httpMetadata: { contentType: "video/mp4", cacheControl: "private, no-store" },
+          customMetadata: { title, duration: String(duration), quality: String(quality), ownerId: user.id }
+        });
+      } catch (error) {
+        console.error(JSON.stringify({ event: "cloud_backup_upload_failed", user_id: user.id, size: contentLength || null, error: String(error?.message || error).slice(0, 400) }));
+        return json({ ok: false, error: "Cloud storage rejected the upload. Please retry once; your local video is unchanged." }, 502);
+      }
       return json({ ok: true, backup: { id, title, size: object.size, duration, quality } }, 201);
     }
     const backupMatch = path.match(/^\/api\/video-backups\/([a-f0-9-]+)$/i);
