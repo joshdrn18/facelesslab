@@ -660,6 +660,7 @@ async function renderProjectVideo(projectId,button) {
  const scenes=(script.scenes||[]).slice().sort((a,b)=>Number(a.scene)-Number(b.scene));
  if(!scenes.length){status.textContent="No scenes found.";return;}
  button.disabled=true;button.textContent="Preparing…";progress?.classList.remove("hidden");if(bar)bar.style.width="2%";result.innerHTML="";
+ let ffmpegInstance=null;const temporaryFiles=new Set();
  try{
   status.textContent="Checking saved voice-over, visuals and subtitles…";
   const [voiceResponse,visualData,subtitleResponse]=await Promise.all([
@@ -693,7 +694,7 @@ async function renderProjectVideo(projectId,button) {
   const audioDuration=await new Promise(resolve=>{audioMeta.onloadedmetadata=()=>resolve(Number.isFinite(audioMeta.duration)?audioMeta.duration:0);audioMeta.onerror=()=>resolve(0);audioMeta.src=audioMetaUrl;});
   URL.revokeObjectURL(audioMetaUrl);
   if(!(audioDuration>0))throw new Error("The voice-over file could not be read as playable audio. Regenerate the voice-over, then retry rendering.");
-  const ffmpeg=await getBrowserFFmpeg(projectId,status);
+  ffmpegInstance=await getBrowserFFmpeg(projectId,status);const ffmpeg=ffmpegInstance;
   const plannedDurations=scenes.map(scene=>Math.max(1,Number(scene.duration_seconds)||Math.round((Number(script.estimated_duration_seconds)||45)/scenes.length)));
   const sceneVoiceoverWords=scenes.map(scene=>(String(scene.voiceover||"").trim().match(/\S+/g)||[]).length);
   const totalSceneVoiceoverWords=sceneVoiceoverWords.reduce((sum,value)=>sum+value,0);
@@ -702,7 +703,7 @@ async function renderProjectVideo(projectId,button) {
   const sceneDurations=audioDuration>0&&sceneVoiceoverWords.every(words=>words>0)&&totalSceneVoiceoverWords>0
    ?sceneVoiceoverWords.map(words=>audioDuration*words/totalSceneVoiceoverWords)
    :plannedDurations.map(duration=>duration*timelineScale);
-  await ffmpeg.writeFile(voiceFile,new Uint8Array(await voiceBlob.arrayBuffer()));
+  temporaryFiles.add(voiceFile);await ffmpeg.writeFile(voiceFile,new Uint8Array(await voiceBlob.arrayBuffer()));
   const quality=Number($("editor-quality-"+projectId)?.value)||720,frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
   const rawCues=(subtitleData?.cues||[]).map(c=>({start:Number(c.start),end:Number(c.end),text:String(c.text||"").replace(/\s+/g," ").trim()}))
    .filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start&&c.text)
@@ -729,11 +730,11 @@ async function renderProjectVideo(projectId,button) {
      const from=unique[j],to=unique[j+1],mid=(from+to)/2,active=cues.filter(c=>c.start<=mid&&c.end>mid).map(c=>c.text).join(" ");
      const segmentFile="caption_segment_"+String(segmentNumber++).padStart(4,"0")+".jpg";
      status.textContent="Burning captions · scene "+(i+1)+" of "+scenes.length+"…";
-     await ffmpeg.writeFile(segmentFile,await makeCaptionFrame(imageBlob,active,frameWidth,frameHeight));
+     temporaryFiles.add(segmentFile);await ffmpeg.writeFile(segmentFile,await makeCaptionFrame(imageBlob,active,frameWidth,frameHeight));
      concat.push("file '"+segmentFile+"'","duration "+(to-from).toFixed(3));
     }
    }else{
-    await ffmpeg.writeFile(filename,await makeCaptionFrame(imageBlob,"",frameWidth,frameHeight));
+    temporaryFiles.add(filename);await ffmpeg.writeFile(filename,await makeCaptionFrame(imageBlob,"",frameWidth,frameHeight));
     concat.push("file '"+filename+"'","duration "+duration.toFixed(3));
    }
    totalDuration=sceneEnd;sceneRanges.push({start:sceneStart,end:sceneEnd});
@@ -743,10 +744,10 @@ async function renderProjectVideo(projectId,button) {
   if(!concat.length)throw new Error("No video segments were prepared.");
   const lastFile=concat[concat.length-2].match(/file '([^']+)'/)[1];
   concat.push("file '"+lastFile+"'");
-  await ffmpeg.writeFile("scenes.txt",new TextEncoder().encode(concat.join("\n")+"\n"));
+  temporaryFiles.add("scenes.txt");await ffmpeg.writeFile("scenes.txt",new TextEncoder().encode(concat.join("\n")+"\n"));
   if(captionMode==="soft"){
    const srt=cues.map((cue,i)=>(i+1)+"\n"+formatSubtitleTime(cue.start,",")+" --> "+formatSubtitleTime(cue.end,",")+"\n"+cue.text).join("\n\n");
-   await ffmpeg.writeFile("captions.srt",new TextEncoder().encode(srt));
+   temporaryFiles.add("captions.srt");await ffmpeg.writeFile("captions.srt",new TextEncoder().encode(srt));
   }
   if(bar)bar.style.width="48%";status.textContent=captionMode==="burn"?"Rendering video with permanently burned-in captions…":"Rendering MP4 in your browser. Keep this tab open…";
   const args=["-y","-f","concat","-safe","0","-i","scenes.txt","-i",voiceFile];
@@ -756,7 +757,7 @@ async function renderProjectVideo(projectId,button) {
   const motionFilter="scale="+frameWidth+":"+frameHeight+":force_original_aspect_ratio=increase,crop="+frameWidth+":"+frameHeight+",fps=30,zoompan=z='min(zoom+0.00035,1.075)':x='(iw-iw/zoom)/2+sin(on/95)*7':y='(ih-ih/zoom)/2+cos(on/115)*7':d=1:s="+frameWidth+"x"+frameHeight+":fps=30";
   args.push("-vf",motionFilter,"-map","0:v:0","-map","1:a:0","-r","30","-c:v","libx264","-preset","veryfast","-crf","24","-pix_fmt","yuv420p","-c:a","aac","-b:a","160k","-t",String(audioDuration>0?audioDuration:totalDuration),"-shortest");
   if(captionMode==="soft")args.push("-map","2:s:0","-c:s","mov_text");
-  args.push("-movflags","+faststart","output.mp4");
+  temporaryFiles.add("output.mp4");args.push("-movflags","+faststart","output.mp4");
   const exitCode=await ffmpeg.exec(args,30*60*1000);
   if(exitCode!==0)throw new Error("FFmpeg exited with code "+exitCode+".");
   if(bar)bar.style.width="92%";
@@ -776,7 +777,7 @@ async function renderProjectVideo(projectId,button) {
   status.textContent="✓ Rendered with "+(captionMode==="burn"?"burned-in subtitles":captionMode==="soft"?"optional subtitle track":"no subtitles")+" · "+Math.round(renderedDuration||totalDuration)+" sec · "+quality+"p"+durationNote;
   button.textContent="↻ Render again";
  }catch(error){console.error("FacelessLab render error:",error,error?.stack);const detail=error?.message||error?.toString?.()||"Unknown rendering error. Check browser console for details.";status.textContent="Render failed: "+detail;button.textContent="↻ Retry render";}
- finally{button.disabled=false;setTimeout(()=>progress?.classList.add("hidden"),1200);}
+ finally{if(ffmpegInstance){for(const name of temporaryFiles){try{await ffmpegInstance.deleteFile(name);}catch{}}}button.disabled=false;setTimeout(()=>progress?.classList.add("hidden"),1200);}
 }
 
 async function loadSavedScript(projectId) {
