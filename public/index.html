@@ -540,7 +540,7 @@ async function renderProjectVideo(projectId,button) {
      concat.push("file '"+segmentFile+"'","duration "+(to-from).toFixed(3));
     }
    }else{
-    await ffmpeg.writeFile(filename,new Uint8Array(await imageBlob.arrayBuffer()));
+    await ffmpeg.writeFile(filename,await makeCaptionFrame(imageBlob,"",frameWidth,frameHeight));
     concat.push("file '"+filename+"'","duration "+duration.toFixed(3));
    }
    totalDuration=sceneEnd;sceneRanges.push({start:sceneStart,end:sceneEnd});
@@ -558,14 +558,9 @@ async function renderProjectVideo(projectId,button) {
   if(bar)bar.style.width="48%";status.textContent=captionMode==="burn"?"Rendering video with permanently burned-in captions…":"Rendering MP4 in your browser. Keep this tab open…";
   const args=["-y","-f","concat","-safe","0","-i","scenes.txt","-i",voiceFile];
   if(captionMode==="soft")args.push("-i","captions.srt");
-  const transitionDuration=Math.max(0.08,Math.min(0.24,...sceneRanges.map(range=>(range.end-range.start)*0.2)));
-  const transitionFilters=[];
-  sceneRanges.forEach((range,index)=>{
-   if(index===0)transitionFilters.push("fade=t=in:st=0:d="+transitionDuration.toFixed(3));
-   else transitionFilters.push("fade=t=in:st="+range.start.toFixed(3)+":d="+transitionDuration.toFixed(3));
-   if(index<sceneRanges.length-1)transitionFilters.push("fade=t=out:st="+Math.max(range.start,range.end-transitionDuration).toFixed(3)+":d="+transitionDuration.toFixed(3));
-  });
-  const motionFilter="scale="+frameWidth+":"+frameHeight+":force_original_aspect_ratio=increase,crop="+frameWidth+":"+frameHeight+",fps=30,zoompan=z='min(zoom+0.00035,1.075)':x='(iw-iw/zoom)/2+sin(on/95)*7':y='(ih-ih/zoom)/2+cos(on/115)*7':d=1:s="+frameWidth+"x"+frameHeight+":fps=30,"+transitionFilters.join(",");
+  // Avoid chained per-scene fades that can create timestamp/filter issues
+  // after zoompan. Source images are normalized to JPEG before concat.
+  const motionFilter="scale="+frameWidth+":"+frameHeight+":force_original_aspect_ratio=increase,crop="+frameWidth+":"+frameHeight+",fps=30,zoompan=z='min(zoom+0.00035,1.075)':x='(iw-iw/zoom)/2+sin(on/95)*7':y='(ih-ih/zoom)/2+cos(on/115)*7':d=1:s="+frameWidth+"x"+frameHeight+":fps=30";
   args.push("-vf",motionFilter,"-map","0:v:0","-map","1:a:0","-r","30","-c:v","libx264","-preset","veryfast","-crf","24","-pix_fmt","yuv420p","-c:a","aac","-b:a","160k","-t",String(audioDuration>0?audioDuration:totalDuration),"-shortest");
   if(captionMode==="soft")args.push("-map","2:s:0","-c:s","mov_text");
   args.push("-movflags","+faststart","output.mp4");
