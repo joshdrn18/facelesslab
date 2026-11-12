@@ -501,6 +501,39 @@ async function handle(request, env) {
   if (path.startsWith("/api/")) {
     const user = await getUser(request, env);
     if (!user) return json({ ok: false, error: "Authentication required." }, 401);
+    if (path === "/api/profile/avatar" && method === "POST") {
+      if (!env.MEDIA) return json({ ok: false, error: "Profile image storage is not configured." }, 503);
+      const contentType = (request.headers.get("content-type") || "").split(";")[0].toLowerCase();
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+      if (!allowedTypes.includes(contentType)) return json({ ok: false, error: "Choose a JPG, PNG, or WebP image." }, 415);
+      const bytes = await request.arrayBuffer();
+      if (!bytes.byteLength || bytes.byteLength > 2 * 1024 * 1024) return json({ ok: false, error: "Profile images must be smaller than 2 MB." }, 413);
+      const signature = new Uint8Array(bytes.slice(0, 12));
+      const valid = contentType === "image/jpeg"
+        ? signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff
+        : contentType === "image/png"
+          ? signature[0] === 0x89 && signature[1] === 0x50 && signature[2] === 0x4e && signature[3] === 0x47
+          : signature[0] === 0x52 && signature[1] === 0x49 && signature[2] === 0x46 && signature[3] === 0x46 && signature[8] === 0x57 && signature[9] === 0x45 && signature[10] === 0x42 && signature[11] === 0x50;
+      if (!valid) return json({ ok: false, error: "The selected file is not a valid image of that type." }, 415);
+      await env.MEDIA.put("avatars/" + user.id + "/profile", bytes, { httpMetadata: { contentType, cacheControl: "private, max-age=3600" } });
+      return json({ ok: true, message: "Profile photo updated." });
+    }
+    if (path === "/api/profile/avatar" && method === "GET") {
+      if (!env.MEDIA) return json({ ok: false, error: "Profile image storage is not configured." }, 503);
+      const object = await env.MEDIA.get("avatars/" + user.id + "/profile");
+      if (!object) return json({ ok: false, error: "No profile photo uploaded." }, 404);
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set("cache-control", "private, no-store");
+      headers.set("x-content-type-options", "nosniff");
+      return new Response(object.body, { headers });
+    }
+    if (path === "/api/profile/avatar" && method === "DELETE") {
+      if (!env.MEDIA) return json({ ok: false, error: "Profile image storage is not configured." }, 503);
+      await env.MEDIA.delete("avatars/" + user.id + "/profile");
+      return json({ ok: true, message: "Profile photo removed." });
+    }
+
     if (path === "/api/profile/password" && method === "POST") {
       const body = await request.json().catch(() => null);
       const currentPassword = String(body?.current_password || "");
