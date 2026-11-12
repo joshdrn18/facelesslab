@@ -503,6 +503,65 @@ async function handle(request, env) {
       }
       return json({ok:true,queued:true,generation_id:generationId,status:"queued"},202);
     }
+    const characterReferenceImageMatch=path.match(/^\/api\/projects\/([a-f0-9-]+)\/characters\/([a-z0-9-]+)\/reference\/image$/i);
+    if(characterReferenceImageMatch&&method==="GET"){
+      const projectId=characterReferenceImageMatch[1],characterId=characterReferenceImageMatch[2];
+      const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      const row=await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      if(!row)return json({ok:false,error:"Script not found."},404);
+      const character=(JSON.parse(row.output_json||"{}").characters||[]).find(c=>c.id===characterId);
+      if(!character?.character_reference_object_key)return json({ok:false,error:"This character has no reference image yet."},404);
+      const object=await env.MEDIA.get(character.character_reference_object_key);
+      if(!object)return json({ok:false,error:"Character reference image is missing from R2."},404);
+      return new Response(object.body,{headers:{"content-type":"image/png","cache-control":"private, no-store"}});
+    }
+    const characterReferenceMatch=path.match(/^\/api\/projects\/([a-f0-9-]+)\/characters\/([a-z0-9-]+)\/reference$/i);
+    if(characterReferenceMatch&&method==="POST"){
+      const projectId=characterReferenceMatch[1],characterId=characterReferenceMatch[2];
+      const project=await env.DB.prepare("SELECT id,style FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      if(!env.AI||typeof env.AI.run!=="function"||!env.MEDIA)return json({ok:false,error:"Workers AI or R2 storage is unavailable."},503);
+      const row=await env.DB.prepare("SELECT id,output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      if(!row)return json({ok:false,error:"Generate a script before creating character references."},409);
+      const script=JSON.parse(row.output_json||"{}"),character=(script.characters||[]).find(c=>c.id===characterId);
+      if(!character)return json({ok:false,error:"Character profile not found."},404);
+      const generationId=crypto.randomUUID();
+      const anime=String(project.style||"").toLowerCase()==="anime";
+      const prompt=[
+        anime?"Premium Japanese 2D anime character design reference, hand-drawn clean linework, cinematic cel shading, polished professional animation model sheet.":"Professional cinematic character design reference, realistic anatomy, natural materials and detailed production design.",
+        "Create ONE individual character only. Full body, standing neutral relaxed three-quarter view, entire head and feet visible, centered, clear silhouette, simple uncluttered neutral studio background, soft even lighting, highly readable face and clothing.",
+        "CHARACTER NAME: "+String(character.name||"").slice(0,80)+". ROLE: "+String(character.role||"").slice(0,140)+".",
+        "LOCKED VISUAL IDENTITY: "+String(character.visual_identity||"").slice(0,600)+".",
+        "SIGNATURE OUTFIT: "+String(character.signature_outfit||"").slice(0,350)+".",
+        "DISTINCTIVE FEATURES: "+String(character.distinctive_features||"").slice(0,350)+".",
+        "This is a reusable identity reference, not a story scene. Preserve exact face, hairstyle, eye design, age appearance, body proportions, outfit colors and signature accessories. No other people, no multiple views, no turnaround grid, no text, labels, logos, watermark, props obscuring the body."
+      ].join(" ").slice(0,1900);
+      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'character_reference','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({character_id:characterId,character_name:character.name,model:"@cf/black-forest-labs/flux-1-schnell"})).run();
+      try{
+        const result=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});
+        const value=typeof result==="string"?result:result?.image;
+        let bytes;
+        if(typeof value==="string"){const binary=atob(value),out=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);bytes=out;}
+        else if(value instanceof Uint8Array)bytes=value;
+        else if(value instanceof ArrayBuffer)bytes=new Uint8Array(value);
+        else if(ArrayBuffer.isView(value))bytes=new Uint8Array(value.buffer,value.byteOffset,value.byteLength);
+        else throw new Error("Image model returned an unsupported character reference.");
+        if(!bytes?.byteLength)throw new Error("Image model returned an empty character reference.");
+        const objectKey="users/"+user.id+"/projects/"+projectId+"/character-references/"+characterId+".png";
+        await env.MEDIA.put(objectKey,bytes,{httpMetadata:{contentType:"image/png",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,characterId,generationId}});
+        character.character_reference_object_key=objectKey;
+        character.character_reference_generated_at=new Date().toISOString();
+        await env.DB.prepare("UPDATE generations SET output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(script),row.id,user.id).run();
+        const output={character_id:characterId,character_name:character.name,object_key:objectKey,mime_type:"image/png",bytes:bytes.byteLength,model:"@cf/black-forest-labs/flux-1-schnell"};
+        await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
+        return json({ok:true,character:{...character,reference_url:"/api/projects/"+projectId+"/characters/"+characterId+"/reference/image"}},201);
+      }catch(error){
+        await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
+        const message=String(error.message||"Character reference generation failed.");
+        return json({ok:false,error:message},/limit|quota|billing|exceeded/i.test(message)?429:502);
+      }
+    }
     const charactersMatch=path.match(/^\/api\/projects\/([a-f0-9-]+)\/characters$/i);
     if(charactersMatch&&method==="POST"){
       const projectId=charactersMatch[1];
