@@ -378,9 +378,28 @@ async function processPublishQueueMessage(message,env) {
    for(let i=0;i<chunks;i++){const start=i*chunkSize,end=Math.min(size,start+chunkSize),part=bytes.slice(start,end);const sent=await fetch(started.data.upload_url,{method:"PUT",headers:{"content-type":"video/mp4","content-length":String(part.byteLength),"content-range":"bytes "+start+"-"+(end-1)+"/"+size},body:part});if(!sent.ok)throw new Error("TikTok upload failed on chunk "+(i+1)+".");}
    await env.DB.prepare("UPDATE publish_jobs SET status='processing',provider_post_id=?,updated_at=unixepoch() WHERE id=?").bind(started.data.publish_id,id).run();
    const check=await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json"},body:JSON.stringify({publish_id:started.data.publish_id})});
-   const status=await check.json().catch(()=>({}));if(status.data?.status==="PUBLISH_COMPLETE")await env.DB.prepare("UPDATE publish_jobs SET status='published',updated_at=unixepoch() WHERE id=?").bind(id).run();else if(status.data?.status==="FAILED")throw new Error(status.data.fail_reason||"TikTok rejected the video.");
+   const status=await check.json().catch(()=>({}));if(status.data?.status==="PUBLISH_COMPLETE")await env.DB.prepare("UPDATE publish_jobs SET status='published',provider_url=?,updated_at=unixepoch() WHERE id=?").bind(status.data?.share_url||null,id).run();else if(status.data?.status==="FAILED")throw new Error(status.data.fail_reason||"TikTok rejected the video.");else await env.JOBS.send({type:"check_tiktok_status",job_id:id,attempt:1},{delaySeconds:30});
   }
  }catch(error){await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(String(error?.message||error).slice(0,700),id).run();throw error;}
+}
+
+async function processTikTokStatusMessage(message,env) {
+ const id=message.body?.job_id,attempt=Number(message.body?.attempt||1);
+ const job=await env.DB.prepare("SELECT * FROM publish_jobs WHERE id=? AND platform='tiktok' AND status='processing'").bind(id).first();if(!job)return;
+ const connection=await env.DB.prepare("SELECT * FROM social_connections WHERE id=? AND user_id=? AND status='active'").bind(job.connection_id,job.user_id).first();if(!connection)throw new Error("TikTok connection is no longer available.");
+ const access=await getFreshSocialAccessToken(env,connection);
+ const response=await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json"},body:JSON.stringify({publish_id:job.provider_post_id})});
+ const data=await response.json().catch(()=>({}));if(!response.ok||data.error?.code!=="ok")throw new Error(data.error?.message||"TikTok status check failed.");
+ const state=data.data?.status||"";
+ if(state==="PUBLISH_COMPLETE"){
+  await env.DB.prepare("UPDATE publish_jobs SET status='published',provider_url=?,updated_at=unixepoch() WHERE id=?").bind(data.data?.share_url||null,id).run();
+ }else if(state==="FAILED"){
+  await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(String(data.data?.fail_reason||"TikTok could not publish this video.").slice(0,700),id).run();
+ }else if(attempt<20){
+  await env.JOBS.send({type:"check_tiktok_status",job_id:id,attempt:attempt+1},{delaySeconds:30});
+ }else{
+  await env.DB.prepare("UPDATE publish_jobs SET error_message='TikTok is still processing. Refresh status or check the TikTok account.',updated_at=unixepoch() WHERE id=?").bind(id).run();
+ }
 }
 
 async function handle(request, env) {
@@ -1171,7 +1190,7 @@ async function runScheduledMaintenance(env, scheduledTime) {
 
 export default {
   async queue(batch, env) {
-    for (const message of batch.messages) { if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else if(message.body?.type === "publish_video") await processPublishQueueMessage(message,env); else await processScriptQueueMessage(message, env); }
+    for (const message of batch.messages) { if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else if(message.body?.type === "publish_video") await processPublishQueueMessage(message,env); else if(message.body?.type === "check_tiktok_status") await processTikTokStatusMessage(message,env); else await processScriptQueueMessage(message, env); }
   },
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runScheduledMaintenance(env, controller.scheduledTime).catch(error => {
