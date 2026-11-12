@@ -114,7 +114,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
 .profile-avatar-large{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(135deg,#a18aff,#5c54d8);color:#fff;font-size:21px;font-weight:850;box-shadow:0 8px 22px #8e76ff30}
 .profile-info-list{display:grid;gap:11px}.profile-info-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:12px}.profile-info-row:last-child{border:0}.profile-info-row span{color:var(--muted)}.profile-note{font-size:11px;color:var(--muted);line-height:1.6;margin:12px 0 0}
 .main[data-view="profile"] #overviewHero,.main[data-view="profile"] .stats,.main[data-view="profile"] #mainWorkspace,.main[data-view="profile"] #projects,.main[data-view="profile"] #billingPanel,.main[data-view="profile"] #videoLibrary{display:none!important}
-.main[data-view="profile"] #profilePanel{display:block!important}
+.main[data-view="profile"] #profilePanel{display:block!important}\n.main[data-view="publishing"] #overviewHero,.main[data-view="publishing"] .stats,.main[data-view="publishing"] #mainWorkspace,.main[data-view="publishing"] #projects,.main[data-view="publishing"] #videoLibrary,.main[data-view="publishing"] #billingPanel,.main[data-view="publishing"] #profilePanel{display:none!important}\n.main[data-view="publishing"] #publishingPanel{display:block!important}\n@media(max-width:700px){#publishingPanel .grid-two{grid-template-columns:1fr!important}}
 @media(max-width:700px){.profile-layout{grid-template-columns:1fr}}
 
 </style>
@@ -135,7 +135,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
  </div>
 </section>
 <div id="appScreen" class="app hidden">
- <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
+ <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a><a href="#publishing" data-view="publishing"><span class="ico">↗</span>Publishing</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
  <main class="main">
   <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div><div id="systemHealth" class="health-pill" role="status" aria-live="polite"><span></span>Checking core systems…</div></div><div class="avatar" id="avatar">FL</div><button class="secondary" id="logoutBtn">Log out</button></div></header>
   <section class="hero" id="overviewHero"><div><div class="eyebrow">CREATE WITHOUT A CAMERA</div><h2>Your next video starts with an idea.</h2><p>Generate scripts, voiceovers, visuals and subtitles in one workflow.</p></div><button class="primary" onclick="document.querySelector('#topic').focus()">＋ Create a video</button></section>
@@ -152,6 +152,19 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
   </div>
   <section id="projects"><div class="sectionhead"><div><h3>My projects</h3><span class="muted" style="font-size:12px">Saved to your account</span></div><button class="secondary" type="button" onclick="navigateTo('create')">＋ New project</button></div><div class="project-toolbar"><input id="projectSearch" type="search" placeholder="Search projects…" aria-label="Search projects"><select id="projectSort" aria-label="Sort projects"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select><button class="secondary" type="button" id="refreshProjectsBtn">↻ Refresh</button></div><div id="projectList" class="project-list"><div class="empty">Loading projects…</div></div></section>
   <section id="videoLibrary" class="panel"><div class="sectionhead"><div><h3>Rendered videos</h3><p class="muted">Saved on this browser only. MP4 files are not uploaded to Cloudflare.</p></div><button class="secondary" type="button" onclick="refreshVideoLibrary()">↻ Refresh</button></div><div class="library-storage" id="libraryStorage">Checking local storage…</div><div class="cloud-backup-panel"><div class="cloud-backup-head"><div><b>Cloud backup · Cloudflare R2</b><small>Keep a second copy outside this browser · up to 90 MB per MP4</small></div><button class="secondary" type="button" id="refreshCloudBackups">↻ Refresh cloud</button></div><div id="cloudBackupSummary" class="library-storage">Checking cloud storage…</div><input id="cloudBackupFile" type="file" accept="video/mp4,.mp4"><button class="secondary" type="button" id="uploadCloudBackup">Upload selected MP4 to cloud</button><div id="cloudBackupList" class="project-list"><div class="empty">Sign in to view cloud backups.</div></div></div><div class="actions" style="margin:12px 0"><label class="secondary mini-btn" for="libraryImport">＋ Import MP4 backup</label><input id="libraryImport" type="file" accept="video/mp4,.mp4" multiple hidden></div><div class="project-toolbar"><input id="librarySearch" type="search" placeholder="Search saved videos…" aria-label="Search saved videos"><select id="librarySort" aria-label="Sort saved videos"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="largest">Largest first</option><option value="title">Title A–Z</option></select><button class="secondary" type="button" id="clearLibrarySearch">Clear</button></div><div id="libraryList" class="project-list"><div class="empty">Loading local videos…</div></div><p class="production-note">Local videos stay in this browser. Use Cloud backup to keep a second copy in R2.</p></section>
+  <section id="publishingPanel" class="panel" style="display:none">
+   <div class="sectionhead"><div><h3>Social publishing</h3><p class="muted">Connect your channels and prepare videos for publishing.</p></div><span class="status">YouTube · TikTok</span></div>
+   <div class="grid-two" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+    <article class="content-card"><span class="content-label">YOUTUBE SHORTS</span><h3 style="margin:8px 0">YouTube</h3><div id="youtubeConnection" class="library-storage">Checking connection…</div><button class="primary" id="connectYoutube" type="button" style="margin-top:12px;width:100%">Connect YouTube</button></article>
+    <article class="content-card"><span class="content-label">TIKTOK</span><h3 style="margin:8px 0">TikTok</h3><div id="tiktokConnection" class="library-storage">Checking connection…</div><button class="primary" id="connectTiktok" type="button" style="margin-top:12px;width:100%">Connect TikTok</button></article>
+   </div>
+   <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. This creates a draft; actual posting activates after provider upload processing is connected.</p>
+    <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
+    </form>
+   </div>
+   <div class="sectionhead"><div><h3>Publishing drafts</h3><span class="muted" style="font-size:12px">Review your prepared posts</span></div></div><div id="publishingJobs" class="project-list"><div class="empty">Loading publishing drafts…</div></div>
+   <p class="production-note">Important: OAuth connections and draft storage are being prepared. Direct automatic upload is not active until YouTube/TikTok credentials are configured and the upload workers are deployed. TikTok public posting also requires approval of the Content Posting API app.</p>
+  </section>
   <section id="profilePanel" class="panel billing-panel" style="display:none">
    <div class="sectionhead"><div><h3>Profile & account settings</h3><p class="muted">Manage the basic details shown in your workspace.</p></div><span class="status">Account</span></div>
    <div class="profile-layout">
@@ -233,10 +246,10 @@ function escapeHtml(value) {
 }
 
 function navigateTo(view,updateHash=true){
- const allowed=["overview","create","projects","library","billing","profile"];if(!allowed.includes(view))view="overview";
+ const allowed=["overview","create","projects","library","publishing","billing","profile"];if(!allowed.includes(view))view="overview";
  const main=document.querySelector(".main");if(main)main.dataset.view=view;
  document.querySelectorAll(".nav a[data-view]").forEach(a=>a.classList.toggle("active",a.dataset.view===view));
- if(updateHash&&location.hash!=="#"+view)history.replaceState(null,"","#"+view);
+ if(view==="publishing")refreshPublishing().catch(()=>{});\n if(updateHash&&location.hash!=="#"+view)history.replaceState(null,"","#"+view);
  window.scrollTo({top:0,behavior:"smooth"});
 }
 document.querySelectorAll(".nav a[data-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();navigateTo(a.dataset.view);}));
@@ -621,6 +634,38 @@ async function refreshVideoLibrary(){
 $("librarySearch")?.addEventListener("input",refreshVideoLibrary);
 $("librarySort")?.addEventListener("change",refreshVideoLibrary);
 $("clearLibrarySearch")?.addEventListener("click",()=>{if($("librarySearch"))$("librarySearch").value="";refreshVideoLibrary();});
+async function refreshPublishing(){
+ const jobsEl=$("publishingJobs");if(jobsEl)jobsEl.innerHTML='<div class="empty">Loading publishing details…</div>';
+ try{
+  const [connectionsData,jobsData,backupData]=await Promise.all([api("/api/publishing/connections"),api("/api/publishing/jobs"),api("/api/video-backups")]);
+  const connections=connectionsData.connections||[],configured=connectionsData.configured||{};
+  for(const platform of ["youtube","tiktok"]){
+   const el=$(platform+"Connection"),button=$("connect"+(platform==="youtube"?"Youtube":"Tiktok"));
+   const row=connections.find(c=>c.platform===platform);
+   if(el)el.innerHTML=row?'<b>Connected: '+escapeHtml(row.display_name||row.platform_user_id)+'</b><small>'+escapeHtml(row.status)+' · token stored securely</small>':'<b>Not connected</b><small>'+((configured[platform]&&configured.encryption)?"Ready to connect":"Waiting for API credentials and encryption key")+'</small>';
+   if(button){button.disabled=!(configured[platform]&&configured.encryption);button.textContent=row?"Reconnect "+(platform==="youtube"?"YouTube":"TikTok"):"Connect "+(platform==="youtube"?"YouTube":"TikTok");}
+  }
+  const select=$("publishBackup"),selected=select?.value;
+  if(select){select.innerHTML='<option value="">Choose a cloud video…</option>'+(backupData.backups||[]).map(b=>'<option value="'+escapeHtml(b.id)+'">'+escapeHtml(b.title)+' · '+(Number(b.size||0)/1048576).toFixed(1)+' MB</option>').join("");if(selected&&[...select.options].some(o=>o.value===selected))select.value=selected;}
+  const jobs=jobsData.jobs||[];
+  if(jobsEl)jobsEl.innerHTML=jobs.length?jobs.map(j=>'<article class="cloud-backup-row"><b>'+escapeHtml(j.title)+'</b><small>'+escapeHtml(j.platform.toUpperCase())+' · '+escapeHtml(j.status)+' · '+new Date(j.created_at*1000).toLocaleString()+'</small><small>'+escapeHtml(j.account_name||"Connected account")+'</small>'+(j.error_message?'<small>'+escapeHtml(j.error_message)+'</small>':'')+((j.status==="draft"||j.status==="failed"||j.status==="cancelled")?'<button class="secondary" type="button" onclick="deletePublishDraft(\''+j.id+'\')">Delete draft</button>':'')+'</article>').join(""):'<div class="empty">No publishing drafts yet. Prepare one from a Cloud backup above.</div>';
+ }catch(error){if(jobsEl)jobsEl.innerHTML='<div class="empty">'+escapeHtml(error.message||"Could not load publishing details.")+'</div>';}
+}
+async function connectSocial(platform){
+ const button=$("connect"+(platform==="youtube"?"Youtube":"Tiktok"));if(button){button.disabled=true;button.textContent="Preparing secure connection…";}
+ try{const data=await api("/api/publishing/connect/"+platform,{method:"POST",body:"{}"});if(!data.authorization_url)throw new Error("Authorization URL was not returned.");location.href=data.authorization_url;}
+ catch(error){alert(error.message||"Could not start account connection.");if(button){button.disabled=false;button.textContent="Connect "+(platform==="youtube"?"YouTube":"TikTok");}}
+}
+async function deletePublishDraft(id){if(!confirm("Delete this publishing draft?"))return;try{await api("/api/publishing/jobs/"+id,{method:"DELETE"});await refreshPublishing();}catch(error){alert(error.message);}}
+$("connectYoutube")?.addEventListener("click",()=>connectSocial("youtube"));
+$("connectTiktok")?.addEventListener("click",()=>connectSocial("tiktok"));
+$("refreshPublishing")?.addEventListener("click",refreshPublishing);
+$("publishDraftForm")?.addEventListener("submit",async event=>{
+ event.preventDefault();const button=$("savePublishDraft"),notice=$("publishDraftNotice");button.disabled=true;button.textContent="Saving…";notice.textContent="";
+ try{await api("/api/publishing/jobs",{method:"POST",body:JSON.stringify({backup_id:$("publishBackup").value,platform:$("publishPlatform").value,title:$("publishTitle").value,description:$("publishDescription").value,hashtags:$("publishHashtags").value,privacy:$("publishPrivacy").value})});notice.style.color="#8fe0c4";notice.textContent="Publishing draft saved.";await refreshPublishing();}
+ catch(error){notice.style.color="";notice.textContent=error.message||"Could not save publishing draft.";}
+ finally{button.disabled=false;button.textContent="Save publishing draft";}
+});
 async function refreshCloudBackups(){
  const el=$("cloudBackupList");if(!el)return;
  try{const data=await api("/api/video-backups"),rows=data.backups||[],summary=$("cloudBackupSummary");
