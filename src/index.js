@@ -534,13 +534,19 @@ async function handle(request, env) {
           ? "Premium Japanese 2D anime film frame, hand-drawn look, expressive characters, clean linework, cinematic cel shading, richly painted background, atmospheric lighting, consistent character design, vertical 9:16. Not photorealistic or 3D."
           : "High-end cinematic photorealistic film still, believable natural anatomy, physically plausible environment, rich production design, motivated dramatic lighting, vertical 9:16.",
         "STORY: "+clean(project.topic,120)+". TITLE: "+clean(script.title,60)+".",
+        animeMode&&continuation?.character_bible
+          ? "SERIES CHARACTER IDENTITY LOCK — use these exact established designs; do not reinterpret or redesign them: "+clean(continuation.character_bible,520)+". Preserve each named character's face shape, eye design, hair color and cut, age appearance, signature clothing, accessories and proportions. If a character is not in this scene, do not add them."
+          : "",
+        animeMode&&continuation?.previous_ending_visual_prompt
+          ? "PREVIOUS EPISODE VISUAL REFERENCE CONTEXT: "+clean(continuation.previous_ending_visual_prompt,220)+". Keep the same anime world, linework, palette and character design."
+          : "",
         "EXACT MOMENT TO ILLUSTRATE: "+clean(scene.voiceover,240),
         "DIRECTOR'S VISUAL BRIEF: "+clean(visualPrompt,480),
         "SHOT DESIGN: "+shotDirection,
         "COMPOSITION: One instantly readable focal subject. Strong foreground, middle-ground and background separation. Intentional negative space. Subject placement and silhouette must read clearly on a phone screen. Show the described action at its most visually informative instant.",
         "CAMERA AND LIGHT: Use a deliberate cinematic camera distance and angle, natural perspective, controlled depth of field, motivated key light, subtle rim light where appropriate, and a coherent color grade. Avoid flat centered passport-like framing.",
         animeMode
-          ? "Maintain the same anime character identity, face shape, eye design, hairstyle, colors and outfit. Keep linework, cel shading and background painting consistent."
+          ? "Maintain the same anime character identity, face shape, eye design, hairstyle, colors and outfit. Keep linework, cel shading and background painting consistent. Do not invent alternate costumes, change hair or eye colors, age the character, or replace established characters with lookalikes."
           : "Maintain recurring character identity, age appearance, wardrobe, era, location logic, lens language and color grade. Keep anatomy, hands, objects and architecture plausible.",
         previousScene?"PREVIOUS BEAT (continuity only): "+clean(previousScene.voiceover,90)+". Advance the story; do not repeat its action, pose or composition.":"OPENING BEAT: establish the story world with a strong visual question.",
         continuation&&sceneIndex===0?"SERIES CONTINUATION: Start from the previous episode's exact ending state. Previous action: "+clean(continuation.ending_state||continuation.previous_ending_voiceover,180)+". Previous shot: "+clean(continuation.previous_ending_visual_prompt,220)+". Preserve identity and world continuity.":"",
