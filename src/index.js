@@ -295,7 +295,7 @@ async function socialOAuthCallback(request,env,platform) {
   const stateRow=await env.DB.prepare("SELECT user_id,platform,expires_at FROM oauth_states WHERE state=?").bind(state).first();
   await env.DB.prepare("DELETE FROM oauth_states WHERE state=?").bind(state).run();
   if(!stateRow||stateRow.platform!==platform||Number(stateRow.expires_at)<Math.floor(Date.now()/1000))return fail("Authorization expired. Please connect again.");
-  const redirectUri=(env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/api/publishing/oauth/"+platform+"/callback";
+  const redirectUri=new URL(request.url).origin+"/api/publishing/oauth/"+platform+"/callback";
   let tokenData={},profile={},scopes="";
   if(platform==="youtube"){
     if(!env.YOUTUBE_CLIENT_ID||!env.YOUTUBE_CLIENT_SECRET)return fail("YouTube OAuth credentials are not configured yet.");
@@ -521,7 +521,7 @@ async function handle(request, env) {
       if(platform==="youtube"&&(!env.YOUTUBE_CLIENT_ID||!env.YOUTUBE_CLIENT_SECRET))return json({ok:false,error:"YouTube OAuth credentials are not configured."},503);
       if(platform==="tiktok"&&(!env.TIKTOK_CLIENT_KEY||!env.TIKTOK_CLIENT_SECRET))return json({ok:false,error:"TikTok OAuth credentials are not configured."},503);
       if(!env.PUBLISH_TOKEN_ENCRYPTION_KEY)return json({ok:false,error:"Secure token encryption is not configured."},503);
-      const state=randomToken(),redirectUri=(env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/api/publishing/oauth/"+platform+"/callback";
+      const state=randomToken(),redirectUri=new URL(request.url).origin+"/api/publishing/oauth/"+platform+"/callback";
       await env.DB.prepare("DELETE FROM oauth_states WHERE expires_at<?").bind(now).run();
       await env.DB.prepare("INSERT INTO oauth_states (state,user_id,platform,expires_at) VALUES (?,?,?,?)").bind(state,user.id,platform,now+600).run();
       let target;
