@@ -520,31 +520,35 @@ async function generateSceneVisual(projectId,sceneNumber,button) {
 const ffmpegInstances = Object.create(null);
 async function getBrowserFFmpeg(projectId,status) {
  if(ffmpegInstances[projectId])return ffmpegInstances[projectId];
- status.textContent="Loading FFmpeg engine (first load is about 30 MB)…";
- const [{FFmpeg},{toBlobURL}]=await Promise.all([
-  import("https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js"),
-  import("https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js")
- ]);
- const ffmpeg=new FFmpeg();
- ffmpeg.on("log",({message})=>{if(/frame=|time=/.test(message))status.textContent="Rendering video… "+message.slice(0,100);});
- const base="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
- const [coreURL,wasmURL]=await Promise.all([
-  toBlobURL(base+"/ffmpeg-core.js","text/javascript"),
-  toBlobURL(base+"/ffmpeg-core.wasm","application/wasm")
- ]);
- let loadTimer;
+ let ffmpeg=null,loadTimer;
  try {
-  await Promise.race([
-   ffmpeg.load({coreURL,wasmURL,classWorkerURL:location.origin+"/ffmpeg-worker.js"}),
+  return await Promise.race([
+   (async()=>{
+    status.textContent="Loading FFmpeg engine (first load is about 30 MB)…";
+    const [{FFmpeg},{toBlobURL}]=await Promise.all([
+     import("https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js"),
+     import("https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js")
+    ]);
+    ffmpeg=new FFmpeg();
+    ffmpeg.on("log",({message})=>{if(/frame=|time=/.test(message))status.textContent="Rendering video… "+message.slice(0,100);});
+    const base="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
+    const [coreURL,wasmURL]=await Promise.all([
+     toBlobURL(base+"/ffmpeg-core.js","text/javascript"),
+     toBlobURL(base+"/ffmpeg-core.wasm","application/wasm")
+    ]);
+    await ffmpeg.load({coreURL,wasmURL,classWorkerURL:location.origin+"/ffmpeg-worker.js"});
+    const probe=await ffmpeg.exec(["-version"],30000);
+    if(probe!==0)throw new Error("FFmpeg engine self-check failed (exit "+probe+").");
+    ffmpegInstances[projectId]=ffmpeg;
+    return ffmpeg;
+   })(),
    new Promise((_,reject)=>{loadTimer=setTimeout(()=>reject(new Error("FFmpeg engine did not finish loading within 120 seconds. Check the connection and reload the editor.")),120000);})
   ]);
  } catch(error) {
-  try{ffmpeg.terminate();}catch{}
+  if(ffmpeg){try{ffmpeg.terminate();}catch{}}
+  delete ffmpegInstances[projectId];
   throw error;
  } finally {if(loadTimer)clearTimeout(loadTimer);}
- const probe=await ffmpeg.exec(["-version"],30000);
- if(probe!==0){try{ffmpeg.terminate();}catch{}throw new Error("FFmpeg engine self-check failed (exit "+probe+"). Reload the editor and retry.");}
- ffmpegInstances[projectId]=ffmpeg;return ffmpeg;
 }
 
 const VIDEO_LIBRARY_DB="facelesslab-local-videos-v1";
