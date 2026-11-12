@@ -49,6 +49,12 @@ body{background:radial-gradient(ellipse at 78% -12%,rgba(113,91,190,.22),transpa
 .top .eyebrow{font-size:9px}
 .userbox{padding:8px 10px;border:1px solid var(--line-soft);border-radius:13px;background:rgba(18,24,38,.72)}
 .avatar{border:1px solid rgba(161,138,255,.25)}
+.avatar-button,.health-pill-button{font:inherit;cursor:pointer}
+.avatar-button{padding:0;transition:transform .16s ease,box-shadow .16s ease}
+.avatar-button:hover{transform:translateY(-1px);box-shadow:0 0 0 4px rgba(161,138,255,.12)}
+.health-pill-button{border:0;background:transparent;padding:2px 4px 2px 0;border-radius:6px;text-align:left}
+.health-pill-button:hover{filter:brightness(1.25);text-decoration:underline}
+.health-pill-button:focus-visible,.avatar-button:focus-visible{outline:2px solid #a18aff;outline-offset:3px}
 .hero{position:relative;overflow:hidden;padding:25px 28px;border-color:rgba(161,138,255,.28);background:linear-gradient(112deg,rgba(44,34,78,.94),rgba(20,29,45,.96) 68%,rgba(19,43,49,.72));box-shadow:0 18px 50px rgba(0,0,0,.13)}
 .hero:after{content:"";position:absolute;width:220px;height:220px;right:8%;top:-145px;border-radius:50%;border:1px solid rgba(188,174,255,.13);box-shadow:0 0 0 24px rgba(188,174,255,.025),0 0 0 52px rgba(188,174,255,.02);pointer-events:none}
 .hero>div,.hero>button{position:relative;z-index:1}
@@ -140,7 +146,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
 <div id="appScreen" class="app hidden">
  <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a><a href="#publishing" data-view="publishing"><span class="ico">↗</span>Publishing</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
  <main class="main">
-  <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div><div id="systemHealth" class="health-pill" role="status" aria-live="polite"><span></span>Checking core systems…</div></div><div class="avatar" id="avatar">FL</div><button class="secondary" id="logoutBtn">Log out</button></div></header>
+  <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div><button id="systemHealth" class="health-pill health-pill-button" type="button" title="Click to check service status" aria-live="polite"><span></span>Checking core systems…</button></div><button class="avatar avatar-button" id="avatar" type="button" title="Open profile settings" aria-label="Open profile settings">FL</button><button class="secondary" id="logoutBtn">Log out</button></div></header>
   <section class="hero" id="overviewHero"><div><div class="eyebrow">CREATE WITHOUT A CAMERA</div><h2>Your next video starts with an idea.</h2><p>Generate scripts, voiceovers, visuals and subtitles in one workflow.</p></div><button class="primary" onclick="document.querySelector('#topic').focus()">＋ Create a video</button></section>
   <section class="stats"><div class="stat"><span>Total projects</span><strong id="projectCount">0</strong></div><div class="stat"><span>Videos generated</span><strong id="videoCount">0</strong></div><div class="stat" id="points"><span>Available points</span><strong id="pointsBalance">0</strong></div></section>
   <div class="workspace" id="mainWorkspace">
@@ -188,7 +194,23 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
       <div class="profile-info-row"><span>Account type</span><b id="profileRole">Member</b></div>
       <div class="profile-info-row"><span>Sign-in email</span><b id="profileEmailSummary" style="overflow-wrap:anywhere;text-align:right">—</b></div>
      </div>
-     <p class="profile-note">Your email address is read-only. Profile photo uploads and password changes are not enabled yet; this page currently supports display-name updates.</p>
+     <p class="profile-note">Your email address is read-only. Profile details are private to your account.</p>
+    </div>
+    <div class="content-card">
+     <span class="content-label">SECURITY</span>
+     <h3 style="margin:10px 0 5px">Change password</h3>
+     <p class="muted" style="font-size:12px;margin:0 0 12px">Confirm your current password before setting a new one.</p>
+     <form id="passwordForm">
+      <label class="field" for="currentPassword">Current password</label>
+      <input id="currentPassword" type="password" required minlength="8" maxlength="128" autocomplete="current-password" placeholder="Current password">
+      <label class="field" for="newPassword">New password</label>
+      <input id="newPassword" type="password" required minlength="8" maxlength="128" autocomplete="new-password" placeholder="At least 8 characters">
+      <label class="field" for="confirmPassword">Confirm new password</label>
+      <input id="confirmPassword" type="password" required minlength="8" maxlength="128" autocomplete="new-password" placeholder="Repeat new password">
+      <div class="actions"><button class="primary" id="changePasswordBtn" type="submit">Update password</button></div>
+      <div class="notice" id="passwordNotice" role="status" aria-live="polite"></div>
+     </form>
+     <p class="profile-note">Changing your password signs out other active sessions for this account.</p>
     </div>
    </div>
   </section>
@@ -257,6 +279,13 @@ function navigateTo(view,updateHash=true){
  window.scrollTo({top:0,behavior:"smooth"});
 }
 document.querySelectorAll(".nav a[data-view]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();navigateTo(a.dataset.view);}));
+$("avatar").addEventListener("click",()=>navigateTo("profile"));
+$("systemHealth").addEventListener("click",async()=>{
+ const el=$("systemHealth");el.disabled=true;el.innerHTML="<span></span>Checking services…";
+ await checkCoreHealth();
+ el.disabled=false;
+ el.title=el.dataset.state==="ok"?"Database, media storage and queue are online.":"One or more core services need attention. Check the API health endpoint.";
+});
 window.addEventListener("hashchange",()=>navigateTo(location.hash.slice(1),false));
 
 $("projectSearch").addEventListener("input", renderProjectList);
@@ -1018,6 +1047,20 @@ $("profileForm").addEventListener("submit", async (event) => {
   notice.style.color="#8fe0c4";notice.textContent="Profile updated successfully.";
  }catch(error){notice.style.color="";notice.textContent=error.message;}
  finally{button.disabled=false;button.textContent="Save changes";}
+});
+$("passwordForm").addEventListener("submit",async(event)=>{
+ event.preventDefault();
+ const currentPassword=$("currentPassword").value,newPassword=$("newPassword").value,confirmPassword=$("confirmPassword").value;
+ const notice=$("passwordNotice"),button=$("changePasswordBtn");
+ notice.textContent="";notice.style.color="";
+ if(newPassword!==confirmPassword){notice.textContent="New passwords do not match.";return;}
+ if(newPassword.length<8){notice.textContent="New password must be at least 8 characters.";return;}
+ button.disabled=true;button.textContent="Updating…";
+ try{
+  const result=await api("/api/profile/password",{method:"POST",body:JSON.stringify({current_password:currentPassword,new_password:newPassword})});
+  $("passwordForm").reset();notice.style.color="#8fe0c4";notice.textContent=result.message||"Password updated successfully.";
+ }catch(error){notice.textContent=error.message||"Could not update password.";}
+ finally{button.disabled=false;button.textContent="Update password";}
 });
 $("logoutBtn").addEventListener("click", async () => {
  try { await api("/api/auth/logout", { method: "POST" }); } catch {}
