@@ -289,7 +289,7 @@ async function encryptSocialToken(env,value) {
 }
 async function socialOAuthCallback(request,env,platform) {
   const url=new URL(request.url),state=url.searchParams.get("state")||"",code=url.searchParams.get("code")||"";
-  const fail=(message)=>Response.redirect((env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/#publishing?oauth_error="+encodeURIComponent(message),302);
+  const fail=(message)=>Response.redirect((env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/?oauth_error="+encodeURIComponent(message)+"#publishing",302);
   if(url.searchParams.get("error"))return fail("Authorization was cancelled.");
   if(!state||!code)return fail("The authorization response is missing its state or code.");
   const stateRow=await env.DB.prepare("SELECT user_id,platform,expires_at FROM oauth_states WHERE state=?").bind(state).first();
@@ -326,7 +326,7 @@ async function socialOAuthCallback(request,env,platform) {
     await env.DB.prepare("INSERT INTO social_connections (id,user_id,platform,platform_user_id,display_name,access_token_enc,refresh_token_enc,access_token_expires_at,refresh_token_expires_at,scopes,status) VALUES (?,?,?,?,?,?,?,?,?,?, 'active') ON CONFLICT(user_id,platform,platform_user_id) DO UPDATE SET display_name=excluded.display_name,access_token_enc=excluded.access_token_enc,refresh_token_enc=COALESCE(excluded.refresh_token_enc,social_connections.refresh_token_enc),access_token_expires_at=excluded.access_token_expires_at,refresh_token_expires_at=excluded.refresh_token_expires_at,scopes=excluded.scopes,status='active',updated_at=unixepoch()")
       .bind(crypto.randomUUID(),stateRow.user_id,platform,profile.id,profile.name,accessEnc,refreshEnc,Math.floor(Date.now()/1000)+Number(tokenData.expires_in||3600),tokenData.refresh_expires_in?Math.floor(Date.now()/1000)+Number(tokenData.refresh_expires_in):null,scopes).run();
   }catch(error){console.error("social_token_store_failed",platform,String(error));return fail("Could not securely save the account. Check the publishing encryption key.");}
-  return Response.redirect((env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/#publishing?connected="+platform,302);
+  return Response.redirect((env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/?connected="+platform+"#publishing",302);
 }
 
 async function decryptSocialToken(env,value) {
@@ -358,7 +358,7 @@ async function processPublishQueueMessage(message,env) {
  try{
   const access=await getFreshSocialAccessToken(env,connection),size=Number(object.size||0);if(!size)throw new Error("MP4 file is empty.");
   if(job.platform==="youtube"){
-   const tags=(String(job.hashtags||"").match(/#[\\p{L}\\p{N}_]+/gu)||[]).map(x=>x.slice(1)).slice(0,30);
+   const tags=(String(job.hashtags||"").match(/#[\p{L}\p{N}_]+/gu)||[]).map(x=>x.slice(1)).slice(0,30);
    const metadata={snippet:{title:String(job.title||"FacelessLab video").slice(0,100),description:String(job.description||"")+(job.hashtags?"\\n\\n"+job.hashtags:""),tags,categoryId:"24"},status:{privacyStatus:["public","unlisted","private"].includes(job.privacy)?job.privacy:"private",selfDeclaredMadeForKids:false}};
    const init=await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json; charset=UTF-8","x-upload-content-type":"video/mp4","x-upload-content-length":String(size)},body:JSON.stringify(metadata)});
    if(!init.ok)throw new Error("YouTube upload setup failed: "+(await init.text()).slice(0,300));
