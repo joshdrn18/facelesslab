@@ -356,7 +356,7 @@ async function handle(request, env) {
     const backupCollection = "/api/video-backups";
     if (path === backupCollection && method === "GET") {
       const prefix = "users/" + user.id + "/rendered-backups/";
-      const listed = await env.MEDIA.list({ prefix, limit: 100 });
+      const listed = await env.MEDIA.list({ prefix, limit: 100, include: ["customMetadata"] });
       const backups = (listed.objects || []).map(object => ({ id: object.key.slice(prefix.length).replace(/\.mp4$/i, ""), title: object.customMetadata?.title || "FacelessLab video", size: object.size, created_at: object.uploaded ? new Date(object.uploaded).toISOString() : null, duration: Number(object.customMetadata?.duration || 0), quality: Number(object.customMetadata?.quality || 0) }));
       return json({ ok: true, backups, truncated: Boolean(listed.truncated) });
     }
@@ -370,7 +370,9 @@ async function handle(request, env) {
       const title = String(request.headers.get("x-video-title") || "FacelessLab video").slice(0, 160);
       const duration = Math.max(0, Number(request.headers.get("x-video-duration") || 0));
       const quality = Math.max(0, Number(request.headers.get("x-video-quality") || 0));
-      const object = await env.MEDIA.put(prefix + id + ".mp4", request.body, { httpMetadata: { contentType: "video/mp4", cacheControl: "private, no-store" }, customMetadata: { title, duration: String(duration), quality: String(quality), ownerId: user.id } });
+      let receivedBytes = 0;
+      const limitedBody = request.body.pipeThrough(new TransformStream({ transform(chunk, controller) { receivedBytes += chunk.byteLength; if (receivedBytes > maxBytes) throw new Error("Cloud backup supports MP4 files up to 90 MB per file."); controller.enqueue(chunk); } }));
+      const object = await env.MEDIA.put(prefix + id + ".mp4", limitedBody, { httpMetadata: { contentType: "video/mp4", cacheControl: "private, no-store" }, customMetadata: { title, duration: String(duration), quality: String(quality), ownerId: user.id } });
       return json({ ok: true, backup: { id, title, size: object.size, duration, quality } }, 201);
     }
     const backupMatch = path.match(/^\/api\/video-backups\/([a-f0-9-]+)$/i);
