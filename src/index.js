@@ -207,7 +207,7 @@ async function processScriptQueueMessage(message, env) {
   const result=await generateScriptWithProviders(env,project,continuation),script=result.script;
   script.characters=(Array.isArray(script.characters)?script.characters:[]).slice(0,8).map((c,i)=>{
    const name=String(c?.name||"").trim().slice(0,80);
-   const id=String(c?.id||name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||("character-"+(i+1))).slice(0,80);
+   const id=String(c?.id||name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||("character-"+(i+1))).toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"").slice(0,80)||("character-"+(i+1));
    return {id,name,role:String(c?.role||"").trim().slice(0,180),visual_identity:String(c?.visual_identity||"").trim().slice(0,600),signature_outfit:String(c?.signature_outfit||"").trim().slice(0,350),distinctive_features:String(c?.distinctive_features||"").trim().slice(0,350)};
   }).filter(c=>c.name&&c.visual_identity);
   if(!script||typeof script!=="object"||!Array.isArray(script.scenes)||!script.narration)throw new Error("AI response is missing required script fields.");
@@ -572,7 +572,14 @@ async function handle(request, env) {
       const row=await env.DB.prepare("SELECT id,output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
       if(!row)return json({ok:false,error:"Generate a script before editing character profiles."},409);
       const script=JSON.parse(row.output_json||"{}");
-      script.characters=characters.map((c,i)=>({id:String(c?.id||("character-"+(i+1))).slice(0,80),name:String(c?.name||"").trim().slice(0,80),role:String(c?.role||"").trim().slice(0,180),visual_identity:String(c?.visual_identity||"").trim().slice(0,600),signature_outfit:String(c?.signature_outfit||"").trim().slice(0,350),distinctive_features:String(c?.distinctive_features||"").trim().slice(0,350)})).filter(c=>c.name&&c.visual_identity);
+      const previousCharacters=new Map((script.characters||[]).map(c=>[String(c.id||""),c]));
+      script.characters=characters.map((c,i)=>{
+        const id=String(c?.id||("character-"+(i+1))).toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"").slice(0,80)||("character-"+(i+1));
+        const previous=previousCharacters.get(id)||{};
+        const next={...previous,id,name:String(c?.name||"").trim().slice(0,80),role:String(c?.role||"").trim().slice(0,180),visual_identity:String(c?.visual_identity||"").trim().slice(0,600),signature_outfit:String(c?.signature_outfit||"").trim().slice(0,350),distinctive_features:String(c?.distinctive_features||"").trim().slice(0,350)};
+        if(next.visual_identity!==previous.visual_identity||next.signature_outfit!==previous.signature_outfit||next.distinctive_features!==previous.distinctive_features){delete next.character_reference_object_key;delete next.character_reference_generated_at;}
+        return next;
+      }).filter(c=>c.name&&c.visual_identity);
       await env.DB.prepare("UPDATE generations SET output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(script),row.id,user.id).run();
       return json({ok:true,characters:script.characters});
     }
