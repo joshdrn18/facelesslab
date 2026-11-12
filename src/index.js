@@ -368,7 +368,10 @@ async function handle(request, env) {
       if (contentLength > maxBytes) return json({ ok: false, error: "Cloud backup supports MP4 files up to 90 MB per file." }, 413);
       const id = crypto.randomUUID();
       const prefix = "users/" + user.id + "/rendered-backups/";
-      const title = String(request.headers.get("x-video-title") || "FacelessLab video").slice(0, 160);
+      const encodedTitle = String(request.headers.get("x-video-title") || "FacelessLab video");
+      let title = encodedTitle;
+      try { title = decodeURIComponent(encodedTitle); } catch {}
+      title = title.slice(0, 160);
       const duration = Math.max(0, Number(request.headers.get("x-video-duration") || 0));
       const quality = Math.max(0, Number(request.headers.get("x-video-quality") || 0));
       let receivedBytes = 0;
