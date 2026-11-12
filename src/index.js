@@ -352,7 +352,7 @@ async function handle(request, env) {
     return json({
       ok,
       service: "FacelessLab API",
-      version: "0.8.0",
+      version: "0.9.0",
       checks: { database, storage, queue },
       timestamp: new Date().toISOString()
     }, ok ? 200 : 503);
@@ -422,7 +422,7 @@ async function handle(request, env) {
     return json({ ok: true });
   }
 
-  const socialCallback=path.match(/^\\/api\\/publishing\\/oauth\\/(youtube|tiktok)\\/callback$/);
+  const socialCallback=path.match(new RegExp("^/api/publishing/oauth/(youtube|tiktok)/callback$"));
   if(socialCallback&&method==="GET")return socialOAuthCallback(request,env,socialCallback[1]);
 
   if (path.startsWith("/api/")) {
@@ -442,7 +442,7 @@ async function handle(request, env) {
       const rows=await env.DB.prepare("SELECT id,platform,platform_user_id,display_name,status,scopes,access_token_expires_at,created_at FROM social_connections WHERE user_id=? ORDER BY platform").bind(user.id).all();
       return json({ok:true,connections:rows.results||[],configured:{youtube:Boolean(env.YOUTUBE_CLIENT_ID&&env.YOUTUBE_CLIENT_SECRET),tiktok:Boolean(env.TIKTOK_CLIENT_KEY&&env.TIKTOK_CLIENT_SECRET),encryption:Boolean(env.PUBLISH_TOKEN_ENCRYPTION_KEY)}});
     }
-    const connectMatch=path.match(/^\\/api\\/publishing\\/connect\\/(youtube|tiktok)$/);
+    const connectMatch=path.match(new RegExp("^/api/publishing/connect/(youtube|tiktok)$"));
     if(connectMatch&&method==="POST"){
       const platform=connectMatch[1],now=Math.floor(Date.now()/1000);
       if(platform==="youtube"&&(!env.YOUTUBE_CLIENT_ID||!env.YOUTUBE_CLIENT_SECRET))return json({ok:false,error:"YouTube OAuth credentials are not configured."},503);
@@ -483,7 +483,7 @@ async function handle(request, env) {
       await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,privacy,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,String(body?.privacy||"private")).run();
       return json({ok:true,job:{id,backup_id:backupId,platform,title,status:"draft"}},201);
     }
-    const publishJobMatch=path.match(/^\\/api\\/publishing\\/jobs\\/([a-f0-9-]+)$/i);
+    const publishJobMatch=path.match(new RegExp("^/api/publishing/jobs/([a-f0-9-]+)$","i"));
     if(publishJobMatch&&method==="DELETE"){
       await env.DB.prepare("DELETE FROM publish_jobs WHERE id=? AND user_id=? AND status IN ('draft','failed','cancelled')").bind(publishJobMatch[1],user.id).run();
       return json({ok:true});
