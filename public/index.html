@@ -699,7 +699,16 @@ async function renderProjectVideo(projectId,button) {
    :plannedDurations.map(duration=>duration*timelineScale);
   await ffmpeg.writeFile(voiceFile,new Uint8Array(await voiceBlob.arrayBuffer()));
   const quality=Number($("editor-quality-"+projectId)?.value)||720,frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
-  const cues=(subtitleData?.cues||[]).map(c=>({start:Math.max(0,Number(c.start)||0),end:Math.max(0,Number(c.end)||0),text:String(c.text||"").trim()})).filter(c=>c.end>c.start&&c.text);
+  const rawCues=(subtitleData?.cues||[]).map(c=>({start:Number(c.start),end:Number(c.end),text:String(c.text||"").replace(/\s+/g," ").trim()}))
+   .filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start&&c.text)
+   .sort((a,b)=>a.start-b.start);
+  const cues=rawCues.map(c=>({start:Math.max(0,Math.min(audioDuration,c.start)),end:Math.max(0,Math.min(audioDuration,c.end)),text:c.text}))
+   .filter(c=>c.end-c.start>=0.08);
+  if(captionMode!=="off"&&!cues.length)throw new Error("The saved subtitles do not overlap the voice-over duration. Regenerate subtitles from the current voice-over.");
+  const subtitleDuration=Number(subtitleData?.duration_seconds)||0;
+  if(captionMode!=="off"&&subtitleDuration>0&&Math.abs(subtitleDuration-audioDuration)>Math.max(2,audioDuration*0.08)){
+   status.textContent="Subtitle timing differs from the audio duration; trimming captions to the actual voice-over…";
+  }
   const concat=[],sceneRanges=[];let totalDuration=0,segmentNumber=0;
   for(let i=0;i<scenes.length;i++){
    const scene=scenes[i],meta=visualMap.get(Number(scene.scene)),imageResponse=await fetch(API_BASE+"/api/projects/"+projectId+"/visuals/"+meta.generation_id+"/image",{headers:{authorization:"Bearer "+token}});
