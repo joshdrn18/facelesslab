@@ -316,10 +316,11 @@ function escapeHtml(value) {
 }
 
 function navigateTo(view,updateHash=true){
- const allowed=["overview","create","projects","library","publishing","billing","profile"];if(!allowed.includes(view))view="overview";
+ const allowed=["overview","create","projects","library","publishing","billing","profile","admin"];if(!allowed.includes(view)||(view==="admin"&&currentUser?.role!=="admin"))view="overview";
  const main=document.querySelector(".main");if(main)main.dataset.view=view;
  document.querySelectorAll(".nav a[data-view]").forEach(a=>a.classList.toggle("active",a.dataset.view===view));
  if(view==="publishing")refreshPublishing().catch(()=>{});
+ if(view==="admin")refreshAdminPanel().catch(()=>{});
  if(updateHash&&location.hash!=="#"+view)history.replaceState(null,"","#"+view);
  window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -331,6 +332,88 @@ $("systemHealth").addEventListener("click",async()=>{
  el.disabled=false;
  el.title=el.dataset.state==="ok"?"Database, media storage and queue are online.":"One or more core services need attention. Check the API health endpoint.";
 });
+
+let adminOffset=0,adminTotal=0,adminSearchTimer=null;
+async function refreshAdminPanel(){
+ if(currentUser?.role!=="admin")return;
+ $("adminNotice").textContent="Loading admin workspace…";
+ try{
+  const data=await api("/api/admin/overview");
+  const s=data.stats||{};
+  $("adminMembersTotal").textContent=Number(s.members||0).toLocaleString();
+  $("adminMembersActive").textContent=Number(s.active_members||0).toLocaleString();
+  $("adminMembersSuspended").textContent=Number(s.suspended_members||0).toLocaleString();
+  $("adminPointsTotal").textContent=Number(s.points_in_circulation||0).toLocaleString();
+  $("adminProjectsTotal").textContent=Number(s.projects||0).toLocaleString();
+  $("adminGenerationsTotal").textContent=Number(s.generations||0).toLocaleString();
+  $("adminPublishTotal").textContent=Number(s.publish_jobs||0).toLocaleString();
+  renderAdminAudit(data.audit||[]);
+  await loadAdminMembers(false);
+  $("adminNotice").textContent="";
+ }catch(error){$("adminNotice").textContent=error.message||"Could not load admin dashboard.";}
+}
+function renderAdminAudit(items){
+ const el=$("adminAuditList");
+ if(!items.length){el.innerHTML='<div class="empty">No admin actions recorded yet.</div>';return;}
+ el.innerHTML=items.map(item=>{
+  let details={};try{details=JSON.parse(item.details_json||"{}");}catch{}
+  const title=item.action==="member_status"?"Member access changed":item.action==="points_adjustment"?"Points adjusted":String(item.action||"Admin action").replaceAll("_"," ");
+  const detail=item.action==="member_status"?"Status: "+(details.status||"updated"):item.action==="points_adjustment"?(Number(details.delta)>0?"+":"")+Number(details.delta||0)+" points · "+(details.description||"Manual adjustment"):"Action recorded";
+  return '<div class="admin-audit-item"><div><b>'+escapeHtml(title)+'</b><small>'+escapeHtml(item.target_email||"Unknown member")+' · by '+escapeHtml(item.actor_email||"Admin")+' · '+escapeHtml(detail)+'</small></div><time>'+new Date(Number(item.created_at||0)*1000).toLocaleString([], {dateStyle:"medium",timeStyle:"short"})+'</time></div>';
+ }).join("");
+}
+async function loadAdminMembers(append=false){
+ if(currentUser?.role!=="admin")return;
+ const query=$("adminSearch").value.trim();
+ const offset=append?adminOffset:0;
+ const params=new URLSearchParams({q:query,limit:"25",offset:String(offset)});
+ const data=await api("/api/admin/users?"+params.toString());
+ adminTotal=Number(data.total||0);
+ adminOffset=offset+(data.users||[]).length;
+ const html=(data.users||[]).map(member=>{
+  const isSuspended=member.status==="suspended";
+  const label=member.display_name||member.email.split("@")[0];
+  const role=member.role==="admin"?"Administrator":"Member";
+  return '<article class="admin-member-row"><div class="admin-member-name"><b>'+escapeHtml(label)+'</b><small>'+escapeHtml(member.email)+' · '+escapeHtml(role)+'</small><small>Joined '+new Date(Number(member.created_at||0)*1000).toLocaleDateString()+'</small></div><span class="admin-member-meta">'+Number(member.project_count||0)+' projects · '+Number(member.generation_count||0)+' runs</span><span>'+Number(member.points||0).toLocaleString()+' pts</span><span><i class="admin-pill '+(isSuspended?'suspended':'')+'">'+(isSuspended?'Suspended':'Active')+'</i></span><div class="admin-member-actions"><button class="mini-btn" type="button" data-admin-action="points" data-user-id="'+escapeHtml(member.id)+'" data-user-email="'+escapeHtml(member.email)+'">Adjust points</button><button class="secondary" type="button" data-admin-action="status" data-user-id="'+escapeHtml(member.id)+'" data-user-email="'+escapeHtml(member.email)+'" data-status="'+(isSuspended?'active':'suspended')+'">'+(isSuspended?'Activate':'Suspend')+'</button></div></article>';
+ }).join("");
+ const list=$("adminMembersList");
+ if(append)list.insertAdjacentHTML("beforeend",html);
+ else list.innerHTML=html||'<div class="empty">No members found.</div>';
+ $("adminResultCount").textContent="Showing "+adminOffset+" of "+adminTotal+" members";
+ $("adminLoadMore").style.display=adminOffset<adminTotal?"inline-flex":"none";
+}
+$("adminRefreshBtn").addEventListener("click",()=>refreshAdminPanel());
+$("adminSearch").addEventListener("input",()=>{
+ clearTimeout(adminSearchTimer);
+ adminSearchTimer=setTimeout(()=>loadAdminMembers(false).catch(error=>$("adminNotice").textContent=error.message),250);
+});
+$("adminLoadMore").addEventListener("click",()=>loadAdminMembers(true).catch(error=>$("adminNotice").textContent=error.message));
+$("adminMembersList").addEventListener("click",async event=>{
+ const button=event.target.closest("button[data-admin-action]");
+ if(!button)return;
+ const id=button.dataset.userId,email=button.dataset.userEmail,action=button.dataset.adminAction;
+ const notice=$("adminNotice");
+ if(action==="status"){
+  const next=button.dataset.status;
+  const promptText=next==="suspended"?"Suspend "+email+"? This member will no longer be able to sign in.":"Reactivate "+email+"?";
+  if(!confirm(promptText))return;
+  button.disabled=true;
+  try{const result=await api("/api/admin/users/"+encodeURIComponent(id)+"/status",{method:"POST",body:JSON.stringify({status:next})});notice.textContent=result.message;await refreshAdminPanel();}
+  catch(error){notice.textContent=error.message||"Could not update member status.";button.disabled=false;}
+ }
+ if(action==="points"){
+  const raw=prompt("Points adjustment for "+email+". Use a positive number to add or a negative number to deduct:","100");
+  if(raw===null)return;
+  const delta=Number(raw);
+  if(!Number.isSafeInteger(delta)||delta===0){notice.textContent="Enter a non-zero whole number.";return;}
+  const description=prompt("Reason for this adjustment:","Admin points adjustment");
+  if(description===null)return;
+  button.disabled=true;
+  try{const result=await api("/api/admin/users/"+encodeURIComponent(id)+"/points",{method:"POST",body:JSON.stringify({delta,description})});notice.textContent=result.message+" New balance: "+result.balance+" points.";await refreshAdminPanel();}
+  catch(error){notice.textContent=error.message||"Could not adjust points.";button.disabled=false;}
+ }
+});
+
 window.addEventListener("hashchange",()=>navigateTo(location.hash.slice(1),false));
 
 $("projectSearch").addEventListener("input", renderProjectList);
@@ -369,6 +452,7 @@ function showApp(user, points) {
  if($("profileAvatar"))$("profileAvatar").textContent=name.slice(0,2).toUpperCase();
  loadProfileAvatar();
  if($("profileRole"))$("profileRole").textContent=user.role==="admin"?"Administrator":"Member";
+ if($("adminNav"))$("adminNav").style.display=user.role==="admin"?"flex":"none";
  $("pointsBalance").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
  $("billingPoints").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
  $("accountPlan").textContent = user.role === "admin" ? "Admin workspace" : "Free workspace";
