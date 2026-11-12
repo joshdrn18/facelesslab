@@ -118,6 +118,11 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
 .profile-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.75fr);gap:14px;align-items:start}
 .profile-avatar-card{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--line-soft);border-radius:12px;background:linear-gradient(120deg,#211d39,#141d2b)}
 .profile-avatar-large{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(135deg,#a18aff,#5c54d8);color:#fff;font-size:21px;font-weight:850;box-shadow:0 8px 22px #8e76ff30}
+.profile-avatar-large{overflow:hidden;flex:0 0 58px}
+.profile-avatar-large img,.avatar-button img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar-button img{border-radius:50%}
+.profile-avatar-large img{border-radius:18px}
+#profilePhotoInput{display:none}
 .profile-info-list{display:grid;gap:11px}.profile-info-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:12px}.profile-info-row:last-child{border:0}.profile-info-row span{color:var(--muted)}.profile-note{font-size:11px;color:var(--muted);line-height:1.6;margin:12px 0 0}
 .main[data-view="profile"] #overviewHero,.main[data-view="profile"] .stats,.main[data-view="profile"] #mainWorkspace,.main[data-view="profile"] #projects,.main[data-view="profile"] #billingPanel,.main[data-view="profile"] #videoLibrary{display:none!important}
 .main[data-view="profile"] #profilePanel{display:block!important}
@@ -178,7 +183,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
    <div class="sectionhead"><div><h3>Profile & account settings</h3><p class="muted">Manage the basic details shown in your workspace.</p></div><span class="status">Account</span></div>
    <div class="profile-layout">
     <div class="content-card">
-     <div class="profile-avatar-card"><div class="profile-avatar-large" id="profileAvatar">FL</div><div><b id="profileCardName">Creator</b><div class="muted" style="font-size:11px">FacelessLab account</div></div></div>
+     <div class="profile-avatar-card"><div class="profile-avatar-large" id="profileAvatar">FL</div><div style="min-width:0"><b id="profileCardName">Creator</b><div class="muted" style="font-size:11px">FacelessLab account</div><div class="actions" style="margin-top:9px"><label class="secondary" for="profilePhotoInput" style="cursor:pointer;padding:7px 10px">Upload photo</label><button class="secondary" id="removeProfilePhoto" type="button" style="padding:7px 10px">Remove</button><input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="profile-note">JPG, PNG, or WebP · max 2 MB</div></div></div>
      <form id="profileForm" style="margin-top:16px">
       <label class="field" for="profileDisplayName">Display name</label>
       <input id="profileDisplayName" maxlength="80" required placeholder="Your display name">
@@ -322,6 +327,7 @@ function showApp(user, points) {
  if($("profileEmailSummary"))$("profileEmailSummary").textContent=user.email||"—";
  if($("profileCardName"))$("profileCardName").textContent=name;
  if($("profileAvatar"))$("profileAvatar").textContent=name.slice(0,2).toUpperCase();
+ loadProfileAvatar();
  if($("profileRole"))$("profileRole").textContent=user.role==="admin"?"Administrator":"Member";
  $("pointsBalance").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
  $("billingPoints").textContent = user.role === "admin" ? "∞" : String(points ?? 0);
@@ -330,6 +336,36 @@ function showApp(user, points) {
  refreshProjects();
  refreshVideoLibrary();
 }
+let profileAvatarObjectUrl="";
+function profileInitials(){const name=currentUser?.display_name||currentUser?.email?.split("@")[0]||"FL";return name.slice(0,2).toUpperCase();}
+function resetProfileAvatar(){for(const id of ["avatar","profileAvatar"]){const el=$(id);if(el)el.textContent=profileInitials();}}
+async function loadProfileAvatar(){
+ try{
+  const response=await fetch(API_BASE+"/api/profile/avatar",{headers:{authorization:"Bearer "+token},cache:"no-store"});
+  if(!response.ok){resetProfileAvatar();return;}
+  const blob=await response.blob();
+  if(profileAvatarObjectUrl)URL.revokeObjectURL(profileAvatarObjectUrl);
+  profileAvatarObjectUrl=URL.createObjectURL(blob);
+  for(const id of ["avatar","profileAvatar"]){const el=$(id);if(el)el.innerHTML='<img alt="Profile photo" src="'+profileAvatarObjectUrl+'">';}
+ }catch{resetProfileAvatar();}
+}
+$("profilePhotoInput").addEventListener("change",async()=>{
+ const file=$("profilePhotoInput").files?.[0];if(!file)return;
+ const notice=$("profileNotice");notice.textContent="Uploading profile photo…";notice.style.color="";
+ try{
+  const response=await fetch(API_BASE+"/api/profile/avatar",{method:"POST",headers:{authorization:"Bearer "+token,"content-type":file.type},body:file});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.error||"Could not upload profile photo.");
+  await loadProfileAvatar();notice.style.color="#8fe0c4";notice.textContent="Profile photo updated.";
+ }catch(error){notice.textContent=error.message||"Could not upload profile photo.";}
+ finally{$("profilePhotoInput").value="";}
+});
+$("removeProfilePhoto").addEventListener("click",async()=>{
+ const notice=$("profileNotice");notice.textContent="Removing profile photo…";notice.style.color="";
+ try{
+  const result=await api("/api/profile/avatar",{method:"DELETE"});resetProfileAvatar();notice.style.color="#8fe0c4";notice.textContent=result.message||"Profile photo removed.";
+ }catch(error){notice.textContent=error.message||"Could not remove profile photo.";}
+});
 async function refreshProjects() {
  try {
   const data = await api("/api/projects");
