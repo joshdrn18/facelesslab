@@ -635,6 +635,8 @@ $("librarySearch")?.addEventListener("input",refreshVideoLibrary);
 $("librarySort")?.addEventListener("change",refreshVideoLibrary);
 $("clearLibrarySearch")?.addEventListener("click",()=>{if($("librarySearch"))$("librarySearch").value="";refreshVideoLibrary();});
 async function refreshPublishing(){
+ const oauthParams=new URLSearchParams(location.search),connectedPlatform=oauthParams.get("connected"),oauthError=oauthParams.get("oauth_error"),oauthNotice=$("publishDraftNotice");
+ if(oauthNotice&&(connectedPlatform||oauthError)){oauthNotice.style.color=oauthError?"var(--red)":"#8fe0c4";oauthNotice.textContent=oauthError||("Successfully connected "+(connectedPlatform==="youtube"?"YouTube":"TikTok")+".");history.replaceState(null,"",location.pathname+"#publishing");}
  const jobsEl=$("publishingJobs");if(jobsEl)jobsEl.innerHTML='<div class="empty">Loading publishing details…</div>';
  try{
   const [connectionsData,jobsData,backupData]=await Promise.all([api("/api/publishing/connections"),api("/api/publishing/jobs"),api("/api/video-backups")]);
