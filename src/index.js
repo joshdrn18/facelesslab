@@ -329,6 +329,60 @@ async function socialOAuthCallback(request,env,platform) {
   return Response.redirect((env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/#publishing?connected="+platform,302);
 }
 
+async function decryptSocialToken(env,value) {
+  const bytes=decodeBase64(value),key=await tokenCryptoKey(env);
+  const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:bytes.slice(0,12)},key,bytes.slice(12));
+  return new TextDecoder().decode(plain);
+}
+async function getFreshSocialAccessToken(env,connection) {
+  const now=Math.floor(Date.now()/1000);
+  if(Number(connection.access_token_expires_at||0)>now+300)return decryptSocialToken(env,connection.access_token_enc);
+  if(!connection.refresh_token_enc)throw new Error("Reconnect this social account to restore upload access.");
+  const refresh=await decryptSocialToken(env,connection.refresh_token_enc);
+  const youtube=connection.platform==="youtube";
+  const body=youtube?{client_id:env.YOUTUBE_CLIENT_ID,client_secret:env.YOUTUBE_CLIENT_SECRET,refresh_token:refresh,grant_type:"refresh_token"}:{client_key:env.TIKTOK_CLIENT_KEY,client_secret:env.TIKTOK_CLIENT_SECRET,refresh_token:refresh,grant_type:"refresh_token"};
+  const response=await fetch(youtube?"https://oauth2.googleapis.com/token":"https://open.tiktokapis.com/v2/oauth/token/",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams(body)});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||!data.access_token)throw new Error(data.error_description||data.error||"Social account token refresh failed.");
+  await env.DB.prepare("UPDATE social_connections SET access_token_enc=?,refresh_token_enc=?,access_token_expires_at=?,refresh_token_expires_at=?,status='active',updated_at=unixepoch() WHERE id=?")
+   .bind(await encryptSocialToken(env,data.access_token),data.refresh_token?await encryptSocialToken(env,data.refresh_token):connection.refresh_token_enc,now+Number(data.expires_in||3600),data.refresh_expires_in?now+Number(data.refresh_expires_in):connection.refresh_token_expires_at,connection.id).run();
+  return data.access_token;
+}
+async function processPublishQueueMessage(message,env) {
+ const id=message.body?.job_id;if(!id)return;
+ const job=await env.DB.prepare("SELECT * FROM publish_jobs WHERE id=? AND status='queued'").bind(id).first();if(!job)return;
+ const connection=await env.DB.prepare("SELECT * FROM social_connections WHERE id=? AND user_id=? AND status='active'").bind(job.connection_id,job.user_id).first();
+ if(!connection)throw new Error("Connected social account not found.");
+ const object=await env.MEDIA.get("users/"+job.user_id+"/rendered-backups/"+job.backup_id+".mp4");if(!object)throw new Error("Cloud backup not found.");
+ await env.DB.prepare("UPDATE publish_jobs SET status='uploading',error_message=NULL,updated_at=unixepoch() WHERE id=?").bind(id).run();
+ try{
+  const access=await getFreshSocialAccessToken(env,connection),size=Number(object.size||0);if(!size)throw new Error("MP4 file is empty.");
+  if(job.platform==="youtube"){
+   const tags=(String(job.hashtags||"").match(/#[\\p{L}\\p{N}_]+/gu)||[]).map(x=>x.slice(1)).slice(0,30);
+   const metadata={snippet:{title:String(job.title||"FacelessLab video").slice(0,100),description:String(job.description||"")+(job.hashtags?"\\n\\n"+job.hashtags:""),tags,categoryId:"24"},status:{privacyStatus:["public","unlisted","private"].includes(job.privacy)?job.privacy:"private",selfDeclaredMadeForKids:false}};
+   const init=await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json; charset=UTF-8","x-upload-content-type":"video/mp4","x-upload-content-length":String(size)},body:JSON.stringify(metadata)});
+   if(!init.ok)throw new Error("YouTube upload setup failed: "+(await init.text()).slice(0,300));
+   const location=init.headers.get("location");if(!location)throw new Error("YouTube did not return an upload URL.");
+   const uploaded=await fetch(location,{method:"PUT",headers:{"content-type":"video/mp4","content-length":String(size)},body:object.body});
+   const result=await uploaded.json().catch(()=>({}));if(!uploaded.ok||!result.id)throw new Error("YouTube upload failed: "+JSON.stringify(result.error||result).slice(0,300));
+   await env.DB.prepare("UPDATE publish_jobs SET status='published',provider_post_id=?,provider_url=?,updated_at=unixepoch() WHERE id=?").bind(result.id,"https://www.youtube.com/shorts/"+result.id,id).run();
+  }else{
+   if(size<5*1024*1024)throw new Error("TikTok direct upload requires an MP4 of at least 5 MB.");
+   const info=await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json"},body:"{}"});
+   const creator=await info.json().catch(()=>({})),privacy=job.privacy==="public"?"PUBLIC_TO_EVERYONE":"SELF_ONLY";
+   if(!info.ok||creator.error?.code!=="ok"||!(creator.data?.privacy_level_options||[]).includes(privacy))throw new Error("TikTok does not allow the selected privacy setting.");
+   const chunkSize=Math.min(64*1024*1024,Math.max(5*1024*1024,size)),chunks=Math.ceil(size/chunkSize);
+   const init=await fetch("https://open.tiktokapis.com/v2/post/publish/video/init/",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json"},body:JSON.stringify({post_info:{title:(job.title+" "+(job.hashtags||"")).slice(0,2200),privacy_level:privacy,is_aigc:true},source_info:{source:"FILE_UPLOAD",video_size:size,chunk_size:chunkSize,total_chunk_count:chunks}})});
+   const started=await init.json().catch(()=>({}));if(!init.ok||started.error?.code!=="ok"||!started.data?.upload_url)throw new Error("TikTok upload setup failed: "+(started.error?.message||"unknown error"));
+   const bytes=await object.arrayBuffer();
+   for(let i=0;i<chunks;i++){const start=i*chunkSize,end=Math.min(size,start+chunkSize),part=bytes.slice(start,end);const sent=await fetch(started.data.upload_url,{method:"PUT",headers:{"content-type":"video/mp4","content-length":String(part.byteLength),"content-range":"bytes "+start+"-"+(end-1)+"/"+size},body:part});if(!sent.ok)throw new Error("TikTok upload failed on chunk "+(i+1)+".");}
+   await env.DB.prepare("UPDATE publish_jobs SET status='processing',provider_post_id=?,updated_at=unixepoch() WHERE id=?").bind(started.data.publish_id,id).run();
+   const check=await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json"},body:JSON.stringify({publish_id:started.data.publish_id})});
+   const status=await check.json().catch(()=>({}));if(status.data?.status==="PUBLISH_COMPLETE")await env.DB.prepare("UPDATE publish_jobs SET status='published',updated_at=unixepoch() WHERE id=?").bind(id).run();else if(status.data?.status==="FAILED")throw new Error(status.data.fail_reason||"TikTok rejected the video.");
+  }
+ }catch(error){await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(String(error?.message||error).slice(0,700),id).run();throw error;}
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -482,6 +536,16 @@ async function handle(request, env) {
       const id=crypto.randomUUID();
       await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,privacy,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,String(body?.privacy||"private")).run();
       return json({ok:true,job:{id,backup_id:backupId,platform,title,status:"draft"}},201);
+    }
+    const publishNowMatch=path.match(new RegExp("^/api/publishing/jobs/([a-f0-9-]+)/publish$","i"));
+    if(publishNowMatch&&method==="POST"){
+      const id=publishNowMatch[1],job=await env.DB.prepare("SELECT id,status FROM publish_jobs WHERE id=? AND user_id=?").bind(id,user.id).first();
+      if(!job)return json({ok:false,error:"Publishing draft not found."},404);
+      if(!["draft","failed"].includes(job.status))return json({ok:false,error:"This post is already in the publishing workflow."},409);
+      if(!env.JOBS||typeof env.JOBS.send!=="function")return json({ok:false,error:"Publishing queue is unavailable."},503);
+      await env.DB.prepare("UPDATE publish_jobs SET status='queued',error_message=NULL,updated_at=unixepoch() WHERE id=?").bind(id).run();
+      try{await env.JOBS.send({type:"publish_video",job_id:id});}catch(error){await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(String(error?.message||error).slice(0,500),id).run();throw error;}
+      return json({ok:true,status:"queued"},202);
     }
     const publishJobMatch=path.match(new RegExp("^/api/publishing/jobs/([a-f0-9-]+)$","i"));
     if(publishJobMatch&&method==="DELETE"){
