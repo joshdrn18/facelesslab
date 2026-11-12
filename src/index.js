@@ -639,7 +639,8 @@ async function handle(request, env) {
       const continuation=project.continuity_json?JSON.parse(project.continuity_json):null;
       const characterBible=clean(script.character_bible||continuation?.character_bible,680);
        const sceneText=(String(scene.voiceover||"")+" "+String(scene.visual_prompt||"")).toLowerCase();
-       const sceneCharacterLock=(script.characters||[]).filter(c=>c.name&&sceneText.includes(String(c.name).toLowerCase())).map(c=>"CHARACTER "+clean(c.name,70)+": "+clean(c.visual_identity,240)+". Outfit: "+clean(c.signature_outfit,130)+". Features: "+clean(c.distinctive_features,100)+".").join(" ");
+       const sceneCharacters=(Array.isArray(script.characters)?script.characters:[]).filter(c=>c&&typeof c==="object"&&c.name&&sceneText.includes(String(c.name).toLowerCase()));
+       const sceneCharacterLock=sceneCharacters.map(c=>"CHARACTER "+clean(c.name,70)+": "+clean(c.visual_identity,240)+". Outfit: "+clean(c.signature_outfit,130)+". Features: "+clean(c.distinctive_features,100)+".").join(" ");
       const shotDirections=[
         "ESTABLISHING WIDE SHOT: reveal the location and scale; subject small within a richly detailed environment.",
         "MEDIUM ACTION SHOT: bring the main subject closer; capture a decisive physical action with a clear focal point.",
