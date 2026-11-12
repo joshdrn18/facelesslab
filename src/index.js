@@ -537,6 +537,7 @@ async function handle(request, env) {
       const clean=(value,max=260)=>String(value||"").replace(/\\s+/g," ").trim().slice(0,max);
       const animeMode=String(project.style||"").toLowerCase()==="anime";
       const continuation=project.continuity_json?JSON.parse(project.continuity_json):null;
+      const characterBible=clean(script.character_bible||continuation?.character_bible,680);
       const shotDirections=[
         "ESTABLISHING WIDE SHOT: reveal the location and scale; subject small within a richly detailed environment.",
         "MEDIUM ACTION SHOT: bring the main subject closer; capture a decisive physical action with a clear focal point.",
@@ -552,8 +553,8 @@ async function handle(request, env) {
           ? "Premium Japanese 2D anime film frame, hand-drawn look, expressive characters, clean linework, cinematic cel shading, richly painted background, atmospheric lighting, consistent character design, vertical 9:16. Not photorealistic or 3D."
           : "High-end cinematic photorealistic film still, believable natural anatomy, physically plausible environment, rich production design, motivated dramatic lighting, vertical 9:16.",
         "STORY: "+clean(project.topic,120)+". TITLE: "+clean(script.title,60)+".",
-        animeMode&&continuation?.character_bible
-          ? "SERIES CHARACTER IDENTITY LOCK — use these exact established designs; do not reinterpret or redesign them: "+clean(continuation.character_bible,520)+". Preserve each named character's face shape, eye design, hair color and cut, age appearance, signature clothing, accessories and proportions. If a character is not in this scene, do not add them."
+        characterBible
+          ? "CHARACTER IDENTITY LOCK — use this character bible as the source of truth in EVERY episode and scene; do not redesign or reinterpret established characters: "+characterBible+". Preserve each named character's face shape, eye design, hair color and cut, age appearance, body proportions, signature clothing and accessories. Keep the same identity even when pose, expression, camera angle or lighting changes. If a character is not in this scene, do not add them."
           : "",
         animeMode&&continuation?.previous_ending_visual_prompt
           ? "PREVIOUS EPISODE VISUAL REFERENCE CONTEXT: "+clean(continuation.previous_ending_visual_prompt,220)+". Keep the same anime world, linework, palette and character design."
@@ -587,7 +588,7 @@ async function handle(request, env) {
       const preferredModel=referenceObjectKey?"@cf/runwayml/stable-diffusion-v1-5-img2img":"@cf/black-forest-labs/flux-1-schnell";
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'visuals','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({model:preferredModel,scene_number:sceneNumber,prompt,reference_object_key:referenceObjectKey,reference_source:referenceSource})).run();
       try{
-        let bytes=null,actualModel=preferredModel,continuityMode=referenceObjectKey?"image-to-image":"text-to-image",continuityFallback=null;
+        let bytes=null,actualModel=preferredModel,continuityMode=referenceObjectKey?"image-to-image":"text-to-image",continuityFallback=null,referenceStrength=null;
         const decodeBase64=value=>{const binary=atob(value),output=new Uint8Array(binary.length);for(let index=0;index<binary.length;index++)output[index]=binary.charCodeAt(index);return output;};
         const readImageResult=async result=>{
           if(typeof result==="string")return decodeBase64(result);
@@ -604,7 +605,8 @@ async function handle(request, env) {
             if(!referenceObject)throw new Error("The saved continuity reference image is missing from R2.");
             const referenceBytes=new Uint8Array(await referenceObject.arrayBuffer());
             if(!referenceBytes.byteLength||referenceBytes.byteLength>5*1024*1024)throw new Error("The continuity reference image is empty or larger than 5 MB.");
-            const strength=referenceSource==="previous_episode_ending"?0.48:0.62;
+            const strength=referenceSource==="previous_episode_ending"?0.42:0.50;
+            referenceStrength=strength;
             const result=await env.AI.run("@cf/runwayml/stable-diffusion-v1-5-img2img",{
               prompt:continuityPrompt,
               image:Array.from(referenceBytes),strength,guidance:7.5,num_steps:20,width:768,height:1344,
@@ -620,7 +622,7 @@ async function handle(request, env) {
         if(!bytes?.byteLength)throw new Error("Image model returned an empty image.");
         const objectKey="users/"+user.id+"/projects/"+projectId+"/visuals/"+generationId+".png";
         await env.MEDIA.put(objectKey,bytes,{httpMetadata:{contentType:"image/png",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId,sceneNumber:String(sceneNumber),continuityMode}});
-        const output={object_key:objectKey,mime_type:"image/png",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:actualModel,scene_number:sceneNumber,prompt,continuity_mode:continuityMode,reference_source:referenceSource,reference_object_key:referenceObjectKey,continuity_fallback_error:continuityFallback};
+        const output={object_key:objectKey,mime_type:"image/png",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:actualModel,scene_number:sceneNumber,prompt,continuity_mode:continuityMode,reference_source:referenceSource,reference_object_key:referenceObjectKey,reference_strength:referenceStrength,continuity_fallback_error:continuityFallback};
         await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
         return json({ok:true,generation_id:generationId,visual:{generation_id:generationId,...output}},201);      }catch(error){
         await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
