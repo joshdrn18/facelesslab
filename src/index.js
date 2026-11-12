@@ -271,6 +271,64 @@ async function processVoiceQueueMessage(message, env) {
  }
 }
 
+function decodeBase64(value) {
+  const normalized=String(value||"").replace(/-/g,"+").replace(/_/g,"/");
+  const padded=normalized+"=".repeat((4-normalized.length%4)%4);
+  return Uint8Array.from(atob(padded),ch=>ch.charCodeAt(0));
+}
+async function tokenCryptoKey(env) {
+  const raw=decodeBase64(env.PUBLISH_TOKEN_ENCRYPTION_KEY||"");
+  if(raw.length!==32)throw new Error("PUBLISH_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.");
+  return crypto.subtle.importKey("raw",raw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
+}
+async function encryptSocialToken(env,value) {
+  const iv=crypto.getRandomValues(new Uint8Array(12)),key=await tokenCryptoKey(env);
+  const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,encoder.encode(String(value||"")));
+  const combined=new Uint8Array(iv.length+encrypted.byteLength);combined.set(iv);combined.set(new Uint8Array(encrypted),iv.length);
+  return base64url(combined);
+}
+async function socialOAuthCallback(request,env,platform) {
+  const url=new URL(request.url),state=url.searchParams.get("state")||"",code=url.searchParams.get("code")||"";
+  const fail=(message)=>Response.redirect((env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/#publishing?oauth_error="+encodeURIComponent(message),302);
+  if(url.searchParams.get("error"))return fail("Authorization was cancelled.");
+  if(!state||!code)return fail("The authorization response is missing its state or code.");
+  const stateRow=await env.DB.prepare("SELECT user_id,platform,expires_at FROM oauth_states WHERE state=?").bind(state).first();
+  await env.DB.prepare("DELETE FROM oauth_states WHERE state=?").bind(state).run();
+  if(!stateRow||stateRow.platform!==platform||Number(stateRow.expires_at)<Math.floor(Date.now()/1000))return fail("Authorization expired. Please connect again.");
+  const redirectUri=(env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/api/publishing/oauth/"+platform+"/callback";
+  let tokenData={},profile={},scopes="";
+  if(platform==="youtube"){
+    if(!env.YOUTUBE_CLIENT_ID||!env.YOUTUBE_CLIENT_SECRET)return fail("YouTube OAuth credentials are not configured yet.");
+    const body=new URLSearchParams({code,client_id:env.YOUTUBE_CLIENT_ID,client_secret:env.YOUTUBE_CLIENT_SECRET,redirect_uri:redirectUri,grant_type:"authorization_code"});
+    const response=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body});
+    tokenData=await response.json().catch(()=>({}));
+    if(!response.ok||!tokenData.access_token)return fail(tokenData.error_description||tokenData.error||"YouTube token exchange failed.");
+    const p=await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",{headers:{authorization:"Bearer "+tokenData.access_token}});
+    const pd=await p.json().catch(()=>({}));
+    if(!p.ok||!pd.items?.[0])return fail("Could not read the authorized YouTube channel.");
+    profile={id:pd.items[0].id,name:pd.items[0].snippet?.title||"YouTube channel"};
+    scopes=tokenData.scope||"https://www.googleapis.com/auth/youtube.upload";
+  }else{
+    if(!env.TIKTOK_CLIENT_KEY||!env.TIKTOK_CLIENT_SECRET)return fail("TikTok OAuth credentials are not configured yet.");
+    const body=new URLSearchParams({client_key:env.TIKTOK_CLIENT_KEY,client_secret:env.TIKTOK_CLIENT_SECRET,code,grant_type:"authorization_code",redirect_uri:redirectUri});
+    const response=await fetch("https://open.tiktokapis.com/v2/oauth/token/",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body});
+    tokenData=await response.json().catch(()=>({}));
+    if(!response.ok||!tokenData.access_token)return fail(tokenData.error_description||tokenData.error||"TikTok token exchange failed.");
+    const p=await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",{headers:{authorization:"Bearer "+tokenData.access_token}});
+    const pd=await p.json().catch(()=>({}));
+    if(!p.ok||!pd.data?.user?.open_id)return fail("Could not read the authorized TikTok profile.");
+    profile={id:pd.data.user.open_id,name:pd.data.user.display_name||"TikTok creator"};
+    scopes=tokenData.scope||"";
+  }
+  try{
+    const accessEnc=await encryptSocialToken(env,tokenData.access_token);
+    const refreshEnc=tokenData.refresh_token?await encryptSocialToken(env,tokenData.refresh_token):null;
+    await env.DB.prepare("INSERT INTO social_connections (id,user_id,platform,platform_user_id,display_name,access_token_enc,refresh_token_enc,access_token_expires_at,refresh_token_expires_at,scopes,status) VALUES (?,?,?,?,?,?,?,?,?,?, 'active') ON CONFLICT(user_id,platform,platform_user_id) DO UPDATE SET display_name=excluded.display_name,access_token_enc=excluded.access_token_enc,refresh_token_enc=COALESCE(excluded.refresh_token_enc,social_connections.refresh_token_enc),access_token_expires_at=excluded.access_token_expires_at,refresh_token_expires_at=excluded.refresh_token_expires_at,scopes=excluded.scopes,status='active',updated_at=unixepoch()")
+      .bind(crypto.randomUUID(),stateRow.user_id,platform,profile.id,profile.name,accessEnc,refreshEnc,Math.floor(Date.now()/1000)+Number(tokenData.expires_in||3600),tokenData.refresh_expires_in?Math.floor(Date.now()/1000)+Number(tokenData.refresh_expires_in):null,scopes).run();
+  }catch(error){console.error("social_token_store_failed",platform,String(error));return fail("Could not securely save the account. Check the publishing encryption key.");}
+  return Response.redirect((env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/#publishing?connected="+platform,302);
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -364,6 +422,9 @@ async function handle(request, env) {
     return json({ ok: true });
   }
 
+  const socialCallback=path.match(/^\\/api\\/publishing\\/oauth\\/(youtube|tiktok)\\/callback$/);
+  if(socialCallback&&method==="GET")return socialOAuthCallback(request,env,socialCallback[1]);
+
   if (path.startsWith("/api/")) {
     const user = await getUser(request, env);
     if (!user) return json({ ok: false, error: "Authentication required." }, 401);
@@ -377,6 +438,56 @@ async function handle(request, env) {
       return json({ ok: true, user: publicUser(updated) });
     }
 
+    if(path==="/api/publishing/connections"&&method==="GET"){
+      const rows=await env.DB.prepare("SELECT id,platform,platform_user_id,display_name,status,scopes,access_token_expires_at,created_at FROM social_connections WHERE user_id=? ORDER BY platform").bind(user.id).all();
+      return json({ok:true,connections:rows.results||[],configured:{youtube:Boolean(env.YOUTUBE_CLIENT_ID&&env.YOUTUBE_CLIENT_SECRET),tiktok:Boolean(env.TIKTOK_CLIENT_KEY&&env.TIKTOK_CLIENT_SECRET),encryption:Boolean(env.PUBLISH_TOKEN_ENCRYPTION_KEY)}});
+    }
+    const connectMatch=path.match(/^\\/api\\/publishing\\/connect\\/(youtube|tiktok)$/);
+    if(connectMatch&&method==="POST"){
+      const platform=connectMatch[1],now=Math.floor(Date.now()/1000);
+      if(platform==="youtube"&&(!env.YOUTUBE_CLIENT_ID||!env.YOUTUBE_CLIENT_SECRET))return json({ok:false,error:"YouTube OAuth credentials are not configured."},503);
+      if(platform==="tiktok"&&(!env.TIKTOK_CLIENT_KEY||!env.TIKTOK_CLIENT_SECRET))return json({ok:false,error:"TikTok OAuth credentials are not configured."},503);
+      if(!env.PUBLISH_TOKEN_ENCRYPTION_KEY)return json({ok:false,error:"Secure token encryption is not configured."},503);
+      const state=randomToken(),redirectUri=(env.APP_ORIGIN||"https://facelesslab.pages.dev")+"/api/publishing/oauth/"+platform+"/callback";
+      await env.DB.prepare("DELETE FROM oauth_states WHERE expires_at<?").bind(now).run();
+      await env.DB.prepare("INSERT INTO oauth_states (state,user_id,platform,expires_at) VALUES (?,?,?,?)").bind(state,user.id,platform,now+600).run();
+      let target;
+      if(platform==="youtube"){
+        const u=new URL("https://accounts.google.com/o/oauth2/v2/auth");
+        u.searchParams.set("client_id",env.YOUTUBE_CLIENT_ID);u.searchParams.set("redirect_uri",redirectUri);u.searchParams.set("response_type","code");u.searchParams.set("scope","https://www.googleapis.com/auth/youtube.upload");u.searchParams.set("access_type","offline");u.searchParams.set("prompt","consent");u.searchParams.set("state",state);target=u.toString();
+      }else{
+        const u=new URL("https://www.tiktok.com/v2/auth/authorize/");
+        u.searchParams.set("client_key",env.TIKTOK_CLIENT_KEY);u.searchParams.set("redirect_uri",redirectUri);u.searchParams.set("response_type","code");u.searchParams.set("scope","user.info.basic,video.publish,video.upload");u.searchParams.set("state",state);target=u.toString();
+      }
+      return json({ok:true,authorization_url:target});
+    }
+    if(path==="/api/publishing/connections"&&method==="DELETE"){
+      const body=await request.json().catch(()=>({})),id=String(body?.id||"");
+      if(!id)return json({ok:false,error:"Connection ID is required."},400);
+      await env.DB.prepare("DELETE FROM social_connections WHERE id=? AND user_id=?").bind(id,user.id).run();
+      return json({ok:true});
+    }
+    if(path==="/api/publishing/jobs"&&method==="GET"){
+      const rows=await env.DB.prepare("SELECT j.id,j.backup_id,j.platform,j.title,j.description,j.hashtags,j.privacy,j.scheduled_at,j.status,j.provider_post_id,j.provider_url,j.error_message,j.created_at,c.display_name AS account_name FROM publish_jobs j LEFT JOIN social_connections c ON c.id=j.connection_id WHERE j.user_id=? ORDER BY j.created_at DESC LIMIT 100").bind(user.id).all();
+      return json({ok:true,jobs:rows.results||[]});
+    }
+    if(path==="/api/publishing/jobs"&&method==="POST"){
+      const body=await request.json().catch(()=>null),backupId=String(body?.backup_id||""),platform=String(body?.platform||"");
+      const title=String(body?.title||"").trim().slice(0,100),description=String(body?.description||"").trim().slice(0,5000),hashtags=String(body?.hashtags||"").trim().slice(0,1000);
+      if(!/^[a-f0-9-]{36}$/i.test(backupId)||!["youtube","tiktok"].includes(platform)||!title)return json({ok:false,error:"Choose a cloud video, platform, and title."},400);
+      const connection=await env.DB.prepare("SELECT id FROM social_connections WHERE user_id=? AND platform=? AND status='active' ORDER BY updated_at DESC LIMIT 1").bind(user.id,platform).first();
+      if(!connection)return json({ok:false,error:"Connect your "+platform+" account before preparing a post."},409);
+      const key="users/"+user.id+"/rendered-backups/"+backupId+".mp4",object=await env.MEDIA.head(key);
+      if(!object)return json({ok:false,error:"Cloud video not found. Upload or render a video backup first."},404);
+      const id=crypto.randomUUID();
+      await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,privacy,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,String(body?.privacy||"private")).run();
+      return json({ok:true,job:{id,backup_id:backupId,platform,title,status:"draft"}},201);
+    }
+    const publishJobMatch=path.match(/^\\/api\\/publishing\\/jobs\\/([a-f0-9-]+)$/i);
+    if(publishJobMatch&&method==="DELETE"){
+      await env.DB.prepare("DELETE FROM publish_jobs WHERE id=? AND user_id=? AND status IN ('draft','failed','cancelled')").bind(publishJobMatch[1],user.id).run();
+      return json({ok:true});
+    }
     const backupCollection = "/api/video-backups";
     if (path === backupCollection && method === "GET") {
       const prefix = "users/" + user.id + "/rendered-backups/";
