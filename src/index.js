@@ -225,7 +225,22 @@ async function processVoiceQueueMessage(message, env) {
  try{
   const input=JSON.parse(row.input_json||"{}"),scriptRow=await env.DB.prepare("SELECT output_json FROM generations WHERE id=? AND project_id=? AND user_id=? AND stage='script' AND status='completed'").bind(input.script_generation_id,projectId,userId).first();
   if(!scriptRow)throw new Error("The source script is no longer available.");
-  const script=JSON.parse(scriptRow.output_json),narration=String(script.narration||(script.scenes||[]).map(s=>s.voiceover||"").join(" ")).trim();
+  const script=JSON.parse(scriptRow.output_json);
+  // Normalize narration for plain-text TTS without changing its wording or meaning.
+  // MeloTTS does not expose SSML controls here, so punctuation is the pause signal.
+  const rawNarration=String(script.narration||(script.scenes||[]).map(s=>s.voiceover||"").join(" "));
+  const narration=rawNarration
+    .replace(/\\r\\n?/g,"\\n")
+    .replace(/[\\u2018\\u2019]/g,"'")
+    .replace(/[\\u201C\\u201D]/g,'"')
+    .replace(/[\\u2013\\u2014]/g,", ")
+    .replace(/\\.{4,}/g,"...")
+    .replace(/[ \\t]+/g," ")
+    .replace(/ *\\n+ */g,"\\n")
+    .replace(/\\s+([,.;!?])/g,"$1")
+    .replace(/([,;:])(?=\\S)/g,"$1 ")
+    .replace(/([.!?])(?=[A-Z])/g,"$1 ")
+    .trim();
   if(!narration||narration.length>4500)throw new Error("Narration is empty or exceeds the current 4,500 character limit.");
   await env.DB.prepare("UPDATE generations SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(generationId,userId).run();
   const model="@cf/myshell-ai/melotts",provider="cloudflare-workers-ai",result=await env.AI.run(model,{prompt:narration,lang:"en"}),audioValue=typeof result==="string"?result:result?.audio;
@@ -236,7 +251,7 @@ async function processVoiceQueueMessage(message, env) {
   if(!audio.byteLength)throw new Error("The text-to-speech model returned an empty audio file.");
   const objectKey="users/"+userId+"/projects/"+projectId+"/voice/"+generationId+".mp3";
   await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:"audio/mpeg",cacheControl:"private, max-age=3600"},customMetadata:{userId,projectId,generationId}});
-  const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,provider,model,language:"en",characters:narration.length};
+  const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,provider,model,language:"en",characters:narration.length,source_characters:rawNarration.length,preprocessing:"punctuation-and-whitespace-normalized"};
   await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,userId).run();
   console.log(JSON.stringify({event:"background_voice_completed",generation_id:generationId,project_id:projectId}));message.ack();
  }catch(error){
