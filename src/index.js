@@ -648,9 +648,13 @@ async function handle(request, env) {
           let group = [];
           const flush = () => {
             if (!group.length) return;
-            const start = Math.max(0, group[0].start - 0.025);
-            const end = Math.max(start + 0.18, group[group.length - 1].end + 0.055);
-            const text = group.map(item => item.word).join(" ").replace(/\s+([,.;!?])/g, "$1").replace(/\s+([’'])/g, "$1");
+            const start = Math.max(0, group[0].start - 0.04);
+            const end = Math.max(start + 0.2, group[group.length - 1].end + 0.07);
+            const text = group.map(item => item.word).join(" ")
+              .replace(/\\s+([,.;!?])/g, "$1")
+              .replace(/\\s+([’'])/g, "$1")
+              .replace(/\\s+(:)/g, "$1")
+              .trim();
             cues.push({ index: cues.length + 1, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)), text });
             group = [];
           };
@@ -659,9 +663,11 @@ async function handle(request, env) {
             const candidateText = candidate.map(word => word.word).join(" ").replace(/\s+([,.;!?])/g, "$1");
             const gap = group.length ? Math.max(0, item.start - group[group.length - 1].end) : 0;
             const phraseEnds = /[.!?]["')\]]?$/.test(item.word);
-            const tooLong = candidate.length > 5 || candidateText.length > 34;
-            const tooSlow = group.length && item.end - group[0].start > 2.35;
-            if (group.length && (tooLong || tooSlow || gap > 0.42 || (phraseEnds && candidate.length >= 2))) flush();
+            // Compact phrase cards are easier to read on a phone than long transcript strips.
+            // Preserve Whisper's real word timestamps instead of estimating cue timing.
+            const tooLong = candidate.length > 4 || candidateText.length > 30;
+            const tooSlow = group.length && item.end - group[0].start > 1.9;
+            if (group.length && (tooLong || tooSlow || gap > 0.32 || (phraseEnds && candidate.length >= 2))) flush();
             group.push(item);
             if (phraseEnds && group.length >= 2) flush();
           }
