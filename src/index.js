@@ -353,6 +353,38 @@ async function handle(request, env) {
       return json({ ok: true, user: publicUser(updated) });
     }
 
+    const backupCollection = "/api/video-backups";
+    if (path === backupCollection && method === "GET") {
+      const prefix = "users/" + user.id + "/rendered-backups/";
+      const listed = await env.MEDIA.list({ prefix, limit: 100 });
+      const backups = (listed.objects || []).map(object => ({ id: object.key.slice(prefix.length).replace(/\.mp4$/i, ""), title: object.customMetadata?.title || "FacelessLab video", size: object.size, created_at: object.uploaded ? new Date(object.uploaded).toISOString() : null, duration: Number(object.customMetadata?.duration || 0), quality: Number(object.customMetadata?.quality || 0) }));
+      return json({ ok: true, backups, truncated: Boolean(listed.truncated) });
+    }
+    if (path === backupCollection && method === "POST") {
+      const contentLength = Number(request.headers.get("content-length") || 0);
+      const maxBytes = 90 * 1024 * 1024;
+      if (!request.body) return json({ ok: false, error: "MP4 file body is missing." }, 400);
+      if (contentLength > maxBytes) return json({ ok: false, error: "Cloud backup supports MP4 files up to 90 MB per file." }, 413);
+      const id = crypto.randomUUID();
+      const prefix = "users/" + user.id + "/rendered-backups/";
+      const title = String(request.headers.get("x-video-title") || "FacelessLab video").slice(0, 160);
+      const duration = Math.max(0, Number(request.headers.get("x-video-duration") || 0));
+      const quality = Math.max(0, Number(request.headers.get("x-video-quality") || 0));
+      const object = await env.MEDIA.put(prefix + id + ".mp4", request.body, { httpMetadata: { contentType: "video/mp4", cacheControl: "private, no-store" }, customMetadata: { title, duration: String(duration), quality: String(quality), ownerId: user.id } });
+      return json({ ok: true, backup: { id, title, size: object.size, duration, quality } }, 201);
+    }
+    const backupMatch = path.match(/^\/api\/video-backups\/([a-f0-9-]+)$/i);
+    if (backupMatch && method === "GET") {
+      const key = "users/" + user.id + "/rendered-backups/" + backupMatch[1] + ".mp4";
+      const object = await env.MEDIA.get(key);
+      if (!object) return json({ ok: false, error: "Cloud backup not found." }, 404);
+      return new Response(object.body, { headers: { "content-type": "video/mp4", "content-length": String(object.size), "content-disposition": "attachment; filename=facelesslab-video.mp4", "cache-control": "private, no-store" } });
+    }
+    if (backupMatch && method === "DELETE") {
+      const key = "users/" + user.id + "/rendered-backups/" + backupMatch[1] + ".mp4";
+      await env.MEDIA.delete(key);
+      return json({ ok: true });
+    }
     if (path === "/api/me" && method === "GET") {
       const wallet = await env.DB.prepare("SELECT balance FROM wallets WHERE user_id = ?").bind(user.id).first();
       return json({ ok: true, user: publicUser(user), points: user.role === "admin" ? null : (wallet?.balance ?? 0), unlimited_points: user.role === "admin" });
@@ -754,8 +786,8 @@ export default {
     const allowedOrigin = env.APP_ORIGIN || "*";
     const headers = {
       "access-control-allow-origin": allowedOrigin === "*" ? "*" : (origin === allowedOrigin ? origin : allowedOrigin),
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": "content-type, authorization",
+      "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+      "access-control-allow-headers": "content-type, authorization, x-video-title, x-video-duration, x-video-quality",
       "access-control-max-age": "86400",
       "vary": "Origin",
       "x-content-type-options": "nosniff"
