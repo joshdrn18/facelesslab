@@ -575,7 +575,7 @@ async function refreshCloudBackups(){
 async function uploadSelectedCloudBackup(){
  const f=$("cloudBackupFile")?.files?.[0];if(!f){alert("Choose an MP4 first.");return;}if(f.size>90*1024*1024){alert("Maximum file size is 90 MB.");return;}
  const b=$("uploadCloudBackup");b.disabled=true;b.textContent="Uploading…";
- try{const r=await fetch(API_BASE+"/api/video-backups",{method:"POST",headers:{authorization:"Bearer "+token,"content-type":"video/mp4","x-video-title":f.name.replace(/\.mp4$/i,"")},body:f});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Upload failed");$("cloudBackupFile").value="";await refreshCloudBackups();}
+ try{const r=await fetch(API_BASE+"/api/video-backups",{method:"POST",headers:{authorization:"Bearer "+token,"content-type":"video/mp4","x-video-title":encodeURIComponent(f.name.replace(/\.mp4$/i,""))},body:f});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Upload failed");$("cloudBackupFile").value="";await refreshCloudBackups();}
  catch(e){alert(e.message);}finally{b.disabled=false;b.textContent="Upload selected MP4 to cloud";}
 }
 async function cloudBackupFile(id){const r=await fetch(API_BASE+"/api/video-backups/"+id,{headers:{authorization:"Bearer "+token}});if(!r.ok)throw new Error("Could not download cloud backup.");return {blob:await r.blob(),title:decodeURIComponent(r.headers.get("x-video-title")||"Restored FacelessLab video"),duration:Number(r.headers.get("x-video-duration")||0),quality:Number(r.headers.get("x-video-quality")||0)};}
@@ -591,7 +591,7 @@ async function uploadLocalVideoToCloud(id,button){
  if(blob.size>90*1024*1024){alert("Cloud backup supports up to 90 MB per MP4. Your local copy is unchanged.");return;}
  const old=button?.textContent;if(button){button.disabled=true;button.textContent="Uploading…";}
  try{
-  const response=await fetch(API_BASE+"/api/video-backups",{method:"POST",headers:{authorization:"Bearer "+token,"content-type":"video/mp4","x-video-title":String(v.title||"FacelessLab video").slice(0,160),"x-video-duration":String(v.duration||0),"x-video-quality":String(v.quality||0)},body:blob});
+  const response=await fetch(API_BASE+"/api/video-backups",{method:"POST",headers:{authorization:"Bearer "+token,"content-type":"video/mp4","x-video-title":encodeURIComponent(String(v.title||"FacelessLab video").slice(0,160)),"x-video-duration":String(v.duration||0),"x-video-quality":String(v.quality||0)},body:blob});
   const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Cloud backup upload failed.");
   if(button){button.textContent="Backed up ✓";button.disabled=false;}
   await refreshCloudBackups();
