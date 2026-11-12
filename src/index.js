@@ -380,7 +380,7 @@ async function handle(request, env) {
       const key = "users/" + user.id + "/rendered-backups/" + backupMatch[1] + ".mp4";
       const object = await env.MEDIA.get(key);
       if (!object) return json({ ok: false, error: "Cloud backup not found." }, 404);
-      return new Response(object.body, { headers: { "content-type": "video/mp4", "content-length": String(object.size), "content-disposition": "attachment; filename=facelesslab-video.mp4", "cache-control": "private, no-store" } });
+      return new Response(object.body, { headers: { "content-type": "video/mp4", "content-length": String(object.size), "content-disposition": "attachment; filename=facelesslab-video.mp4", "cache-control": "private, no-store", "x-video-title": encodeURIComponent(object.customMetadata?.title || "FacelessLab video"), "x-video-duration": String(object.customMetadata?.duration || 0), "x-video-quality": String(object.customMetadata?.quality || 0), "access-control-expose-headers": "x-video-title, x-video-duration, x-video-quality" } });
     }
     if (backupMatch && method === "DELETE") {
       const key = "users/" + user.id + "/rendered-backups/" + backupMatch[1] + ".mp4";
