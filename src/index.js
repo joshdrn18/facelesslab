@@ -501,6 +501,87 @@ async function handle(request, env) {
   if (path.startsWith("/api/")) {
     const user = await getUser(request, env);
     if (!user) return json({ ok: false, error: "Authentication required." }, 401);
+
+    if (path.startsWith("/api/admin/")) {
+      if (user.role !== "admin") return json({ ok: false, error: "Administrator access required." }, 403);
+
+      if (path === "/api/admin/overview" && method === "GET") {
+        const [members, activeMembers, suspendedMembers, projects, generations, publishJobs, points] = await Promise.all([
+          env.DB.prepare("SELECT COUNT(*) AS count FROM users").first(),
+          env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE status='active'").first(),
+          env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE status='suspended'").first(),
+          env.DB.prepare("SELECT COUNT(*) AS count FROM projects").first(),
+          env.DB.prepare("SELECT COUNT(*) AS count FROM generations").first(),
+          env.DB.prepare("SELECT COUNT(*) AS count FROM publish_jobs").first(),
+          env.DB.prepare("SELECT COALESCE(SUM(balance),0) AS total FROM wallets").first()
+        ]);
+        const audit = await env.DB.prepare(
+          "SELECT a.id,a.action,a.details_json,a.created_at,u.email AS target_email,actor.email AS actor_email FROM admin_audit_logs a LEFT JOIN users u ON u.id=a.target_user_id LEFT JOIN users actor ON actor.id=a.actor_id ORDER BY a.created_at DESC LIMIT 8"
+        ).all();
+        return json({ ok: true, stats: {
+          members: Number(members?.count || 0), active_members: Number(activeMembers?.count || 0),
+          suspended_members: Number(suspendedMembers?.count || 0), projects: Number(projects?.count || 0),
+          generations: Number(generations?.count || 0), publish_jobs: Number(publishJobs?.count || 0),
+          points_in_circulation: Number(points?.total || 0)
+        }, audit: audit.results || [] });
+      }
+
+      if (path === "/api/admin/users" && method === "GET") {
+        const q = String(url.searchParams.get("q") || "").trim().slice(0, 100);
+        const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") || 25)));
+        const offset = Math.max(0, Number(url.searchParams.get("offset") || 0));
+        const result = await env.DB.prepare(
+          "SELECT u.id,u.email,u.display_name,u.role,u.status,u.created_at,COALESCE(w.balance,0) AS points,(SELECT COUNT(*) FROM projects p WHERE p.user_id=u.id) AS project_count,(SELECT COUNT(*) FROM generations g WHERE g.user_id=u.id) AS generation_count,(SELECT COUNT(*) FROM publish_jobs j WHERE j.user_id=u.id) AS publish_count FROM users u LEFT JOIN wallets w ON w.user_id=u.id WHERE (?='' OR lower(u.email) LIKE '%'||lower(?)||'%' OR lower(COALESCE(u.display_name,'')) LIKE '%'||lower(?)||'%') ORDER BY u.created_at DESC LIMIT ? OFFSET ?"
+        ).bind(q, q, q, limit, offset).all();
+        const count = await env.DB.prepare(
+          "SELECT COUNT(*) AS count FROM users WHERE (?='' OR lower(email) LIKE '%'||lower(?)||'%' OR lower(COALESCE(display_name,'')) LIKE '%'||lower(?)||'%')"
+        ).bind(q, q, q).first();
+        return json({ ok: true, users: result.results || [], total: Number(count?.count || 0), limit, offset });
+      }
+
+      const statusMatch = path.match(/^\/api\/admin\/users\/([a-f0-9-]+)\/status$/i);
+      if (statusMatch && method === "POST") {
+        const targetId = statusMatch[1];
+        const body = await request.json().catch(() => null);
+        const status = String(body?.status || "");
+        if (!["active", "suspended"].includes(status)) return json({ ok: false, error: "Choose active or suspended status." }, 400);
+        if (targetId === user.id && status === "suspended") return json({ ok: false, error: "You cannot suspend your own administrator account." }, 400);
+        const target = await env.DB.prepare("SELECT id,email,role,status FROM users WHERE id=?").bind(targetId).first();
+        if (!target) return json({ ok: false, error: "Member not found." }, 404);
+        if (target.role === "admin" && target.status === "active" && status === "suspended") {
+          const admins = await env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE role='admin' AND status='active'").first();
+          if (Number(admins?.count || 0) <= 1) return json({ ok: false, error: "The last active administrator cannot be suspended." }, 409);
+        }
+        await env.DB.prepare("UPDATE users SET status=?,updated_at=unixepoch() WHERE id=?").bind(status,targetId).run();
+        await env.DB.prepare("INSERT INTO admin_audit_logs (id,actor_id,target_user_id,action,details_json) VALUES (?,?,?,?,?)")
+          .bind(crypto.randomUUID(),user.id,targetId,"member_status",JSON.stringify({status,previous_status:target.status})).run();
+        return json({ok:true,message:status==="active"?"Member account activated.":"Member account suspended.",status});
+      }
+
+      const pointsMatch = path.match(/^\/api\/admin\/users\/([a-f0-9-]+)\/points$/i);
+      if (pointsMatch && method === "POST") {
+        const targetId = pointsMatch[1];
+        const body = await request.json().catch(() => null);
+        const delta = Number(body?.delta);
+        const description = String(body?.description || "Manual admin adjustment").trim().slice(0,160);
+        if (!Number.isSafeInteger(delta) || delta === 0 || Math.abs(delta) > 100000) return json({ok:false,error:"Points adjustment must be a non-zero whole number between -100,000 and 100,000."},400);
+        const target = await env.DB.prepare("SELECT id,email FROM users WHERE id=?").bind(targetId).first();
+        if (!target) return json({ok:false,error:"Member not found."},404);
+        await env.DB.prepare("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)").bind(targetId).run();
+        const update = await env.DB.prepare("UPDATE wallets SET balance=balance+?,updated_at=unixepoch() WHERE user_id=? AND balance+?>=0")
+          .bind(delta,targetId,delta).run();
+        if (Number(update.meta?.changes || 0) !== 1) return json({ok:false,error:"Adjustment would make the member's points balance negative."},409);
+        const transactionId=crypto.randomUUID();
+        const auditDescription=description+" (by "+user.email+")";
+        await env.DB.prepare("INSERT INTO point_transactions (id,user_id,amount,type,description,reference_id) VALUES (?,?,?,'adjustment',?,?)")
+          .bind(transactionId,targetId,delta,auditDescription,"admin:"+user.id).run();
+        await env.DB.prepare("INSERT INTO admin_audit_logs (id,actor_id,target_user_id,action,details_json) VALUES (?,?,?,?,?)")
+          .bind(crypto.randomUUID(),user.id,targetId,"points_adjustment",JSON.stringify({delta,description})).run();
+        const wallet=await env.DB.prepare("SELECT balance FROM wallets WHERE user_id=?").bind(targetId).first();
+        return json({ok:true,message:"Member points updated.",balance:Number(wallet?.balance||0),delta});
+      }
+      return json({ok:false,error:"Admin endpoint not found."},404);
+    }
     if (path === "/api/profile/avatar" && method === "POST") {
       if (!env.MEDIA) return json({ ok: false, error: "Profile image storage is not configured." }, 503);
       const contentType = (request.headers.get("content-type") || "").split(";")[0].toLowerCase();
