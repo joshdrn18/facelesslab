@@ -131,6 +131,22 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
 @media(max-width:700px){#publishingPanel .grid-two{grid-template-columns:1fr!important}}
 @media(max-width:700px){.profile-layout{grid-template-columns:1fr}}
 
+
+.main[data-view="admin"] #overviewHero,.main[data-view="admin"] .stats,.main[data-view="admin"] #mainWorkspace,.main[data-view="admin"] #projects,.main[data-view="admin"] #videoLibrary,.main[data-view="admin"] #publishingPanel,.main[data-view="admin"] #profilePanel,.main[data-view="admin"] #billingPanel{display:none!important}
+.main[data-view="admin"] #adminPanel{display:block!important}
+.admin-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:0 0 15px}
+.admin-metrics .stat{padding:14px;min-width:0}.admin-metrics .stat strong{font-size:22px;overflow-wrap:anywhere}
+.admin-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+.admin-search{display:flex;gap:8px;min-width:0}.admin-search input{width:min(280px,34vw);padding:10px 12px}
+.admin-table-head,.admin-member-row{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(95px,.8fr) minmax(70px,.55fr) minmax(95px,.7fr) minmax(145px,1fr);gap:10px;align-items:center}
+.admin-table-head{padding:10px 12px;color:#94a2bb;font-size:10px;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--line)}
+.admin-member-row{padding:13px 12px;border-bottom:1px solid #242c3d;font-size:12px}
+.admin-member-name{min-width:0}.admin-member-name b,.admin-member-name small{display:block;overflow-wrap:anywhere}.admin-member-name small,.admin-member-meta{color:var(--muted);font-size:10px;margin-top:4px}
+.admin-member-actions{display:flex;gap:6px;flex-wrap:wrap}.admin-member-actions button{padding:7px 9px;font-size:10px}
+.admin-pill{display:inline-flex;border-radius:20px;padding:4px 8px;font-size:10px;font-weight:700;background:#1b342f;color:#8fe0c4}.admin-pill.suspended{background:#3b242b;color:#ff9ba4}.admin-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:13px;color:var(--muted);font-size:11px}
+.admin-audit-list{display:grid;gap:8px}.admin-audit-item{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #242c3d;font-size:11px}.admin-audit-item:last-child{border:0}.admin-audit-item small{display:block;color:var(--muted);margin-top:4px}.admin-audit-item time{color:var(--muted);white-space:nowrap;font-size:10px}
+@media(max-width:800px){.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-table-head{display:none}.admin-member-row{grid-template-columns:minmax(0,1fr) auto;gap:8px}.admin-member-row>span:nth-child(2){grid-column:1}.admin-member-row>span:nth-child(3),.admin-member-row>span:nth-child(4){grid-column:2}.admin-member-actions{grid-column:1/-1}.admin-toolbar{align-items:flex-start;flex-direction:column}.admin-search{width:100%}.admin-search input{width:100%;flex:1}}
+@media(max-width:480px){.admin-metrics{gap:8px}.admin-metrics .stat{padding:11px}.admin-metrics .stat strong{font-size:19px}.admin-member-row{padding:12px 4px}.admin-search{flex-wrap:wrap}.admin-search input{flex-basis:100%}.admin-search button{width:100%}}
 </style>
 </head>
 <body>
@@ -149,7 +165,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
  </div>
 </section>
 <div id="appScreen" class="app hidden">
- <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a><a href="#publishing" data-view="publishing"><span class="ico">↗</span>Publishing</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
+ <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a><a href="#publishing" data-view="publishing"><span class="ico">↗</span>Publishing</a><a href="#admin" data-view="admin" id="adminNav" style="display:none"><span class="ico">⚙</span>Admin panel</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
  <main class="main">
   <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div><button id="systemHealth" class="health-pill health-pill-button" type="button" title="Click to check service status" aria-live="polite"><span></span>Checking core systems…</button></div><button class="avatar avatar-button" id="avatar" type="button" title="Open profile settings" aria-label="Open profile settings">FL</button><button class="secondary" id="logoutBtn">Log out</button></div></header>
   <section class="hero" id="overviewHero"><div><div class="eyebrow">CREATE WITHOUT A CAMERA</div><h2>Your next video starts with an idea.</h2><p>Generate scripts, voiceovers, visuals and subtitles in one workflow.</p></div><button class="primary" onclick="document.querySelector('#topic').focus()">＋ Create a video</button></section>
@@ -218,6 +234,30 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
      <p class="profile-note">Changing your password signs out other active sessions for this account.</p>
     </div>
    </div>
+  </section>
+  <section id="adminPanel" class="panel billing-panel" style="display:none">
+   <div class="sectionhead"><div><h3>Admin control center</h3><p class="muted">Manage members, monitor workspace activity and control points.</p></div><span class="status">Administrator</span></div>
+   <div class="admin-metrics">
+    <article class="stat"><span>Total members</span><strong id="adminMembersTotal">—</strong></article>
+    <article class="stat"><span>Active accounts</span><strong id="adminMembersActive">—</strong></article>
+    <article class="stat"><span>Suspended accounts</span><strong id="adminMembersSuspended">—</strong></article>
+    <article class="stat"><span>Points in circulation</span><strong id="adminPointsTotal">—</strong></article>
+    <article class="stat"><span>Video projects</span><strong id="adminProjectsTotal">—</strong></article>
+    <article class="stat"><span>AI generations</span><strong id="adminGenerationsTotal">—</strong></article>
+    <article class="stat"><span>Publishing jobs</span><strong id="adminPublishTotal">—</strong></article>
+   </div>
+   <div class="content-card admin-members-card">
+    <div class="admin-toolbar"><div><span class="content-label">MEMBER MANAGEMENT</span><h3 style="margin:6px 0 0">Members</h3></div><div class="admin-search"><input id="adminSearch" type="search" placeholder="Search name or email"><button class="secondary" id="adminRefreshBtn" type="button">↻ Refresh</button></div></div>
+    <div class="admin-table-head"><span>Member</span><span>Usage</span><span>Points</span><span>Access</span><span>Actions</span></div>
+    <div id="adminMembersList"><div class="empty">Loading member list…</div></div>
+    <div class="admin-pagination"><span id="adminResultCount">—</span><button class="secondary" id="adminLoadMore" type="button" style="display:none">Load more</button></div>
+    <div class="notice" id="adminNotice" role="status" aria-live="polite"></div>
+   </div>
+   <div class="content-card" style="margin-top:14px">
+    <span class="content-label">ADMIN AUDIT TRAIL</span><h3 style="margin:7px 0 12px">Recent admin actions</h3>
+    <div id="adminAuditList" class="admin-audit-list"><div class="empty">No recent actions.</div></div>
+   </div>
+   <p class="production-note">Account suspension prevents sign-in. Point adjustments are recorded in the member's transaction history and the admin audit trail. The final active administrator cannot be suspended.</p>
   </section>
   <section id="billingPanel" class="panel billing-panel"><div class="sectionhead"><div><h3>Points & billing</h3><p class="muted">Manage your FacelessLab usage and account.</p></div><span class="status">Account</span></div><div class="billing-grid"><article class="stat"><span>Available points</span><strong id="billingPoints">0</strong></article><article class="stat"><span>Projects created</span><strong id="billingProjects">0</strong></article><article class="stat"><span>Completed projects</span><strong id="billingVideos">0</strong></article></div><div class="content-card"><span class="content-label">CURRENT ACCESS</span><h3 id="accountPlan">Free workspace</h3><p id="billingDescription">Your workspace is active. Point top-ups and payment checkout are not enabled yet; no payment will be taken from this page.</p><div class="actions"><button class="secondary" type="button" onclick="refreshProjects()">↻ Refresh usage</button><button class="primary" type="button" onclick="navigateTo('create')">Create a video →</button></div></div><p class="production-note">Payment methods and point top-ups will appear here after a verified checkout and point ledger are connected.</p></section>
   <div class="footer">FacelessLab · Your ideas deserve to be seen.</div>
