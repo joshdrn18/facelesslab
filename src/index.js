@@ -205,6 +205,11 @@ async function processScriptQueueMessage(message, env) {
   const project={...row,user_id:userId};
   const continuation=project.parent_project_id&&project.continuity_json?JSON.parse(project.continuity_json):null;
   const result=await generateScriptWithProviders(env,project,continuation),script=result.script;
+  script.characters=(Array.isArray(script.characters)?script.characters:[]).slice(0,8).map((c,i)=>{
+   const name=String(c?.name||"").trim().slice(0,80);
+   const id=String(c?.id||name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||("character-"+(i+1))).slice(0,80);
+   return {id,name,role:String(c?.role||"").trim().slice(0,180),visual_identity:String(c?.visual_identity||"").trim().slice(0,600),signature_outfit:String(c?.signature_outfit||"").trim().slice(0,350),distinctive_features:String(c?.distinctive_features||"").trim().slice(0,350)};
+  }).filter(c=>c.name&&c.visual_identity);
   if(!script||typeof script!=="object"||!Array.isArray(script.scenes)||!script.narration)throw new Error("AI response is missing required script fields.");
   await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({...script,_provider:result.provider}),generationId,userId).run();
   await env.DB.prepare("UPDATE projects SET status='completed',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,userId).run();
@@ -498,6 +503,21 @@ async function handle(request, env) {
       }
       return json({ok:true,queued:true,generation_id:generationId,status:"queued"},202);
     }
+    const charactersMatch=path.match(/^\/api\/projects\/([a-f0-9-]+)\/characters$/i);
+    if(charactersMatch&&method==="POST"){
+      const projectId=charactersMatch[1];
+      const project=await env.DB.prepare("SELECT id FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
+      if(!project)return json({ok:false,error:"Project not found."},404);
+      const body=await request.json().catch(()=>null),characters=Array.isArray(body?.characters)?body.characters:[];
+      if(characters.length>8)return json({ok:false,error:"A project can have up to 8 character profiles."},400);
+      const row=await env.DB.prepare("SELECT id,output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+      if(!row)return json({ok:false,error:"Generate a script before editing character profiles."},409);
+      const script=JSON.parse(row.output_json||"{}");
+      script.characters=characters.map((c,i)=>({id:String(c?.id||("character-"+(i+1))).slice(0,80),name:String(c?.name||"").trim().slice(0,80),role:String(c?.role||"").trim().slice(0,180),visual_identity:String(c?.visual_identity||"").trim().slice(0,600),signature_outfit:String(c?.signature_outfit||"").trim().slice(0,350),distinctive_features:String(c?.distinctive_features||"").trim().slice(0,350)})).filter(c=>c.name&&c.visual_identity);
+      await env.DB.prepare("UPDATE generations SET output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(script),row.id,user.id).run();
+      return json({ok:true,characters:script.characters});
+    }
+
     const visualImageMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/visuals\/([a-f0-9-]+)\/image$/i);
     if (visualImageMatch && method === "GET") {
       const projectId=visualImageMatch[1], generationId=visualImageMatch[2];
@@ -539,6 +559,8 @@ async function handle(request, env) {
       const animeMode=String(project.style||"").toLowerCase()==="anime";
       const continuation=project.continuity_json?JSON.parse(project.continuity_json):null;
       const characterBible=clean(script.character_bible||continuation?.character_bible,680);
+       const sceneText=(String(scene.voiceover||"")+" "+String(scene.visual_prompt||"")).toLowerCase();
+       const sceneCharacterLock=(script.characters||[]).filter(c=>c.name&&sceneText.includes(String(c.name).toLowerCase())).map(c=>"CHARACTER "+clean(c.name,70)+": "+clean(c.visual_identity,240)+". Outfit: "+clean(c.signature_outfit,130)+". Features: "+clean(c.distinctive_features,100)+".").join(" ");
       const shotDirections=[
         "ESTABLISHING WIDE SHOT: reveal the location and scale; subject small within a richly detailed environment.",
         "MEDIUM ACTION SHOT: bring the main subject closer; capture a decisive physical action with a clear focal point.",
@@ -560,6 +582,7 @@ async function handle(request, env) {
         animeMode&&continuation?.previous_ending_visual_prompt
           ? "PREVIOUS EPISODE VISUAL REFERENCE CONTEXT: "+clean(continuation.previous_ending_visual_prompt,220)+". Keep the same anime world, linework, palette and character design."
           : "",
+        "INDIVIDUAL CHARACTER PROFILE LOCK — do not merge or swap designs: "+clean(sceneCharacterLock,650),
         "EXACT MOMENT TO ILLUSTRATE: "+clean(scene.voiceover,240),
         "DIRECTOR'S VISUAL BRIEF: "+clean(visualPrompt,480),
         "SHOT DESIGN: "+shotDirection,
