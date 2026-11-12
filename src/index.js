@@ -1171,7 +1171,7 @@ async function runScheduledMaintenance(env, scheduledTime) {
 
 export default {
   async queue(batch, env) {
-    for (const message of batch.messages) { if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else await processScriptQueueMessage(message, env); }
+    for (const message of batch.messages) { if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else if(message.body?.type === "publish_video") await processPublishQueueMessage(message,env); else await processScriptQueueMessage(message, env); }
   },
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runScheduledMaintenance(env, controller.scheduledTime).catch(error => {
