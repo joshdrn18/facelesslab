@@ -501,6 +501,29 @@ async function handle(request, env) {
   if (path.startsWith("/api/")) {
     const user = await getUser(request, env);
     if (!user) return json({ ok: false, error: "Authentication required." }, 401);
+    if (path === "/api/profile/password" && method === "POST") {
+      const body = await request.json().catch(() => null);
+      const currentPassword = String(body?.current_password || "");
+      const newPassword = String(body?.new_password || "");
+      if (!currentPassword || newPassword.length < 8 || newPassword.length > 128) {
+        return json({ ok: false, error: "Enter your current password and a new password of 8–128 characters." }, 400);
+      }
+      const account = await env.DB.prepare("SELECT password_hash FROM users WHERE id = ?").bind(user.id).first();
+      if (!account?.password_hash) return json({ ok: false, error: "Password credentials are unavailable for this account." }, 400);
+      const parts = account.password_hash.split(":");
+      if (parts.length !== 4 || parts[0] !== "pbkdf2-sha256") return json({ ok: false, error: "Account password format is unsupported." }, 500);
+      const verified = await hashPassword(currentPassword, parts[2]);
+      if (verified.hash !== parts[3]) return json({ ok: false, error: "Current password is incorrect." }, 401);
+      const next = await hashPassword(newPassword);
+      const passwordHash = `pbkdf2-sha256:100000:${next.salt}:${next.hash}`;
+      await env.DB.prepare("UPDATE users SET password_hash = ?, updated_at = unixepoch() WHERE id = ?").bind(passwordHash, user.id).run();
+      const auth = request.headers.get("authorization") || "";
+      const currentToken = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+      const currentTokenHash = currentToken ? await sha256(currentToken) : "";
+      await env.DB.prepare("DELETE FROM user_sessions WHERE user_id = ? AND token_hash != ?").bind(user.id, currentTokenHash).run();
+      return json({ ok: true, message: "Password changed. Other sessions have been signed out." });
+    }
+
     if (path === "/api/profile" && method === "POST") {
       const body = await request.json().catch(() => null);
       const displayName = String(body?.display_name || "").trim();
