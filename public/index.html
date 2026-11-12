@@ -550,6 +550,7 @@ async function refreshVideoLibrary(){
   const rows=await localVideos(),est=await navigator.storage?.estimate?.(),persisted=await navigator.storage?.persisted?.();
   const appBytes=rows.reduce((n,v)=>n+Number(v.size||v.blob?.size||0),0);
   $("libraryStorage").textContent=rows.length+" videos · "+prettyBytes(appBytes)+" saved here · Browser storage "+prettyBytes(est?.usage||0)+(est?.quota?" of "+prettyBytes(est.quota):"")+" · "+(persisted?"Persistent storage":"Browser-managed storage");
+  refreshCloudBackups();
   if(!rows.length){el.innerHTML='<div class="empty">No rendered videos yet. Render a project or import an MP4 backup to start your library.</div>';return;}
   const query=($("librarySearch")?.value||"").trim().toLowerCase(),sort=$("librarySort")?.value||"newest";
   const visible=rows.filter(v=>String(v.title||"").toLowerCase().includes(query));
@@ -557,7 +558,6 @@ async function refreshVideoLibrary(){
   if(!visible.length){el.innerHTML='<div class="empty">No saved videos match "'+escapeHtml(query)+'". Try another search.</div>';return;}
   libraryUrls.forEach(URL.revokeObjectURL);libraryUrls=[];
   el.innerHTML=visible.map(v=>'<article class="library-card"><div><b>'+escapeHtml(v.title)+'</b><small>'+new Date(v.createdAt).toLocaleString()+' · '+prettyBytes(v.size||v.blob?.size||0)+' · '+(v.duration||0)+' sec · '+(v.quality||0)+'p</small></div><div class="library-actions"><button class="mini-btn" onclick="playLocalVideo(\''+v.id+'\')">▶ Preview</button><button class="mini-btn" onclick="downloadLocalVideo(\''+v.id+'\')">↓ Backup</button><button class="mini-btn" onclick="uploadLocalVideoToCloud(\''+v.id+'\',this)">☁ Cloud backup</button><button class="mini-btn" onclick="renameLocalVideo(\''+v.id+'\')">Rename</button><button class="mini-btn" onclick="deleteLocalVideo(\''+v.id+'\')">Delete</button></div></article>').join("");
-  refreshCloudBackups();
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
  }catch(e){el.innerHTML='<div class="empty">Local library error: '+escapeHtml(e.message)+'</div>';}
 }
@@ -577,9 +577,9 @@ async function uploadSelectedCloudBackup(){
  try{const r=await fetch(API_BASE+"/api/video-backups",{method:"POST",headers:{authorization:"Bearer "+token,"content-type":"video/mp4","x-video-title":f.name.replace(/\.mp4$/i,"")},body:f});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Upload failed");$("cloudBackupFile").value="";await refreshCloudBackups();}
  catch(e){alert(e.message);}finally{b.disabled=false;b.textContent="Upload selected MP4 to cloud";}
 }
-async function cloudBackupFile(id){const r=await fetch(API_BASE+"/api/video-backups/"+id,{headers:{authorization:"Bearer "+token}});if(!r.ok)throw new Error("Could not download cloud backup.");return r.blob();}
-async function restoreCloudBackup(id){try{const blob=await cloudBackupFile(id),d=await videoDB(),row={id:crypto.randomUUID(),owner:String(currentUser.email||"").toLowerCase(),title:"Restored cloud video",blob,size:blob.size,duration:0,quality:0,createdAt:Date.now()};await new Promise((ok,no)=>{const tx=d.transaction("videos","readwrite");tx.objectStore("videos").add(row);tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});d.close();await refreshVideoLibrary();}catch(e){alert(e.message);}}
-async function downloadCloudBackup(id){try{const blob=await cloudBackupFile(id),u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="facelesslab-backup.mp4";a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);}catch(e){alert(e.message);}}
+async function cloudBackupFile(id){const r=await fetch(API_BASE+"/api/video-backups/"+id,{headers:{authorization:"Bearer "+token}});if(!r.ok)throw new Error("Could not download cloud backup.");return {blob:await r.blob(),title:decodeURIComponent(r.headers.get("x-video-title")||"Restored FacelessLab video"),duration:Number(r.headers.get("x-video-duration")||0),quality:Number(r.headers.get("x-video-quality")||0)};}
+async function restoreCloudBackup(id){try{const backup=await cloudBackupFile(id),blob=backup.blob,d=await videoDB(),row={id:crypto.randomUUID(),owner:String(currentUser.email||"").toLowerCase(),title:backup.title,blob,size:blob.size,duration:backup.duration,quality:backup.quality,createdAt:Date.now()};await new Promise((ok,no)=>{const tx=d.transaction("videos","readwrite");tx.objectStore("videos").add(row);tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});d.close();await refreshVideoLibrary();alert("Video restored with its original title and metadata.");}catch(e){alert(e.message);}}
+async function downloadCloudBackup(id){try{const backup=await cloudBackupFile(id),u=URL.createObjectURL(backup.blob),a=document.createElement("a");a.href=u;a.download=(backup.title||"facelesslab-backup").replace(/[^a-z0-9-_]+/gi,"-")+".mp4";a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);}catch(e){alert(e.message);}}
 async function deleteCloudBackup(id){if(!confirm("Delete this cloud backup?"))return;try{await api("/api/video-backups/"+id,{method:"DELETE"});await refreshCloudBackups();}catch(e){alert(e.message);}}
 $("refreshCloudBackups")?.addEventListener("click",refreshCloudBackups);
 $("uploadCloudBackup")?.addEventListener("click",uploadSelectedCloudBackup);
