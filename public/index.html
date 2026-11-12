@@ -556,7 +556,7 @@ async function refreshVideoLibrary(){
   visible.sort((a,b)=>sort==="oldest"?a.createdAt-b.createdAt:sort==="largest"?(Number(b.size||b.blob?.size||0)-Number(a.size||a.blob?.size||0)):sort==="title"?String(a.title).localeCompare(String(b.title)):b.createdAt-a.createdAt);
   if(!visible.length){el.innerHTML='<div class="empty">No saved videos match "'+escapeHtml(query)+'". Try another search.</div>';return;}
   libraryUrls.forEach(URL.revokeObjectURL);libraryUrls=[];
-  el.innerHTML=visible.map(v=>'<article class="library-card"><div><b>'+escapeHtml(v.title)+'</b><small>'+new Date(v.createdAt).toLocaleString()+' · '+prettyBytes(v.size||v.blob?.size||0)+' · '+(v.duration||0)+' sec · '+(v.quality||0)+'p</small></div><div class="library-actions"><button class="mini-btn" onclick="playLocalVideo(\''+v.id+'\')">▶ Preview</button><button class="mini-btn" onclick="downloadLocalVideo(\''+v.id+'\')">↓ Backup</button><button class="mini-btn" onclick="renameLocalVideo(\''+v.id+'\')">Rename</button><button class="mini-btn" onclick="deleteLocalVideo(\''+v.id+'\')">Delete</button></div></article>').join("");
+  el.innerHTML=visible.map(v=>'<article class="library-card"><div><b>'+escapeHtml(v.title)+'</b><small>'+new Date(v.createdAt).toLocaleString()+' · '+prettyBytes(v.size||v.blob?.size||0)+' · '+(v.duration||0)+' sec · '+(v.quality||0)+'p</small></div><div class="library-actions"><button class="mini-btn" onclick="playLocalVideo(\''+v.id+'\')">▶ Preview</button><button class="mini-btn" onclick="downloadLocalVideo(\''+v.id+'\')">↓ Backup</button><button class="mini-btn" onclick="uploadLocalVideoToCloud(' + "'" + 'v.id' + "'" + ',this)">☁ Cloud backup</button><button class="mini-btn" onclick="renameLocalVideo(\''+v.id+'\')">Rename</button><button class="mini-btn" onclick="deleteLocalVideo(\''+v.id+'\')">Delete</button></div></article>').join("");
   refreshCloudBackups();
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
  }catch(e){el.innerHTML='<div class="empty">Local library error: '+escapeHtml(e.message)+'</div>';}
@@ -584,6 +584,18 @@ async function deleteCloudBackup(id){if(!confirm("Delete this cloud backup?"))re
 $("refreshCloudBackups")?.addEventListener("click",refreshCloudBackups);
 $("uploadCloudBackup")?.addEventListener("click",uploadSelectedCloudBackup);
 $("cloudBackupList")?.addEventListener("click",e=>{const b=e.target.closest("button[data-cloud]");if(!b)return;const id=b.dataset.id;if(b.dataset.cloud==="restore")restoreCloudBackup(id);else if(b.dataset.cloud==="download")downloadCloudBackup(id);else if(b.dataset.cloud==="delete")deleteCloudBackup(id);});
+async function uploadLocalVideoToCloud(id,button){
+ const v=await selectedLocalVideo(id);if(!v)return;
+ const blob=v.blob;if(!blob||!blob.size){alert("This saved video has no readable MP4 data.");return;}
+ if(blob.size>90*1024*1024){alert("Cloud backup supports up to 90 MB per MP4. Your local copy is unchanged.");return;}
+ const old=button?.textContent;if(button){button.disabled=true;button.textContent="Uploading…";}
+ try{
+  const response=await fetch(API_BASE+"/api/video-backups",{method:"POST",headers:{authorization:"Bearer "+token,"content-type":"video/mp4","x-video-title":String(v.title||"FacelessLab video").slice(0,160),"x-video-duration":String(v.duration||0),"x-video-quality":String(v.quality||0)},body:blob});
+  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Cloud backup upload failed.");
+  if(button){button.textContent="Backed up ✓";button.disabled=false;}
+  await refreshCloudBackups();
+ }catch(e){alert(e.message);if(button){button.disabled=false;button.textContent=old||"☁ Cloud backup";}}
+}
 async function selectedLocalVideo(id){return (await localVideos()).find(v=>v.id===id);}
 async function playLocalVideo(id){const v=await selectedLocalVideo(id);if(!v)return;const url=URL.createObjectURL(v.blob);libraryUrls.push(url);$("localVideoPreview")?.remove();const w=document.createElement("div");w.id="localVideoPreview";w.innerHTML='<video class="library-preview" controls playsinline></video>';w.querySelector("video").src=url;$("libraryList").prepend(w);}
 async function downloadLocalVideo(id){const v=await selectedLocalVideo(id);if(!v)return;const url=URL.createObjectURL(v.blob),a=document.createElement("a");a.href=url;a.download=(v.title||"facelesslab-video").replace(/[^a-z0-9-_]+/gi,"-")+".mp4";a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
