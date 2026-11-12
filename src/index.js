@@ -576,14 +576,23 @@ async function handle(request, env) {
       // including the extra continuity instructions used by image-to-image.
       const continuityPrompt=(prompt+" Use the reference image to preserve the exact character identity, face, hairstyle, clothing, art direction and color palette. Change pose, camera framing and background action for this scene; do not repeat the previous composition.").slice(0,2048);
       let referenceObjectKey=null,referenceSource=null;
-      if(sceneIndex>0){
+      // Prefer one stable series character-reference frame across all scenes and episodes.
+      if(continuation?.character_reference_object_key||continuation?.reference_image_object_key){
+        referenceObjectKey=continuation.character_reference_object_key||continuation.reference_image_object_key;
+        referenceSource=continuation.character_reference_object_key?"series_character_reference":"previous_episode_ending";
+      }
+      if(!referenceObjectKey){
+        const anchorRow=await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='visuals' AND status='completed' AND json_extract(output_json,'$.scene_number')=1 ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
+        if(anchorRow){try{const anchorMeta=JSON.parse(anchorRow.output_json||"{}");referenceObjectKey=anchorMeta.character_reference_object_key||anchorMeta.object_key||null;if(referenceObjectKey)referenceSource="project_character_reference";}catch{}}
+      }
+      // Older projects may not have a scene-one anchor yet; use the nearest earlier scene.
+      if(!referenceObjectKey&&sceneIndex>0){
         for(let index=sceneIndex-1;index>=0;index--){
           const priorSceneNumber=Number(scenes[index].scene);
           const priorRow=await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='visuals' AND status='completed' AND json_extract(output_json,'$.scene_number')=? ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,priorSceneNumber).first();
           if(priorRow){try{const priorMeta=JSON.parse(priorRow.output_json||"{}");if(priorMeta.object_key){referenceObjectKey=priorMeta.object_key;referenceSource="previous_scene_"+priorSceneNumber;break;}}catch{}}
         }
       }
-      if(!referenceObjectKey&&sceneIndex===0&&continuation?.reference_image_object_key){referenceObjectKey=continuation.reference_image_object_key;referenceSource="previous_episode_ending";}
       const generationId=crypto.randomUUID();
       const preferredModel=referenceObjectKey?"@cf/runwayml/stable-diffusion-v1-5-img2img":"@cf/black-forest-labs/flux-1-schnell";
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'visuals','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({model:preferredModel,scene_number:sceneNumber,prompt,reference_object_key:referenceObjectKey,reference_source:referenceSource})).run();
@@ -605,7 +614,7 @@ async function handle(request, env) {
             if(!referenceObject)throw new Error("The saved continuity reference image is missing from R2.");
             const referenceBytes=new Uint8Array(await referenceObject.arrayBuffer());
             if(!referenceBytes.byteLength||referenceBytes.byteLength>5*1024*1024)throw new Error("The continuity reference image is empty or larger than 5 MB.");
-            const strength=referenceSource==="previous_episode_ending"?0.42:0.50;
+            const strength=["series_character_reference","project_character_reference"].includes(referenceSource)?0.44:referenceSource==="previous_episode_ending"?0.42:0.50;
             referenceStrength=strength;
             const result=await env.AI.run("@cf/runwayml/stable-diffusion-v1-5-img2img",{
               prompt:continuityPrompt,
@@ -622,7 +631,10 @@ async function handle(request, env) {
         if(!bytes?.byteLength)throw new Error("Image model returned an empty image.");
         const objectKey="users/"+user.id+"/projects/"+projectId+"/visuals/"+generationId+".png";
         await env.MEDIA.put(objectKey,bytes,{httpMetadata:{contentType:"image/png",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId,sceneNumber:String(sceneNumber),continuityMode}});
-        const output={object_key:objectKey,mime_type:"image/png",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:actualModel,scene_number:sceneNumber,prompt,continuity_mode:continuityMode,reference_source:referenceSource,reference_object_key:referenceObjectKey,reference_strength:referenceStrength,continuity_fallback_error:continuityFallback};
+        // Scene one becomes the persistent character-reference frame. Reuse it instead of
+        // generating an extra portrait, keeping image-generation cost and storage low.
+        const characterReferenceObjectKey=referenceObjectKey||objectKey;
+        const output={object_key:objectKey,mime_type:"image/png",bytes:bytes.byteLength,provider:"cloudflare-workers-ai",model:actualModel,scene_number:sceneNumber,prompt,continuity_mode:continuityMode,reference_source:referenceSource,reference_object_key:referenceObjectKey,reference_strength:referenceStrength,character_reference_object_key:characterReferenceObjectKey,character_reference_source:referenceObjectKey?"reused_existing_anchor":"scene_1_anchor",continuity_fallback_error:continuityFallback};
         await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,user.id).run();
         return json({ok:true,generation_id:generationId,visual:{generation_id:generationId,...output}},201);      }catch(error){
         await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
@@ -740,9 +752,15 @@ async function handle(request, env) {
       const previousScenes = Array.isArray(previousScript.scenes)?previousScript.scenes:[];
       const lastScene = previousScenes[previousScenes.length-1] || {};
       const visualRows = await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='visuals' AND status='completed' ORDER BY created_at DESC LIMIT 30").bind(parentId,user.id).all();
-      let endingVisual = null, endingVisualSceneNumber = null;
+      let endingVisual = null, endingVisualSceneNumber = null, characterReferenceObjectKey = null;
       for (const row of (visualRows.results||[])) {
-        try { const meta=JSON.parse(row.output_json||"{}"); if(!endingVisual && meta.object_key) { endingVisual=meta; endingVisualSceneNumber=Number(meta.scene_number)||null; } if(Number(meta.scene_number)===Number(lastScene.scene) && meta.object_key) { endingVisual=meta; endingVisualSceneNumber=Number(meta.scene_number)||null; break; } } catch {}
+        try {
+          const meta=JSON.parse(row.output_json||"{}");
+          if(!characterReferenceObjectKey&&meta.character_reference_object_key)characterReferenceObjectKey=meta.character_reference_object_key;
+          if(!characterReferenceObjectKey&&Number(meta.scene_number)===1&&meta.object_key)characterReferenceObjectKey=meta.object_key;
+          if(!endingVisual&&meta.object_key){endingVisual=meta;endingVisualSceneNumber=Number(meta.scene_number)||null;}
+          if(Number(meta.scene_number)===Number(lastScene.scene)&&meta.object_key){endingVisual=meta;endingVisualSceneNumber=Number(meta.scene_number)||null;}
+        } catch {}
       }
       const episodeNumber = Math.max(1,Number(parent.episode_number)||1)+1;
       const rootProjectId = parent.parent_project_id || parent.id;
@@ -757,8 +775,10 @@ async function handle(request, env) {
         character_bible:String(previousScript.character_bible||previousScenes.map(scene=>String(scene.visual_prompt||"")).join(" | ")).slice(0,1400),
         ending_state:String(previousScript.ending_state||lastScene.voiceover||"").slice(0,1000),
         reference_image_object_key:endingVisual?.object_key||null,
+        character_reference_object_key:characterReferenceObjectKey||endingVisual?.object_key||null,
         reference_scene_number:endingVisualSceneNumber,
-        visual_reference_available:Boolean(endingVisual?.object_key), style:parent.style, language:"en"
+        visual_reference_available:Boolean(characterReferenceObjectKey||endingVisual?.object_key),
+        character_reference_available:Boolean(characterReferenceObjectKey||endingVisual?.object_key), style:parent.style, language:"en"
       };
       const id=crypto.randomUUID();
       const title=rootTitle+" — Part "+episodeNumber;
