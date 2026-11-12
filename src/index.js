@@ -281,7 +281,7 @@ async function tokenCryptoKey(env) {
   if(raw.length!==32)throw new Error("PUBLISH_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.");
   return crypto.subtle.importKey("raw",raw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
 }
-async async function encryptSocialToken(env,value) {
+async function encryptSocialToken(env,value) {
   const iv=crypto.getRandomValues(new Uint8Array(12)),key=await tokenCryptoKey(env);
   const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,encoder.encode(String(value||"")));
   const combined=new Uint8Array(iv.length+encrypted.byteLength);combined.set(iv);combined.set(new Uint8Array(encrypted),iv.length);
