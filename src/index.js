@@ -663,9 +663,12 @@ async function handle(request, env) {
             return { http_status: 0, success: false, result: null, errors: [{ message: String(error.message || error).slice(0, 180) }] };
           }
         };
-        const [credits, billable] = await Promise.all([
+        const analyticsTodayUtc = new Date().toISOString().slice(0,10);
+        const analyticsSevenDaysAgoUtc = new Date(Date.now()-6*86400000).toISOString().slice(0,10);
+        const [credits, billable, aiAnalytics] = await Promise.all([
           requestBilling("/accounts/" + accountId + "/billing/credits"),
-          requestBilling("/accounts/" + accountId + "/billable-usage")
+          requestBilling("/accounts/" + accountId + "/billable-usage"),
+          fetchCloudflareAiAnalytics(env,analyticsSevenDaysAgoUtc,analyticsTodayUtc)
         ]);
         const rows = Array.isArray(billable.result) ? billable.result : [];
         const services = {};
@@ -730,6 +733,7 @@ async function handle(request, env) {
           ok: credits.success || billable.success,
           checked_at: new Date().toISOString(),
           credits: { success: credits.success, http_status: credits.http_status, result: credits.result, summary: creditSummary, errors: credits.errors },
+          ai_analytics: aiAnalytics,
           billable_usage: {
             success: billable.success, http_status: billable.http_status,
             billing_period: rows[0]?.BillingPeriodStart || null,
