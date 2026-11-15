@@ -352,15 +352,28 @@ async function refreshCloudflareBilling(){
  if(status)status.textContent="Checking";
  try{
   const data=await api("/api/admin/cloudflare-billing");
-  const credits=data.credits||{},usage=data.billable_usage||{};
-  if(status)status.textContent=credits.success?"Connected":("HTTP "+(credits.http_status||"error"));
+  const credits=data.credits||{},credit=credits.summary||{},usage=data.billable_usage||{};
+  if(status)status.textContent=(credits.success&&usage.success)?"Connected":(credits.success||usage.success)?"Partial":"HTTP "+(credits.http_status||usage.http_status||"error");
   $("cfBilledCost").textContent=usage.success?(Number(usage.total_billed_cost||0).toFixed(4)+" "+(usage.currency||"USD")):"Unavailable";
   $("cfUsageRecords").textContent=usage.success?Number(usage.record_count||0).toLocaleString():"—";
   $("cfCheckedAt").textContent=data.checked_at?new Date(data.checked_at).toLocaleTimeString():"—";
-  const creditText=credits.success?JSON.stringify(credits.result,null,2):((credits.errors||[]).map(e=>e.message).join("; ")||"Credit endpoint unavailable");
-  $("cfCreditDetails").innerHTML='<div class="admin-audit-item"><div><b>Credit balance response</b><small>'+escapeHtml(creditText)+'</small></div></div>';
+  const money=value=>value===null||value===undefined?"—":Number(value).toFixed(2)+" USD";
+  let creditHtml="";
+  if(!credits.success){
+   creditHtml='<div class="empty">'+escapeHtml((credits.errors||[]).map(e=>e.message).join("; ")||"Credit endpoint unavailable")+'</div>';
+  }else if(!credit.has_record||!credit.eligible){
+   creditHtml='<div class="admin-audit-item"><div><b>Promotional credits</b><small>No eligible credit record is currently available for this account. This does not mean your Cloudflare account is disconnected.</small></div><time>Not eligible</time></div>';
+  }else{
+   creditHtml='<div class="admin-metrics" style="margin:8px 0"><article class="stat"><span>Confirmed balance</span><strong>'+money(credit.confirmed_balance)+'</strong></article><article class="stat"><span>Original credits</span><strong>'+money(credit.original_amount)+'</strong></article><article class="stat"><span>Days remaining</span><strong>'+Number(credit.days_remaining||0).toLocaleString()+'</strong></article><article class="stat"><span>Consumed</span><strong>'+Number(credit.percent_consumed||0).toFixed(1)+'%</strong></article></div>';
+  }
+  $("cfCreditDetails").innerHTML='<div class="content-label">CREDIT BALANCE</div>'+creditHtml;
   const services=usage.services||[];
-  $("cfUsageServices").innerHTML=services.length?'<div class="content-label">BILLABLE SERVICES</div>'+services.map(item=>'<div class="admin-audit-item"><div><b>'+escapeHtml(item.name)+'</b><small>'+Number(item.records||0)+' usage records</small></div><time>'+Number(item.cost||0).toFixed(4)+' '+escapeHtml(usage.currency||"USD")+'</time></div>').join(""):(usage.success?'<div class="empty">No billable usage records returned for this period.</div>':'<div class="empty">'+escapeHtml((usage.errors||[]).map(e=>e.message).join("; ")||"Usage endpoint unavailable")+'</div>');
+  const serviceHtml=services.length?'<div class="content-label">USAGE BY PRODUCT FAMILY</div>'+services.map(item=>'<div class="admin-audit-item"><div><b>'+escapeHtml(item.name)+'</b><small>'+Number(item.records||0)+' records'+(item.products?.length?' · '+item.products.map(p=>escapeHtml(p.name)).join(', '):'')+'</small></div><time>'+Number(item.cost||0).toFixed(4)+' '+escapeHtml(usage.currency||"USD")+'</time></div>').join(""):(usage.success?'<div class="empty">No usage records returned for this period.</div>':'<div class="empty">'+escapeHtml((usage.errors||[]).map(e=>e.message).join("; ")||"Usage endpoint unavailable")+'</div>');
+  const records=usage.records||[];
+  const detailRows=records.map(row=>'<tr><td>'+escapeHtml(row.service)+'</td><td>'+escapeHtml(row.description||"—")+'</td><td>'+ (row.quantity===null?"—":Number(row.quantity).toLocaleString(undefined,{maximumFractionDigits:4})+' '+escapeHtml(row.unit))+'</td><td>'+Number(row.cost||0).toFixed(6)+' '+escapeHtml(row.currency||usage.currency||"USD")+'</td><td>'+ (row.charge_start?new Date(row.charge_start).toLocaleDateString():"—")+'</td></tr>').join("");
+  const period=usage.period_from&&usage.period_to?new Date(usage.period_from).toLocaleDateString()+" – "+new Date(usage.period_to).toLocaleDateString():"Current API period";
+  const recordHtml=records.length?'<details style="margin-top:12px"><summary style="cursor:pointer;padding:12px 0;font-weight:700">View all '+records.length+' usage records · '+escapeHtml(period)+'</summary><div style="overflow-x:auto"><table class="admin-usage-table" style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th align="left">Service</th><th align="left">Description</th><th align="left">Quantity</th><th align="left">Cost</th><th align="left">Date</th></tr></thead><tbody>'+detailRows+'</tbody></table></div></details>':'';
+  $("cfUsageServices").innerHTML=serviceHtml+recordHtml;
  }catch(error){
   if(status)status.textContent="Error";
   $("cfCreditDetails").textContent=error.message||"Could not load Cloudflare billing.";
