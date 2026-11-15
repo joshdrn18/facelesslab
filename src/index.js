@@ -51,6 +51,86 @@ async function getUser(request, env) {
   ).bind(tokenHash, now).first();
 }
 
+
+const DEFAULT_AI_DAILY_REQUEST_LIMIT = 20;
+async function readAIUsageSettings(env) {
+  await env.DB.prepare("INSERT OR IGNORE INTO ai_usage_settings (id,daily_request_limit,warning_percent) VALUES ('global',?,80)")
+    .bind(DEFAULT_AI_DAILY_REQUEST_LIMIT).run();
+  const row = await env.DB.prepare("SELECT daily_request_limit,warning_percent,updated_at FROM ai_usage_settings WHERE id='global'").first();
+  return {
+    daily_request_limit: Math.max(0, Number(row?.daily_request_limit ?? DEFAULT_AI_DAILY_REQUEST_LIMIT)),
+    warning_percent: Math.min(95, Math.max(50, Number(row?.warning_percent ?? 80))),
+    updated_at: Number(row?.updated_at || 0)
+  };
+}
+function estimateAIOutputBytes(result) {
+  if (result instanceof ArrayBuffer) return result.byteLength;
+  if (ArrayBuffer.isView(result)) return result.byteLength;
+  if (typeof result === "string") return Math.floor(result.length * 0.75);
+  if (!result || typeof result !== "object") return 0;
+  for (const value of [result.audio, result.image, result.data, result.response]) {
+    if (value instanceof ArrayBuffer) return value.byteLength;
+    if (ArrayBuffer.isView(value)) return value.byteLength;
+    if (typeof value === "string") return Math.floor(value.length * 0.75);
+  }
+  return 0;
+}
+async function runTrackedAI(env, context, model, input) {
+  const settings = await readAIUsageSettings(env);
+  const now = Math.floor(Date.now() / 1000);
+  const utcDayStart = Math.floor(now / 86400) * 86400;
+  const eventId = crypto.randomUUID();
+  const stage = String(context.stage || "unknown").slice(0, 40);
+  const inputCharacters = Math.max(0, Number(context.input_characters || 0));
+  const inputBytes = Math.max(0, Number(context.input_bytes || 0));
+  // Reserve atomically before inference. Legacy generations count once so
+  // today's activity is not reset when this tracking feature is deployed.
+  const reservation = await env.DB.prepare(
+    "INSERT INTO ai_inference_events (id,user_id,project_id,generation_id,stage,model,status,input_characters,input_bytes) " +
+    "SELECT ?,?,?,?,?,?,'processing',?,? WHERE ?=0 OR (" +
+    "(SELECT COUNT(*) FROM ai_inference_events WHERE created_at>=?) + " +
+    "(SELECT COUNT(*) FROM generations g WHERE g.created_at>=? " +
+    "AND g.stage IN ('voice','visuals','character_reference','subtitles') " +
+    "AND NOT EXISTS (SELECT 1 FROM ai_inference_events e WHERE e.generation_id=g.id)) < ?)"
+  ).bind(
+    eventId, context.user_id, context.project_id || null, context.generation_id || null,
+    stage, model, inputCharacters, inputBytes,
+    settings.daily_request_limit, utcDayStart, utcDayStart, settings.daily_request_limit
+  ).run();
+  if (Number(reservation.meta?.changes || 0) !== 1) {
+    const error = new Error("FacelessLab daily Workers AI safety cap reached (" + settings.daily_request_limit + " model requests). New Workers AI calls are paused until 00:00 UTC or an administrator changes the cap.");
+    error.code = "AI_DAILY_LIMIT_REACHED";
+    throw error;
+  }
+  const startedAt = Date.now();
+  try {
+    const result = await env.AI.run(model, input);
+    const usage = result?.usage || result?.response?.usage || {};
+    const promptTokens = Number(usage.prompt_tokens ?? usage.input_tokens);
+    const completionTokens = Number(usage.completion_tokens ?? usage.output_tokens);
+    const neuronsValue = Number(usage.neurons ?? result?.neurons ?? result?.response?.neurons);
+    await env.DB.prepare(
+      "UPDATE ai_inference_events SET status='completed',duration_ms=?,output_bytes=?," +
+      "prompt_tokens=?,completion_tokens=?,neurons=?,updated_at=unixepoch() WHERE id=?"
+    ).bind(
+      Math.max(0, Date.now() - startedAt), estimateAIOutputBytes(result),
+      Number.isFinite(promptTokens) ? promptTokens : null,
+      Number.isFinite(completionTokens) ? completionTokens : null,
+      Number.isFinite(neuronsValue) && neuronsValue > 0 ? neuronsValue : null,
+      eventId
+    ).run();
+    return result;
+  } catch (error) {
+    await env.DB.prepare(
+      "UPDATE ai_inference_events SET status='failed',duration_ms=?,error_message=?,updated_at=unixepoch() WHERE id=?"
+    ).bind(
+      Math.max(0, Date.now() - startedAt),
+      String(error?.message || error).slice(0, 300), eventId
+    ).run().catch(trackError => console.error(JSON.stringify({event:"ai_usage_tracking_update_failed",message:String(trackError?.message||trackError).slice(0,180)})));
+    throw error;
+  }
+}
+
 function publicUser(user) {
   return {
     id: user.id,
@@ -252,7 +332,7 @@ async function processVoiceQueueMessage(message, env) {
     .trim();
   if(!narration||narration.length>4500)throw new Error("Narration is empty or exceeds the current 4,500 character limit.");
   await env.DB.prepare("UPDATE generations SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(generationId,userId).run();
-  const model="@cf/myshell-ai/melotts",provider="cloudflare-workers-ai",result=await env.AI.run(model,{prompt:narration,lang:"en"}),audioValue=typeof result==="string"?result:result?.audio;
+  const model="@cf/myshell-ai/melotts",provider="cloudflare-workers-ai",result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:narration.length},model,{prompt:narration,lang:"en"}),audioValue=typeof result==="string"?result:result?.audio;
   if(!audioValue||typeof audioValue!=="string")throw new Error("The text-to-speech model returned no audio.");
   let audio;
   if(/^https:\/\//i.test(audioValue)){const response=await fetch(audioValue);if(!response.ok)throw new Error("Could not retrieve the generated audio file.");audio=new Uint8Array(await response.arrayBuffer());}
@@ -266,7 +346,7 @@ async function processVoiceQueueMessage(message, env) {
  }catch(error){
   const detail=String(error?.message||error).slice(0,500),attempts=Number(message.attempts||1);
   console.error(JSON.stringify({event:"background_voice_attempt_failed",generation_id:generationId,attempts,error:detail}));
-  if(attempts>=3){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(detail,generationId,userId).run();message.ack();}
+  if(error?.code==="AI_DAILY_LIMIT_REACHED"||attempts>=3){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(detail,generationId,userId).run();message.ack();}
   else message.retry({delaySeconds:Math.min(60,attempts*15)});
  }
 }
@@ -1024,7 +1104,7 @@ async function handle(request, env) {
       ].join(" ").slice(0,1900);
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'character_reference','processing',?)").bind(generationId,projectId,user.id,JSON.stringify({character_id:characterId,character_name:character.name,model:"@cf/black-forest-labs/flux-1-schnell"})).run();
       try{
-        const result=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});
+        const result=await runTrackedAI(env,{user_id:user.id,project_id:projectId,generation_id:generationId,stage:"character_reference",input_characters:prompt.length},"@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});
         const value=typeof result==="string"?result:result?.image;
         let bytes;
         if(typeof value==="string"){const binary=atob(value),out=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);bytes=out;}
@@ -1212,7 +1292,7 @@ async function handle(request, env) {
             if(!referenceBytes.byteLength||referenceBytes.byteLength>5*1024*1024)throw new Error("The continuity reference image is empty or larger than 5 MB.");
             const strength=["series_character_reference","project_character_reference"].includes(referenceSource)?0.44:referenceSource==="previous_episode_ending"?0.42:0.50;
             referenceStrength=strength;
-            const result=await env.AI.run("@cf/runwayml/stable-diffusion-v1-5-img2img",{
+            const result=await runTrackedAI(env,{user_id:user.id,project_id:projectId,generation_id:generationId,stage:"visuals",input_characters:continuityPrompt.length,input_bytes:referenceBytes.byteLength},"@cf/runwayml/stable-diffusion-v1-5-img2img",{
               prompt:continuityPrompt,
               image:Array.from(referenceBytes),strength,guidance:7.5,num_steps:20,width:768,height:1344,
               negative_prompt:"different character, changed face, changed hairstyle, changed outfit, inconsistent art style, duplicate people, collage, split screen, text, watermark"
@@ -1220,10 +1300,10 @@ async function handle(request, env) {
             bytes=await readImageResult(result);
           }catch(referenceError){
             continuityFallback=String(referenceError.message||referenceError).slice(0,240);
-            const fallbackResult=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});
+            const fallbackResult=await runTrackedAI(env,{user_id:user.id,project_id:projectId,generation_id:generationId,stage:"visuals",input_characters:prompt.length},"@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});
             bytes=await readImageResult(fallbackResult);actualModel="@cf/black-forest-labs/flux-1-schnell";continuityMode="text-fallback";
           }
-        }else{const result=await env.AI.run("@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});bytes=await readImageResult(result);}
+        }else{const result=await runTrackedAI(env,{user_id:user.id,project_id:projectId,generation_id:generationId,stage:"visuals",input_characters:prompt.length},"@cf/black-forest-labs/flux-1-schnell",{prompt,steps:4});bytes=await readImageResult(result);}
         if(!bytes?.byteLength)throw new Error("Image model returned an empty image.");
         const objectKey="users/"+user.id+"/projects/"+projectId+"/visuals/"+generationId+".png";
         await env.MEDIA.put(objectKey,bytes,{httpMetadata:{contentType:"image/png",cacheControl:"private, max-age=3600"},customMetadata:{userId:user.id,projectId,generationId,sceneNumber:String(sceneNumber),continuityMode}});
@@ -1302,7 +1382,7 @@ async function handle(request, env) {
       const generationId = crypto.randomUUID();
       await env.DB.prepare("INSERT INTO generations (id, project_id, user_id, stage, status, input_json) VALUES (?, ?, ?, 'subtitles', 'processing', ?)").bind(generationId, projectId, user.id, JSON.stringify({ source: "saved voice-over audio", timing: "audio-aligned", model: "@cf/openai/whisper" })).run();
       try {
-        const rawResult = await env.AI.run("@cf/openai/whisper", { audio: Array.from(audioBytes) });
+        const rawResult = await runTrackedAI(env,{user_id:user.id,project_id:projectId,generation_id:generationId,stage:"subtitles",input_bytes:audioBytes.byteLength},"@cf/openai/whisper",{ audio: Array.from(audioBytes) });
         const transcription = rawResult?.response || rawResult || {};
         const rawWords = Array.isArray(transcription.words) ? transcription.words : (Array.isArray(transcription.segments) ? transcription.segments.flatMap(segment => Array.isArray(segment.words) ? segment.words : []) : []);
         const words = rawWords.map(item => ({ word: String(item.word || "").trim(), start: Number(item.start), end: Number(item.end) }))
