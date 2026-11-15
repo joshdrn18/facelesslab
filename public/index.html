@@ -905,6 +905,58 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:950px){.idea-vault-form{grid-template-columns:repeat(2,minmax(0,1fr))}.idea-vault-form button{width:100%}}
 @media(max-width:700px){.idea-vault-form,.idea-vault-toolbar{grid-template-columns:1fr}.idea-vault-toolbar>span{text-align:left}.idea-vault-item{grid-template-columns:1fr}.idea-vault-actions{justify-content:flex-start}.idea-vault-foot{align-items:stretch;flex-direction:column}.idea-vault-foot button{width:100%}.script-timing-metrics b{font-size:16px}}
 
+
+/* FacelessLab — visual system v2: calm, compact creator workspace */
+:root{--bg:#080b12;--panel:#101725;--line:#263248;--muted:#91a0b7;--text:#f3f6fc;--purple:#a995ff;--cyan:#75e4d7;--glow:rgba(143,123,255,.16)}
+body{background:radial-gradient(ellipse at 72% -15%,rgba(119,94,220,.2),transparent 38%),radial-gradient(ellipse at 5% 45%,rgba(55,129,137,.08),transparent 35%),#080b12;letter-spacing:.005em}
+.app{grid-template-columns:248px minmax(0,1fr)}
+.side{position:sticky;top:0;height:100vh;min-height:100vh;padding:26px 17px;background:rgba(10,14,23,.92);border-right:1px solid rgba(151,166,196,.13);backdrop-filter:blur(18px)}
+.side .brand{padding:0 9px 30px;font-size:18px;font-weight:850;letter-spacing:-.6px}
+.side .brand .logo{width:36px;height:36px;border-radius:12px;box-shadow:0 5px 20px rgba(122,102,225,.2)}
+.navlabel{padding:16px 11px 8px;color:#68778f;font-size:9px;letter-spacing:1.7px}
+.nav a{position:relative;min-height:42px;align-items:center;gap:12px;padding:10px 12px;margin:3px 0;border:1px solid transparent;border-radius:11px;color:#a5b1c5;font-size:12px;font-weight:600;transition:background .18s,border-color .18s,color .18s}
+.nav a .ico{width:19px;color:#8f9db6;font-size:15px;text-align:center}
+.nav a.active{background:linear-gradient(100deg,rgba(151,128,255,.18),rgba(117,228,215,.07));border-color:rgba(165,147,255,.19);color:#f5f4ff;box-shadow:inset 2px 0 #a995ff}
+.nav a.active .ico{color:#b9aaff}
+.nav a:hover:not(.active){background:rgba(143,161,190,.08);border-color:rgba(143,161,190,.1);color:#fff}
+.sidebottom{top:auto;position:absolute;bottom:20px;left:25px;font-size:9px;letter-spacing:1.1px;color:#66758c}
+.main{max-width:1580px;padding:34px clamp(22px,4vw,62px) 60px}
+.top{align-items:center;margin-bottom:27px;padding-bottom:22px;border-bottom:1px solid rgba(143,160,190,.12)}
+.top-kicker{display:flex;align-items:center;gap:9px;color:#8290a8;font-size:9px;letter-spacing:1.7px;font-weight:800}
+.top-separator{color:#45536a}.top-context{color:#b5a8ff}
+.top h1{font-size:30px;line-height:1.15;letter-spacing:-1.1px;margin:9px 0 6px;font-weight:780}
+.sub{font-size:12px;color:#98a6bb}
+.userbox{gap:10px}.user-meta{padding-right:8px}.user-identity{display:flex;align-items:center;gap:8px}.user-identity b{font-size:12px}.role-pill{font-size:8px;letter-spacing:.8px;padding:3px 7px;border-radius:20px;background:rgba(166,148,255,.12);color:#c2b6ff}
+.user-email{font-size:10px}.health-pill{font-size:9px}.avatar{width:39px;height:39px;border:1px solid rgba(178,159,255,.26);background:linear-gradient(145deg,#332b59,#18363c);color:#e4ddff}
+.hero{position:relative;overflow:hidden;min-height:174px;padding:30px 32px;border:1px solid rgba(165,147,255,.25);border-radius:20px;background:linear-gradient(112deg,rgba(44,35,82,.92),rgba(19,36,51,.96) 72%,rgba(17,30,42,.96));box-shadow:0 18px 50px rgba(0,0,0,.18);margin-bottom:18px}
+.hero:after{content:"";position:absolute;width:260px;height:260px;right:12%;top:-180px;border:1px solid rgba(183,169,255,.18);border-radius:50%;box-shadow:0 0 0 28px rgba(183,169,255,.035),0 0 0 58px rgba(183,169,255,.025);pointer-events:none}
+.hero>div,.hero>button{position:relative;z-index:1}.hero .eyebrow{color:#b7aaff;font-size:9px;letter-spacing:1.8px}.hero h2{font-size:25px;letter-spacing:-.7px;margin:9px 0 7px}.hero p{max-width:520px;font-size:12px;line-height:1.65;color:#c0c8d8}
+.primary{border-radius:11px;padding:12px 17px;background:linear-gradient(105deg,#b5a4ff,#7ce3d8);box-shadow:0 7px 22px rgba(119,112,211,.16);font-size:11px;transition:transform .18s,filter .18s,box-shadow .18s}
+.primary:hover{transform:translateY(-1px);filter:brightness(1.06);box-shadow:0 10px 26px rgba(119,112,211,.24)}
+.secondary{border-radius:10px;background:#182235;border-color:#34435d;color:#dbe4f3;font-size:11px;transition:background .18s,border-color .18s}
+.secondary:hover{background:#222e44;border-color:#566887}
+.stats{gap:12px;margin:0 0 18px}
+.stat,.panel{border:1px solid rgba(143,160,190,.15);background:linear-gradient(145deg,rgba(19,28,43,.96),rgba(13,19,30,.98));border-radius:15px;box-shadow:0 8px 28px rgba(0,0,0,.1)}
+.stat{position:relative;min-height:94px;padding:16px 18px;overflow:hidden}
+.stat:after{content:"";position:absolute;right:-22px;top:-38px;width:100px;height:100px;border-radius:50%;background:rgba(151,133,255,.055);pointer-events:none}
+.stat span{font-size:10px;letter-spacing:.3px;color:#94a3b9}.stat strong{font-size:26px;letter-spacing:-.8px;margin-top:6px}
+.workspace{gap:13px}.panel{padding:21px}.panel h3,.sectionhead h3{font-size:14px;letter-spacing:-.2px;font-weight:750}.panel>p{font-size:11px;line-height:1.65;color:#92a1b7}
+.field{display:block;margin:15px 0 7px;font-size:10px;font-weight:700;color:#c4cee0;letter-spacing:.25px}
+input,select,textarea{border:1px solid #2a3850!important;border-radius:10px!important;background:#0b1220!important;color:#eef3fb!important;box-shadow:inset 0 1px 2px rgba(0,0,0,.12);font-size:11px!important;transition:border-color .16s,box-shadow .16s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(169,149,255,.72)!important;box-shadow:0 0 0 3px rgba(169,149,255,.12)!important}
+input::placeholder,textarea::placeholder{color:#66758d}
+textarea{line-height:1.65}
+.sectionhead{margin:27px 0 13px}.sectionhead>div>span{font-size:10px!important;color:#8191a9!important}
+.project{border:1px solid rgba(143,160,190,.15);background:rgba(15,23,36,.86);border-radius:13px;transition:border-color .18s,transform .18s}
+.project:hover{border-color:rgba(169,149,255,.32);transform:translateY(-1px)}
+.step{padding:12px 0;border-color:rgba(143,160,190,.12)}.num{background:rgba(169,149,255,.12);color:#c2b5ff}
+.tag{background:rgba(117,228,215,.1);color:#8fe6d9}
+.notice{font-size:10px}
+@media(max-width:1100px){.app{grid-template-columns:218px minmax(0,1fr)}.main{padding:26px 22px 50px}}
+@media(max-width:850px){.app{grid-template-columns:1fr}.side{position:relative;top:auto;height:auto;min-height:0;padding:14px 17px}.sidebottom{display:none}.side .brand{padding:0 6px 10px}}
+@media(max-width:600px){.side{padding:10px 12px}.side .brand{padding:0 5px 8px;font-size:15px}.main{padding:17px 12px 36px}.top{align-items:flex-start;gap:8px;padding-bottom:14px;margin-bottom:17px}.top h1{font-size:24px}.top-heading{min-width:0}.top-kicker{font-size:8px}.userbox{gap:6px}.user-meta{padding:0}.user-email{max-width:130px;overflow:hidden;text-overflow:ellipsis}.userbox .secondary{font-size:9px;padding:7px 8px}.hero{padding:22px 19px;min-height:0;border-radius:16px}.hero h2{font-size:21px}.hero>button{width:100%}.stats{gap:8px}.stat{min-height:82px;padding:12px}.stat strong{font-size:22px}.panel{padding:15px}.workspace{gap:10px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+
 </style>
 </head>
 <body>
@@ -947,7 +999,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     <article class="content-card"><span class="content-label">TIKTOK</span><h3 style="margin:8px 0">TikTok</h3><div id="tiktokConnection" class="library-storage">Checking connection…</div><button class="primary" id="connectTiktok" type="button" style="margin-top:12px;width:100%">Connect TikTok</button></article>
    </div>
    <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. Save a draft, review the details, then press Publish now to upload it to your connected channel.</p>
-    <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><div class="actions" style="margin:10px 0 12px"><button class="secondary" id="importLatestYoutubePack" type="button" onclick="importLatestYouTubePack(this)">✦ Import latest AI publishing pack</button><span id="publishPackStatus" class="muted" style="font-size:11px">Reuse the title, description, hashtags and tags generated with your latest script.</span></div><label class="field" for="publishTitleVariant">AI title options</label><select id="publishTitleVariant" style="display:none;margin-bottom:10px" aria-label="Choose an AI-generated YouTube title"></select><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div id="publishTagsField" style="margin-top:12px"><label class="field" for="publishTags">YouTube tags · search keywords</label><textarea id="publishTags" maxlength="1200" rows="2" placeholder="anime story, animated short, mystery explained"></textarea><div class="muted" style="font-size:11px;line-height:1.55;margin-top:5px">Separate tags with commas or new lines. Up to 30 tags and 500 characters total. These are separate from hashtags.</div><div id="publishTagsCount" class="muted" aria-live="polite" style="font-size:11px;text-align:right;margin-top:4px">0/30 tags · 0/500 characters</div></div><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
+    <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div id="publishTagsField" style="margin-top:12px"><label class="field" for="publishTags">YouTube tags · search keywords</label><textarea id="publishTags" maxlength="1200" rows="2" placeholder="anime story, animated short, mystery explained"></textarea><div class="muted" style="font-size:11px;line-height:1.55;margin-top:5px">Separate tags with commas or new lines. Up to 30 tags and 500 characters total. These are separate from hashtags.</div><div id="publishTagsCount" class="muted" aria-live="polite" style="font-size:11px;text-align:right;margin-top:4px">0/30 tags · 0/500 characters</div></div><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
     </form>
    </div>
    <div class="sectionhead"><div><h3>Publishing drafts</h3><span class="muted" style="font-size:12px">Review your prepared posts</span></div></div><div id="publishingJobs" class="project-list"><div class="empty">Loading publishing drafts…</div></div>
@@ -2004,34 +2056,6 @@ function syncPublishPrivacyOptions(){
  const current=privacy.value;
  privacy.innerHTML=platform==="tiktok"?'<option value="private">Only me</option><option value="public">Everyone (requires TikTok app approval)</option>':'<option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>';
  privacy.value=[...privacy.options].some(o=>o.value===current)?current:"private";
-}
-function importLatestYouTubePack(button){
- const scripts=window.facelessScripts||{},ids=Object.keys(scripts);
- const status=$("publishPackStatus"),variant=$("publishTitleVariant");
- if(!ids.length){
-  if(status)status.textContent="Open a generated script first, then import its publishing pack.";
-  return;
- }
- const script=scripts[ids[ids.length-1]]||{};
- const titles=(Array.isArray(script.youtube_title_options)?script.youtube_title_options:[]).map(x=>String(x||"").trim()).filter(x=>x&&x.length<=100);
- if(!titles.length&&script.title)titles.push(String(script.title).slice(0,100));
- if(!titles.length){
-  if(status)status.textContent="This script has no valid title options yet.";
-  return;
- }
- if(variant){
-  variant.innerHTML=titles.map((title,index)=>'<option value="'+index+'">'+escapeHtml("Option "+(index+1)+" · "+title)+'</option>').join("");
-  variant.style.display=titles.length>1?"block":"none";
-  variant.onchange=()=>{const selected=titles[Number(variant.value)||0];if($("publishTitle"))$("publishTitle").value=selected;};
-  variant.value="0";
- }
- if($("publishTitle"))$("publishTitle").value=titles[0];
- if($("publishDescription"))$("publishDescription").value=String(script.youtube_description||"").slice(0,5000);
- if($("publishHashtags"))$("publishHashtags").value=(Array.isArray(script.hashtags)?script.hashtags:[]).map(x=>String(x||"").trim()).filter(Boolean).join(" ").slice(0,1000);
- if($("publishTags"))$("publishTags").value=(Array.isArray(script.youtube_tags)?script.youtube_tags:[]).map(x=>String(x||"").trim()).filter(Boolean).join(", ").slice(0,1200);
- syncPublishingTagInput();
- if(status)status.textContent="Imported "+titles.length+" title option(s) and the latest script's description, hashtags and YouTube tags. Review before saving.";
- if(button){const old=button.textContent;button.textContent="✓ Publishing pack imported";button.disabled=true;setTimeout(()=>{button.textContent=old;button.disabled=false;},1400);}
 }
 function parseYouTubeTagInput(){
  const seen=new Set(),tags=[];let characters=0;
