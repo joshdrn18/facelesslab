@@ -1207,6 +1207,13 @@ async function handle(request, env) {
       const id=crypto.randomUUID(),reviewRequired=body?.review_required===false?0:1;
       await env.DB.prepare("INSERT INTO production_schedules (id,user_id,connection_id,topic,style,duration_seconds,platform,privacy,production_at,publish_at,review_required,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'scheduled')")
         .bind(id,user.id,connection.id,topic,style,duration,platform,privacy,productionAt,publishAt,reviewRequired).run();
+      try{
+        await env.JOBS.send({type:"scheduled_dispatch",kind:"production",schedule_id:id,due_at:productionAt},{delaySeconds:Math.min(86400,Math.max(1,productionAt-now))});
+      }catch(error){
+        const detail=String(error?.message||error).slice(0,350);
+        await env.DB.prepare("UPDATE production_schedules SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,id).run();
+        return json({ok:false,error:"The schedule was saved but could not be added to the background queue: "+detail},503);
+      }
       return json({ok:true,schedule:{id,topic,style,duration_seconds:duration,platform,privacy,production_at:productionAt,publish_at:publishAt,review_required:reviewRequired,status:"scheduled"}},201);
     }
     const productionScheduleMatch=path.match(/^\/api\/production\/schedules\/([a-f0-9-]+)(?:\/(progress|rendered|approve))?$/i);
@@ -1252,6 +1259,15 @@ async function handle(request, env) {
         await env.DB.prepare("UPDATE production_schedules SET backup_id=?,publish_job_id=?,status=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?")
           .bind(backupId,jobId,nextStatus,id,user.id).run();
         await env.DB.prepare("UPDATE projects SET status='completed',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(schedule.project_id,user.id).run();
+        if(autoPublish){
+          try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:jobId,due_at:Number(schedule.publish_at)},{delaySeconds:Math.min(86400,Math.max(1,Number(schedule.publish_at)-Math.floor(Date.now()/1000))) });}
+          catch(error){
+            const detail=String(error?.message||error).slice(0,350);
+            await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,jobId).run();
+            await env.DB.prepare("UPDATE production_schedules SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,id).run();
+            return json({ok:false,error:"The video was rendered, but its publishing timer could not be queued: "+detail},503);
+          }
+        }
         return json({ok:true,status:nextStatus,publish_job_id:jobId,review_required:!autoPublish},201);
       }
       if(action==="approve"){
@@ -1259,6 +1275,13 @@ async function handle(request, env) {
         await env.DB.prepare("UPDATE publish_jobs SET status='queued',scheduled_at=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=? AND status='draft'")
           .bind(schedule.publish_at,schedule.publish_job_id,user.id).run();
         await env.DB.prepare("UPDATE production_schedules SET status='publish_queued',updated_at=unixepoch() WHERE id=? AND user_id=? AND status='awaiting_review'").bind(id,user.id).run();
+        try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:schedule.publish_job_id,due_at:Number(schedule.publish_at)},{delaySeconds:Math.min(86400,Math.max(1,Number(schedule.publish_at)-Math.floor(Date.now()/1000)))});}
+        catch(error){
+          const detail=String(error?.message||error).slice(0,350);
+          await env.DB.prepare("UPDATE publish_jobs SET status='draft',scheduled_at=NULL,error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,schedule.publish_job_id).run();
+          await env.DB.prepare("UPDATE production_schedules SET status='awaiting_review',error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,id).run();
+          return json({ok:false,error:"Approval was not queued: "+detail},503);
+        }
         return json({ok:true,status:"publish_queued",scheduled_at:schedule.publish_at});
       }
       return json({ok:false,error:"Unknown production schedule action."},404);
@@ -1348,7 +1371,15 @@ async function handle(request, env) {
       if(scheduledAtRaw&&(!Number.isFinite(scheduledAt)||scheduledAt<=Math.floor(Date.now()/1000)))return json({ok:false,error:"Choose a future date and time for scheduled publishing."},400);
       const initialStatus=scheduledAt?"queued":"draft";
       await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,tags_json,privacy,scheduled_at,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,JSON.stringify(tags),String(body?.privacy||"private"),scheduledAt,initialStatus).run();
-      if(scheduledAt)return json({ok:true,job:{id,backup_id:backupId,platform,title,status:initialStatus,scheduled_at:scheduledAt}},201);
+      if(scheduledAt){
+        try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:id,due_at:scheduledAt},{delaySeconds:Math.min(86400,Math.max(1,scheduledAt-Math.floor(Date.now()/1000)))});}
+        catch(error){
+          const detail=String(error?.message||error).slice(0,350);
+          await env.DB.prepare("UPDATE publish_jobs SET status='failed',scheduled_at=NULL,error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,id).run();
+          return json({ok:false,error:"The post was saved but its upload timer could not be queued: "+detail},503);
+        }
+        return json({ok:true,job:{id,backup_id:backupId,platform,title,status:initialStatus,scheduled_at:scheduledAt}},201);
+      }
       return json({ok:true,job:{id,backup_id:backupId,platform,title,status:initialStatus}},201);
     }
     const youtubeStatusMatch=path.match(new RegExp("^/api/publishing/jobs/([a-f0-9-]+)/refresh-status$","i"));
@@ -2007,6 +2038,70 @@ async function handle(request, env) {
   return json({ ok: false, error: "Not found" }, 404);
 }
 
+async function createProductionProjectForSchedule(env,schedule){
+  const now=Math.floor(Date.now()/1000),projectId=crypto.randomUUID(),generationId=crypto.randomUUID();
+  try{
+    const title=String(schedule.topic||"Untitled video").slice(0,72);
+    await env.DB.prepare("INSERT INTO projects (id,user_id,title,topic,status,aspect_ratio,language,duration_seconds,style) VALUES (?,?,?,?,'queued','9:16','en',?,?)")
+      .bind(projectId,schedule.user_id,title,schedule.topic,schedule.duration_seconds,schedule.style).run();
+    const input={topic:schedule.topic,language:"en",duration_seconds:schedule.duration_seconds,style:schedule.style,scheduled_production_id:schedule.id,queued_at:new Date().toISOString()};
+    await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'script','queued',?)")
+      .bind(generationId,projectId,schedule.user_id,JSON.stringify(input)).run();
+    await env.DB.prepare("UPDATE production_schedules SET project_id=?,status='script_queued',error_message=NULL,updated_at=? WHERE id=? AND status='starting'")
+      .bind(projectId,now,schedule.id).run();
+    await env.JOBS.send({type:"generate_script",generation_id:generationId,project_id:projectId,user_id:schedule.user_id});
+    return {ok:true,project_id:projectId,generation_id:generationId};
+  }catch(error){
+    const detail=String(error?.message||error).slice(0,500);
+    await env.DB.prepare("UPDATE production_schedules SET status='failed',error_message=?,updated_at=? WHERE id=? AND status IN ('starting','script_queued')").bind(detail,now,schedule.id).run();
+    await env.DB.prepare("UPDATE projects SET status='failed',updated_at=? WHERE id=?").bind(now,projectId).run().catch(()=>{});
+    await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=? WHERE id=?").bind(detail,now,generationId).run().catch(()=>{});
+    throw error;
+  }
+}
+
+async function processScheduledDispatchMessage(message,env){
+  const body=message.body||{},dueAt=Math.floor(Number(body.due_at)||0),now=Math.floor(Date.now()/1000);
+  if(!["production","publish_job"].includes(body.kind)||!dueAt){message.ack();return;}
+  if(dueAt>now){
+    try{
+      await env.JOBS.send(body,{delaySeconds:Math.min(86400,Math.max(1,dueAt-now))});
+      message.ack();
+    }catch(error){
+      console.error(JSON.stringify({event:"scheduled_dispatch_reschedule_failed",kind:body.kind,error:String(error?.message||error).slice(0,240)}));
+      message.retry({delaySeconds:30});
+    }
+    return;
+  }
+  if(body.kind==="production"){
+    const schedule=await env.DB.prepare("SELECT * FROM production_schedules WHERE id=? AND status='scheduled'").bind(String(body.schedule_id||"")).first();
+    if(!schedule){message.ack();return;}
+    const claim=await env.DB.prepare("UPDATE production_schedules SET status='starting',updated_at=? WHERE id=? AND status='scheduled' AND production_at<=?")
+      .bind(now,schedule.id,now).run();
+    if(Number(claim.meta?.changes||0)!==1){message.ack();return;}
+    try{await createProductionProjectForSchedule(env,schedule);message.ack();}
+    catch(error){
+      console.error(JSON.stringify({event:"scheduled_production_start_failed",schedule_id:schedule.id,error:String(error?.message||error).slice(0,400)}));
+      message.ack();
+    }
+    return;
+  }
+  const jobId=String(body.job_id||"");
+  const job=await env.DB.prepare("SELECT id,status,scheduled_at FROM publish_jobs WHERE id=?").bind(jobId).first();
+  if(!job||job.status!=="queued"||!job.scheduled_at){message.ack();return;}
+  const claim=await env.DB.prepare("UPDATE publish_jobs SET scheduled_at=NULL,updated_at=? WHERE id=? AND status='queued' AND scheduled_at<=?")
+    .bind(now,jobId,now).run();
+  if(Number(claim.meta?.changes||0)!==1){message.ack();return;}
+  try{
+    await env.JOBS.send({type:"publish_video",job_id:jobId});
+    message.ack();
+  }catch(error){
+    await env.DB.prepare("UPDATE publish_jobs SET scheduled_at=?,error_message=?,updated_at=? WHERE id=? AND status='queued'")
+      .bind(job.scheduled_at,String(error?.message||error).slice(0,350),now,jobId).run();
+    message.retry({delaySeconds:30});
+  }
+}
+
 async function runScheduledMaintenance(env, scheduledTime) {
   const now = Math.floor(Date.now() / 1000);
   const staleBefore = now - 30 * 60;
@@ -2080,7 +2175,7 @@ async function runScheduledMaintenance(env, scheduledTime) {
 
 export default {
   async queue(batch, env) {
-    for (const message of batch.messages) { if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else if(message.body?.type === "publish_video") await processPublishQueueMessage(message,env); else if(message.body?.type === "check_tiktok_status") await processTikTokStatusMessage(message,env); else if(message.body?.type === "check_youtube_status") await processYouTubeStatusMessage(message,env); else await processScriptQueueMessage(message, env); }
+    for (const message of batch.messages) { if(message.body?.type==="scheduled_dispatch") await processScheduledDispatchMessage(message,env); else if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else if(message.body?.type === "publish_video") await processPublishQueueMessage(message,env); else if(message.body?.type === "check_tiktok_status") await processTikTokStatusMessage(message,env); else if(message.body?.type === "check_youtube_status") await processYouTubeStatusMessage(message,env); else await processScriptQueueMessage(message, env); }
   },
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runScheduledMaintenance(env, controller.scheduledTime).catch(error => {
