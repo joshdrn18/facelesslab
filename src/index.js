@@ -528,22 +528,56 @@ async function handle(request, env) {
         const rows = Array.isArray(billable.result) ? billable.result : [];
         const services = {};
         let totalCost = 0;
-        for (const row of rows) {
-          const service = String(row.ServiceName || row.ServiceFamilyName || "Other").slice(0, 80);
-          const cost = Number(row.BilledCost ?? row.EffectiveCost ?? 0);
-          if (Number.isFinite(cost)) totalCost += cost;
-          if (!services[service]) services[service] = { cost: 0, records: 0 };
-          services[service].cost += Number.isFinite(cost) ? cost : 0;
-          services[service].records += 1;
-        }
+        const records = rows.map((row, index) => {
+          const serviceName = String(row.ServiceName || row.ServiceFamilyName || "Other").slice(0, 100);
+          const family = String(row.ServiceFamilyName || serviceName).slice(0, 80);
+          const rawCost = Number(row.BilledCost ?? row.EffectiveCost ?? row.ContractedCost ?? 0);
+          const cost = Number.isFinite(rawCost) ? rawCost : 0;
+          totalCost += cost;
+          if (!services[family]) services[family] = { cost: 0, records: 0, services: {} };
+          services[family].cost += cost;
+          services[family].records += 1;
+          if (!services[family].services[serviceName]) services[family].services[serviceName] = { cost: 0, records: 0 };
+          services[family].services[serviceName].cost += cost;
+          services[family].services[serviceName].records += 1;
+          return {
+            id: index + 1, service: serviceName, family,
+            description: String(row.ChargeDescription || "").slice(0, 180),
+            quantity: Number.isFinite(Number(row.ConsumedQuantity)) ? Number(row.ConsumedQuantity) : null,
+            unit: String(row.ConsumedUnit || row.PricingUnit || "").slice(0, 40),
+            cost: Number(cost.toFixed(6)),
+            currency: String(row.BillingCurrency || "USD").slice(0, 8),
+            charge_start: row.ChargePeriodStart || null,
+            charge_end: row.ChargePeriodEnd || null,
+            billing_period: row.BillingPeriodStart || null
+          };
+        }).sort((a, b) => String(b.charge_start || "").localeCompare(String(a.charge_start || "")));
+        const periods = records.map(row => row.charge_start).filter(Boolean).sort();
+        const credit = credits.result && typeof credits.result === "object" ? credits.result : null;
+        const creditSummary = credit ? {
+          eligible: credit.eligible === true,
+          has_record: credit.has_record === true,
+          confirmed_balance: Number.isFinite(Number(credit.confirmed_balance_cents)) ? Number(credit.confirmed_balance_cents) / 100 : null,
+          original_amount: Number.isFinite(Number(credit.original_amount_cents)) ? Number(credit.original_amount_cents) / 100 : null,
+          days_remaining: Number.isFinite(Number(credit.days_remaining)) ? Number(credit.days_remaining) : null,
+          percent_consumed: Number.isFinite(Number(credit.percent_consumed)) ? Number(credit.percent_consumed) : null
+        } : null;
         return json({
           ok: credits.success || billable.success,
           checked_at: new Date().toISOString(),
-          credits: { success: credits.success, http_status: credits.http_status, result: credits.result, errors: credits.errors },
-          billable_usage: { success: billable.success, http_status: billable.http_status, billing_period: rows[0]?.BillingPeriodStart || null,
-            currency: rows[0]?.BillingCurrency || null, total_billed_cost: Number(totalCost.toFixed(6)),
-            record_count: rows.length, services: Object.entries(services).map(([name, value]) => ({ name, cost: Number(value.cost.toFixed(6)), records: value.records })),
-            errors: billable.errors }
+          credits: { success: credits.success, http_status: credits.http_status, result: credits.result, summary: creditSummary, errors: credits.errors },
+          billable_usage: {
+            success: billable.success, http_status: billable.http_status,
+            billing_period: rows[0]?.BillingPeriodStart || null,
+            period_from: periods[0] || null, period_to: periods[periods.length - 1] || null,
+            currency: rows[0]?.BillingCurrency || "USD",
+            total_billed_cost: Number(totalCost.toFixed(6)), record_count: rows.length,
+            services: Object.entries(services).map(([name, value]) => ({
+              name, cost: Number(value.cost.toFixed(6)), records: value.records,
+              products: Object.entries(value.services).map(([product, item]) => ({ name: product, cost: Number(item.cost.toFixed(6)), records: item.records }))
+            })).sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name)),
+            records, errors: billable.errors
+          }
         });
       }
 
