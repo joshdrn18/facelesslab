@@ -1082,7 +1082,21 @@ textarea{line-height:1.65}
      </section>
      <p class="youtube-analytics-note" id="youtubeAnalyticsUpdated">Analytics data can be delayed by YouTube. This panel uses real API data and never fills missing metrics with estimates.</p>
     </section>
-    <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. Save a draft, review the details, then press Publish now to upload it to your connected channel.</p>
+    <section class="content-card" id="productionSchedulerPanel" style="margin-top:14px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap"><div><span class="content-label">AUTOMATED CONTENT PIPELINE</span><h3 style="margin:7px 0">Production scheduler</h3><p class="muted" style="margin:0;font-size:11px">Plan an idea now. FacelessLab will create the project and script at the selected time, then continue production in your open studio.</p></div><span class="status">Cloudflare scheduler</span></div>
+  <form id="productionScheduleForm" style="display:grid;gap:11px;margin-top:15px">
+   <label class="field" for="productionScheduleTopic">Video idea / topic</label><textarea id="productionScheduleTopic" rows="3" maxlength="2000" required placeholder="Example: The strange engineering behind ancient Roman concrete"></textarea>
+   <div class="two"><div><label class="field" for="productionScheduleStyle">Video style</label><select id="productionScheduleStyle"><option value="storytelling">Cinematic storytelling</option><option value="anime">AI Anime</option><option value="educational">Educational / facts</option><option value="toplist">Top list / countdown</option><option value="motivation">Motivational</option><option value="news">News explainer</option></select></div><div><label class="field" for="productionScheduleDuration">Duration</label><select id="productionScheduleDuration"><option value="30">30 seconds</option><option value="45" selected>45 seconds</option><option value="60">60 seconds</option></select></div></div>
+   <div class="two"><div><label class="field" for="productionSchedulePlatform">Platform</label><select id="productionSchedulePlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="productionSchedulePrivacy">Visibility</label><select id="productionSchedulePrivacy"><option value="private" selected>Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option></select></div></div>
+   <div class="two"><div><label class="field" for="productionScheduleStart">Start production</label><input id="productionScheduleStart" type="datetime-local" required></div><div><label class="field" for="productionSchedulePublish">Upload time</label><input id="productionSchedulePublish" type="datetime-local" required></div></div>
+   <label style="display:flex;align-items:flex-start;gap:9px;font-size:12px;color:#c0cbe0"><input id="productionScheduleReview" type="checkbox" checked style="width:auto;margin-top:2px"><span><b>Require approval before upload</b><small class="muted" style="display:block;margin-top:3px">Recommended. Uncheck to let the system upload automatically at the selected time after rendering.</small></span></label>
+   <div class="actions"><button class="primary" id="createProductionSchedule" type="submit">＋ Schedule content production</button></div>
+   <div class="notice" id="productionScheduleNotice" role="status" aria-live="polite"></div>
+  </form>
+  <div style="border-top:1px solid var(--line);margin-top:15px;padding-top:13px"><div style="display:flex;justify-content:space-between;align-items:center;gap:9px;margin-bottom:9px"><b style="font-size:13px">Upcoming & active productions</b><button class="secondary mini-btn" id="refreshProductionSchedules" type="button">↻ Refresh</button></div><div id="productionScheduleList" class="project-list"><div class="empty">No scheduled productions yet.</div></div></div>
+  <p class="production-note" style="margin-top:11px">Important: script jobs run in the background, but FFmpeg rendering runs in your browser. Keep FacelessLab open and your device awake while a scheduled production is rendering. If the tab is closed, it can resume when you open the studio again.</p>
+ </section>
+ <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. Save a draft, review the details, then press Publish now to upload it to your connected channel.</p>
     <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><label class="field" for="publishScheduledAt">Schedule upload (optional)</label><input id="publishScheduledAt" type="datetime-local"><div class="muted" style="font-size:11px;margin-top:5px">Leave empty to save as a draft. Scheduled videos are queued automatically when their time arrives.</div><div id="publishTagsField" style="margin-top:12px"><label class="field" for="publishTags">YouTube tags · search keywords</label><textarea id="publishTags" maxlength="1200" rows="2" placeholder="anime story, animated short, mystery explained"></textarea><div class="muted" style="font-size:11px;line-height:1.55;margin-top:5px">Separate tags with commas or new lines. Up to 30 tags and 500 characters total. These are separate from hashtags.</div><div id="publishTagsCount" class="muted" aria-live="polite" style="font-size:11px;text-align:right;margin-top:4px">0/30 tags · 0/500 characters</div></div><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
     </form>
    </div>
@@ -1683,6 +1697,7 @@ function showApp(user, points) {
  navigateTo("overview",false);
  refreshProjects();
  refreshVideoLibrary();
+ startProductionScheduleWatcher();
 }
 let profileAvatarObjectUrl="";
 function profileInitials(){const name=currentUser?.display_name||currentUser?.email?.split("@")[0]||"FL";return name.slice(0,2).toUpperCase();}
@@ -2259,6 +2274,137 @@ $("publishPlatform")?.addEventListener("change",()=>{syncPublishPrivacyOptions()
 $("publishTags")?.addEventListener("input",syncPublishingTagInput);
 syncPublishPrivacyOptions();
 syncPublishingTagInput();
+function productionDateInputValue(date){
+ const adjusted=new Date(date.getTime()-date.getTimezoneOffset()*60000);
+ return adjusted.toISOString().slice(0,16);
+}
+function initializeProductionScheduleForm(){
+ const start=$("productionScheduleStart"),publish=$("productionSchedulePublish");
+ if(!start||!publish)return;
+ const now=Date.now(),startDate=new Date(now+15*60*1000),publishDate=new Date(now+24*60*60*1000);
+ if(!start.value)start.value=productionDateInputValue(startDate);
+ if(!publish.value)publish.value=productionDateInputValue(publishDate);
+}
+function productionStatusLabel(status){
+ return ({scheduled:"Scheduled",starting:"Starting",script_queued:"Script queued",producing:"Producing assets",rendering:"Rendering in browser",awaiting_review:"Ready for approval",publish_queued:"Upload scheduled",published:"Published",failed:"Failed",cancelled:"Cancelled"})[status]||String(status||"Unknown");
+}
+async function refreshProductionSchedules(){
+ const list=$("productionScheduleList");if(!list||!token)return;
+ try{
+  const data=await api("/api/production/schedules"),schedules=data.schedules||[];
+  if(!schedules.length){list.innerHTML='<div class="empty">No scheduled productions yet. Add an idea above to build your content calendar.</div>';return;}
+  list.innerHTML=schedules.map(item=>{
+   const productionDate=new Date(Number(item.production_at)*1000).toLocaleString([], {dateStyle:"medium",timeStyle:"short"});
+   const publishDate=new Date(Number(item.publish_at)*1000).toLocaleString([], {dateStyle:"medium",timeStyle:"short"});
+   const status=String(item.status||"scheduled"),tone=status==="published"?"complete":status==="failed"?"failed":status==="awaiting_review"?"queued":"active";
+   const actions=(status==="awaiting_review"?'<button class="primary" type="button" onclick="approveProductionSchedule(\''+item.id+'\')">Approve & schedule upload</button>':"")+(status==="scheduled"?'<button class="secondary" type="button" onclick="cancelProductionSchedule(\''+item.id+'\')">Cancel</button>':"")+(item.project_id?'<button class="secondary" type="button" onclick="navigateTo(\'projects\')">Open project</button>':"")+(item.provider_url?'<a class="mini-btn" href="'+escapeHtml(item.provider_url)+'" target="_blank" rel="noopener">Open published video</a>':"");
+   return '<article class="cloud-backup-row"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><b>'+escapeHtml(item.project_title||item.topic)+'</b><span class="status status-'+tone+'">'+escapeHtml(productionStatusLabel(status))+'</span></div><small>Production · '+escapeHtml(productionDate)+'</small><small>Upload target · '+escapeHtml(publishDate)+' · '+escapeHtml(String(item.platform||"youtube").toUpperCase())+' · '+escapeHtml(String(item.privacy||"private"))+'</small>'+(item.error_message?'<small style="color:#ff9ba4">'+escapeHtml(item.error_message)+'</small>':"")+'<div class="actions" style="margin-top:8px">'+actions+'</div></article>';
+  }).join("");
+  for(const item of schedules)if(item.project_id&&["script_queued","producing","rendering"].includes(item.status))resumeScheduledProduction(item);
+ }catch(error){list.innerHTML='<div class="empty">'+escapeHtml(error.message||"Could not load schedules.")+'</div>';}
+}
+async function approveProductionSchedule(id){
+ try{await api("/api/production/schedules/"+id+"/approve",{method:"POST",body:"{}"});await refreshProductionSchedules();await refreshPublishing();}
+ catch(error){alert(error.message||"Could not approve this production.");}
+}
+async function cancelProductionSchedule(id){
+ if(!confirm("Cancel this scheduled production?"))return;
+ try{await api("/api/production/schedules/"+id,{method:"DELETE"});await refreshProductionSchedules();}
+ catch(error){alert(error.message||"Could not cancel this schedule.");}
+}
+function pauseFor(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+async function waitForScheduledScript(projectId){
+ for(let attempt=0;attempt<360;attempt++){
+  const data=await api("/api/projects/"+projectId+"/script");
+  if(data.status==="completed"&&data.script)return data.script;
+  if(data.status==="failed")throw new Error(data.error||"The scheduled script generation failed.");
+  await pauseFor(5000);
+ }
+ throw new Error("Script is still processing. Reopen or refresh the studio to resume this production.");
+}
+async function waitForScheduledVoice(projectId){
+ for(let attempt=0;attempt<240;attempt++){
+  const data=await api("/api/projects/"+projectId+"/voice");
+  if(data.status==="completed"&&data.voice)return data.voice;
+  if(data.status==="failed")throw new Error(data.error||"The scheduled voice-over failed.");
+  await pauseFor(3000);
+ }
+ throw new Error("Voice-over is still processing. The scheduled production can resume when you reopen the studio.");
+}
+function resumeScheduledProduction(schedule){
+ window.facelessAutoProductionRuns=window.facelessAutoProductionRuns||Object.create(null);
+ if(window.facelessAutoProductionRuns[schedule.id])return window.facelessAutoProductionRuns[schedule.id];
+ const run=(async()=>{
+  const id=schedule.id,projectId=schedule.project_id;
+  const setProgress=async(status,error="")=>api("/api/production/schedules/"+id+"/progress",{method:"POST",body:JSON.stringify({status,error})});
+  try{
+   await setProgress("producing");
+   await waitForScheduledScript(projectId);
+   await refreshProjects();
+   await loadSavedScript(projectId);
+   const voiceData=await api("/api/projects/"+projectId+"/voice");
+   if(!voiceData.voice&&!["queued","processing"].includes(voiceData.status))await api("/api/projects/"+projectId+"/generate-voice",{method:"POST",body:"{}"});
+   await waitForScheduledVoice(projectId);
+   await loadSavedVoice(projectId);
+   const visualData=await api("/api/projects/"+projectId+"/visuals");
+   for(const visual of visualData.visuals||[])await showSceneVisual(projectId,visual.scene_number,visual);
+   const allVisualButton=$("visual-all-btn-"+projectId);
+   if(!allVisualButton)throw new Error("The production editor is not available. Open My Projects and try again.");
+   await generateAllSceneVisuals(projectId,allVisualButton);
+   const subtitleData=await api("/api/projects/"+projectId+"/subtitles");
+   if(!Array.isArray(subtitleData.subtitles?.cues)||!subtitleData.subtitles.cues.length)await requestProjectSubtitles(projectId);
+   else renderSubtitleResult(projectId,subtitleData.subtitles);
+   await setProgress("rendering");
+   const renderButton=$("editor-btn-"+projectId);
+   if(!renderButton)throw new Error("The video editor could not be loaded. Refresh My Projects to resume.");
+   window.facelessAutoScheduleForProject=window.facelessAutoScheduleForProject||Object.create(null);
+   window.facelessAutoScheduleForProject[projectId]=id;
+   await renderProjectVideo(projectId,renderButton);
+   if(window.facelessAutoScheduleForProject[projectId])throw new Error("The MP4 rendered, but the scheduler could not hand it to the publishing queue. Refresh and retry the render.");
+   await refreshProductionSchedules();
+  }catch(error){
+   await setProgress("failed",String(error?.message||error).slice(0,500)).catch(()=>{});
+   await refreshProductionSchedules().catch(()=>{});
+  }finally{delete window.facelessAutoProductionRuns[id];}
+ })();
+ window.facelessAutoProductionRuns[schedule.id]=run;
+ return run;
+}
+function startProductionScheduleWatcher(){
+ if(!token)return;
+ initializeProductionScheduleForm();
+ refreshProductionSchedules();
+ if(window.facelessProductionScheduleTimer)return;
+ window.facelessProductionScheduleTimer=setInterval(()=>{if(token)refreshProductionSchedules();},20000);
+}
+$("productionScheduleForm")?.addEventListener("submit",async event=>{
+ event.preventDefault();
+ const button=$("createProductionSchedule"),notice=$("productionScheduleNotice");
+ const topic=$("productionScheduleTopic").value.trim();
+ const startValue=$("productionScheduleStart").value,publishValue=$("productionSchedulePublish").value;
+ if(!topic||!startValue||!publishValue){notice.textContent="Enter a topic and both schedule times.";return;}
+ button.disabled=true;button.textContent="Saving schedule…";notice.textContent="";
+ try{
+  await api("/api/production/schedules",{method:"POST",body:JSON.stringify({
+   topic,style:$("productionScheduleStyle").value,duration_seconds:Number($("productionScheduleDuration").value),
+   platform:$("productionSchedulePlatform").value,privacy:$("productionSchedulePrivacy").value,
+   production_at:new Date(startValue).toISOString(),publish_at:new Date(publishValue).toISOString(),
+   review_required:$("productionScheduleReview").checked
+  })});
+  notice.style.color="#8fe0c4";notice.textContent="Production scheduled. The Cloudflare scheduler will create the project at the selected time.";
+  $("productionScheduleTopic").value="";
+  await refreshProductionSchedules();
+ }catch(error){notice.style.color="";notice.textContent=error.message||"Could not create production schedule.";}
+ finally{button.disabled=false;button.textContent="＋ Schedule content production";}
+});
+$("refreshProductionSchedules")?.addEventListener("click",refreshProductionSchedules);
+$("productionSchedulePlatform")?.addEventListener("change",()=>{
+ const tiktok=$("productionSchedulePlatform").value==="tiktok",unlisted=$("productionSchedulePrivacy").querySelector('option[value="unlisted"]');
+ if(unlisted)unlisted.hidden=tiktok;
+ if(tiktok&&$("productionSchedulePrivacy").value==="unlisted")$("productionSchedulePrivacy").value="private";
+});
+initializeProductionScheduleForm();
+
 async function connectSocial(platform){
  const button=$("connect"+(platform==="youtube"?"Youtube":"Tiktok"));if(button){button.disabled=true;button.textContent="Preparing secure connection…";}
  try{const data=await api("/api/publishing/connect/"+platform,{method:"POST",body:"{}"});if(!data.authorization_url)throw new Error("Authorization URL was not returned.");location.href=data.authorization_url;}
@@ -2534,6 +2680,14 @@ async function renderProjectVideo(projectId,button) {
     const backupData=await backupResponse.json().catch(()=>({}));
     if(!backupResponse.ok)throw new Error(backupData.error||"Cloud backup upload failed.");
     cloudNote=" · saved to Cloudflare cloud backup ✓";
+    const autoScheduleId=window.facelessAutoScheduleForProject?.[projectId];
+    if(autoScheduleId){
+     const completion=await api("/api/production/schedules/"+autoScheduleId+"/rendered",{method:"POST",body:JSON.stringify({backup_id:backupData.backup?.id})});
+     delete window.facelessAutoScheduleForProject[projectId];
+     cloudNote+=" · "+(completion.status==="awaiting_review"?"ready for approval":"upload queued");
+     refreshProductionSchedules().catch(()=>{});
+     refreshPublishing().catch(()=>{});
+    }
     refreshCloudBackups().catch(()=>{});
    }catch(backupError){
     console.warn("FacelessLab automatic cloud backup failed:",backupError);
