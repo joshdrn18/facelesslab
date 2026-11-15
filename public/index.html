@@ -358,6 +358,18 @@ button{font-weight:700}
 #publishDraftForm .actions{flex-wrap:wrap}
 @media(max-width:500px){.integration-state{grid-template-columns:32px minmax(0,1fr)}.integration-badge{grid-column:2;justify-self:start}.integration-icon{width:32px;height:32px}}
 
+
+
+/* Guided empty states */
+.empty-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:7px}
+.empty-actions button,.cloud-empty>button{min-height:36px}
+.cloud-empty{display:grid;justify-items:center;gap:9px;padding:24px 18px}
+.cloud-empty b{font-size:13px;color:#e7ecf7}
+.cloud-empty>span:not(.empty-icon){max-width:440px;line-height:1.65}
+#libraryStorage,.library-storage{line-height:1.65;overflow-wrap:anywhere}
+#cloudBackupSummary{overflow-wrap:anywhere}
+@media(max-width:480px){.empty-actions{display:grid;width:100%;grid-template-columns:1fr}.empty-actions button,.cloud-empty>button{width:100%}}
+
 </style>
 </head>
 <body>
@@ -1100,7 +1112,7 @@ async function refreshVideoLibrary(){
   const appBytes=rows.reduce((n,v)=>n+Number(v.size||v.blob?.size||0),0);
   $("libraryStorage").textContent=rows.length+" videos · "+prettyBytes(appBytes)+" saved here · Browser storage "+prettyBytes(est?.usage||0)+(est?.quota?" of "+prettyBytes(est.quota):"")+" · "+(persisted?"Persistent storage":"Browser-managed storage");
   refreshCloudBackups();
-  if(!rows.length){el.innerHTML='<div class="empty">No rendered videos yet. Render a project or import an MP4 backup to start your library.</div>';return;}
+  if(!rows.length){el.innerHTML='<div class="empty library-empty"><span class="empty-icon">▶</span><b>Your video library is ready</b><span>Rendered MP4 files will appear here. You can import a local backup or create a new video from your projects.</span><div class="empty-actions"><button class="primary" type="button" onclick="navigateTo(\'projects\')">Open my projects</button><button class="secondary" type="button" onclick="document.getElementById(\'libraryImport\').click()">Import an MP4</button></div></div>';return;}
   const query=($("librarySearch")?.value||"").trim().toLowerCase(),sort=$("librarySort")?.value||"newest";
   const visible=rows.filter(v=>String(v.title||"").toLowerCase().includes(query));
   visible.sort((a,b)=>sort==="oldest"?a.createdAt-b.createdAt:sort==="largest"?(Number(b.size||b.blob?.size||0)-Number(a.size||a.blob?.size||0)):sort==="title"?String(a.title).localeCompare(String(b.title)):b.createdAt-a.createdAt);
@@ -1132,7 +1144,7 @@ async function refreshPublishing(){
   const select=$("publishBackup"),selected=select?.value;
   if(select){select.innerHTML='<option value="">Choose a cloud video…</option>'+(backupData.backups||[]).map(b=>'<option value="'+escapeHtml(b.id)+'">'+escapeHtml(b.title)+' · '+(Number(b.size||0)/1048576).toFixed(1)+' MB</option>').join("");if(selected&&[...select.options].some(o=>o.value===selected))select.value=selected;}
   const jobs=jobsData.jobs||[];
-  if(jobsEl)jobsEl.innerHTML=jobs.length?jobs.map(j=>'<article class="cloud-backup-row"><b>'+escapeHtml(j.title)+'</b><small>'+escapeHtml(j.platform.toUpperCase())+' · '+escapeHtml(j.status)+' · '+new Date(j.created_at*1000).toLocaleString()+'</small><small>'+escapeHtml(j.account_name||"Connected account")+'</small>'+(j.error_message?'<small>'+escapeHtml(j.error_message)+'</small>':'')+((j.status==="draft"||j.status==="failed")?'<button class="primary" type="button" onclick="publishDraftNow(\''+j.id+'\')">Publish now</button><button class="secondary" type="button" onclick="deletePublishDraft(\''+j.id+'\')">Delete draft</button>':'')+(j.provider_url?'<a class="mini-btn" href="'+escapeHtml(j.provider_url)+'" target="_blank" rel="noopener">Open post</a>':'')+'</article>').join(""):'<div class="empty">No publishing drafts yet. Prepare one from a Cloud backup above.</div>';
+  if(jobsEl)jobsEl.innerHTML=jobs.length?jobs.map(j=>'<article class="cloud-backup-row"><b>'+escapeHtml(j.title)+'</b><small>'+escapeHtml(j.platform.toUpperCase())+' · '+escapeHtml(j.status)+' · '+new Date(j.created_at*1000).toLocaleString()+'</small><small>'+escapeHtml(j.account_name||"Connected account")+'</small>'+(j.error_message?'<small>'+escapeHtml(j.error_message)+'</small>':'')+((j.status==="draft"||j.status==="failed")?'<button class="primary" type="button" onclick="publishDraftNow(\''+j.id+'\')">Publish now</button><button class="secondary" type="button" onclick="deletePublishDraft(\''+j.id+'\')">Delete draft</button>':'')+(j.provider_url?'<a class="mini-btn" href="'+escapeHtml(j.provider_url)+'" target="_blank" rel="noopener">Open post</a>':'')+'</article>').join(""):'<div class="empty cloud-empty"><span class="empty-icon">↗</span><b>No publishing drafts yet</b><span>Choose a saved Cloudflare backup above, add your title and description, then prepare a draft here.</span><button class="secondary" type="button" onclick="document.getElementById(\'publishBackup\').focus()">Choose a cloud video</button></div>';
  }catch(error){if(jobsEl)jobsEl.innerHTML='<div class="empty">'+escapeHtml(error.message||"Could not load publishing details.")+'</div>';}
 }
 function syncPublishPrivacyOptions(){
@@ -1167,7 +1179,7 @@ async function refreshCloudBackups(){
  const el=$("cloudBackupList");if(!el)return;
  try{const data=await api("/api/video-backups"),rows=data.backups||[],summary=$("cloudBackupSummary");
  if(summary)summary.textContent=(data.count??rows.length)+" cloud backups · "+prettyBytes(data.listed_bytes??rows.reduce((n,v)=>n+Number(v.size||0),0))+" stored"+(data.truncated?" · showing latest 1,000; more backups exist":"");
- if(!rows.length){el.innerHTML='<div class="empty">No cloud backups yet.</div>';return;}
+ if(!rows.length){el.innerHTML='<div class="empty cloud-empty"><span class="empty-icon">☁</span><b>No cloud backups yet</b><span>Save an MP4 copy in Cloudflare R2 so it stays available even when you change browsers.</span><button class="secondary" type="button" onclick="document.getElementById(\'cloudBackupFile\').click()">Choose an MP4 to upload</button></div>';return;}
  el.innerHTML=rows.map(v=>'<div class="cloud-backup-row"><b>'+escapeHtml(v.title)+'</b><small>'+prettyBytes(v.size)+' · '+(v.created_at?new Date(v.created_at).toLocaleString():"Cloudflare R2")+'</small><button class="mini-btn" data-cloud="restore" data-id="'+v.id+'">Restore</button><button class="mini-btn" data-cloud="download" data-id="'+v.id+'">Download</button><button class="mini-btn" data-cloud="delete" data-id="'+v.id+'">Delete</button></div>').join("");
  }catch(e){el.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';}
 }
