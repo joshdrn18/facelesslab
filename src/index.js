@@ -1180,6 +1180,90 @@ async function handle(request, env) {
       const rows=await env.DB.prepare("SELECT id,platform,platform_user_id,display_name,status,scopes,access_token_expires_at,created_at FROM social_connections WHERE user_id=? ORDER BY platform").bind(user.id).all();
       return json({ok:true,connections:rows.results||[],configured:{youtube:Boolean(env.YOUTUBE_CLIENT_ID&&env.YOUTUBE_CLIENT_SECRET),tiktok:Boolean(env.TIKTOK_CLIENT_KEY&&env.TIKTOK_CLIENT_SECRET),encryption:Boolean(env.PUBLISH_TOKEN_ENCRYPTION_KEY)}});
     }
+    if(path==="/api/production/schedules"&&method==="GET"){
+      const rows=await env.DB.prepare(
+        "SELECT s.id,s.topic,s.style,s.duration_seconds,s.platform,s.privacy,s.production_at,s.publish_at,s.review_required,s.status,s.project_id,s.publish_job_id,s.backup_id,s.error_message,s.created_at,s.updated_at,p.title AS project_title,j.status AS publish_status,j.provider_url FROM production_schedules s LEFT JOIN projects p ON p.id=s.project_id LEFT JOIN publish_jobs j ON j.id=s.publish_job_id WHERE s.user_id=? ORDER BY s.production_at DESC LIMIT 60"
+      ).bind(user.id).all();
+      return json({ok:true,schedules:rows.results||[]});
+    }
+    if(path==="/api/production/schedules"&&method==="POST"){
+      const body=await request.json().catch(()=>null);
+      const topic=String(body?.topic||"").trim();
+      const style=String(body?.style||"storytelling");
+      const duration=Number(body?.duration_seconds||45);
+      const platform=String(body?.platform||"youtube");
+      const privacy=String(body?.privacy||"private");
+      const productionAt=Math.floor(Date.parse(String(body?.production_at||""))/1000);
+      const publishAt=Math.floor(Date.parse(String(body?.publish_at||""))/1000);
+      const now=Math.floor(Date.now()/1000);
+      const styles=["storytelling","anime","educational","toplist","motivation","news"];
+      if(topic.length<5||topic.length>2000)return json({ok:false,error:"Topic must be between 5 and 2,000 characters."},400);
+      if(!styles.includes(style)||![30,45,60].includes(duration))return json({ok:false,error:"Choose a supported video style and duration."},400);
+      if(!["youtube","tiktok"].includes(platform)||!["private","unlisted","public"].includes(privacy))return json({ok:false,error:"Unsupported publishing platform or visibility."},400);
+      if(!Number.isFinite(productionAt)||productionAt<=now)return json({ok:false,error:"Choose a future production start time."},400);
+      if(!Number.isFinite(publishAt)||publishAt<productionAt)return json({ok:false,error:"The upload time must be the same as or later than production start."},400);
+      const connection=await env.DB.prepare("SELECT id FROM social_connections WHERE user_id=? AND platform=? AND status='active' ORDER BY updated_at DESC LIMIT 1").bind(user.id,platform).first();
+      if(!connection)return json({ok:false,error:"Connect your "+platform+" account before scheduling production."},409);
+      const id=crypto.randomUUID(),reviewRequired=body?.review_required===false?0:1;
+      await env.DB.prepare("INSERT INTO production_schedules (id,user_id,connection_id,topic,style,duration_seconds,platform,privacy,production_at,publish_at,review_required,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'scheduled')")
+        .bind(id,user.id,connection.id,topic,style,duration,platform,privacy,productionAt,publishAt,reviewRequired).run();
+      return json({ok:true,schedule:{id,topic,style,duration_seconds:duration,platform,privacy,production_at:productionAt,publish_at:publishAt,review_required:reviewRequired,status:"scheduled"}},201);
+    }
+    const productionScheduleMatch=path.match(/^\/api\/production\/schedules\/([a-f0-9-]+)(?:\/(progress|rendered|approve))?$/i);
+    if(productionScheduleMatch){
+      const id=productionScheduleMatch[1],action=productionScheduleMatch[2]||"";
+      if(method==="DELETE"&&!action){
+        await env.DB.prepare("UPDATE production_schedules SET status='cancelled',updated_at=unixepoch() WHERE id=? AND user_id=? AND status='scheduled'").bind(id,user.id).run();
+        return json({ok:true});
+      }
+      if(method!=="POST")return json({ok:false,error:"Method not allowed."},405);
+      const schedule=await env.DB.prepare("SELECT * FROM production_schedules WHERE id=? AND user_id=?").bind(id,user.id).first();
+      if(!schedule)return json({ok:false,error:"Production schedule not found."},404);
+      if(action==="progress"){
+        const body=await request.json().catch(()=>({})),next=String(body?.status||"");
+        if(!["producing","rendering","failed"].includes(next))return json({ok:false,error:"Unsupported production status."},400);
+        const detail=String(body?.error||"").slice(0,500)||null;
+        const update=await env.DB.prepare("UPDATE production_schedules SET status=?,error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=? AND status IN ('script_queued','producing','rendering')")
+          .bind(next,detail,id,user.id).run();
+        if(Number(update.meta?.changes||0)!==1)return json({ok:false,error:"This schedule is no longer in an active production state."},409);
+        if(schedule.project_id)await env.DB.prepare("UPDATE projects SET status=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(next==="failed"?"failed":"processing",schedule.project_id,user.id).run();
+        return json({ok:true,status:next});
+      }
+      if(action==="rendered"){
+        if(!["script_queued","producing","rendering"].includes(schedule.status))return json({ok:false,error:"This production is not ready to accept a rendered video."},409);
+        const body=await request.json().catch(()=>({})),backupId=String(body?.backup_id||"");
+        if(!/^[a-f0-9-]{36}$/i.test(backupId))return json({ok:false,error:"A valid cloud backup ID is required."},400);
+        const object=await env.MEDIA.head("users/"+user.id+"/rendered-backups/"+backupId+".mp4");
+        if(!object)return json({ok:false,error:"The rendered video is not present in Cloudflare R2."},404);
+        const connection=await env.DB.prepare("SELECT id FROM social_connections WHERE id=? AND user_id=? AND status='active'").bind(schedule.connection_id,user.id).first();
+        if(!connection)return json({ok:false,error:"The connected publishing account is unavailable. Reconnect it and try again."},409);
+        const scriptRow=await env.DB.prepare("SELECT output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(schedule.project_id,user.id).first();
+        if(!scriptRow)return json({ok:false,error:"The completed script could not be found for this production."},409);
+        const script=JSON.parse(scriptRow.output_json||"{}");
+        const title=String((Array.isArray(script.youtube_title_options)&&script.youtube_title_options[0])||script.title||schedule.topic).trim().slice(0,100);
+        const description=String(script.youtube_description||"").trim().slice(0,5000);
+        const hashtags=(Array.isArray(script.hashtags)?script.hashtags:[]).map(v=>String(v||"").trim()).filter(Boolean).join(" ").slice(0,1000);
+        const tags=(Array.isArray(script.youtube_tags)?script.youtube_tags:[]).map(v=>String(v||"").trim().replace(/^#+/,"")).filter(Boolean).slice(0,30);
+        const autoPublish=!Number(schedule.review_required),jobStatus=autoPublish?"queued":"draft";
+        const scheduledAt=autoPublish?Number(schedule.publish_at):null,jobId=crypto.randomUUID();
+        await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,tags_json,privacy,scheduled_at,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
+          .bind(jobId,user.id,backupId,schedule.platform,connection.id,title,description,hashtags,JSON.stringify(tags),schedule.privacy,scheduledAt,jobStatus).run();
+        const nextStatus=autoPublish?"publish_queued":"awaiting_review";
+        await env.DB.prepare("UPDATE production_schedules SET backup_id=?,publish_job_id=?,status=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?")
+          .bind(backupId,jobId,nextStatus,id,user.id).run();
+        await env.DB.prepare("UPDATE projects SET status='completed',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(schedule.project_id,user.id).run();
+        return json({ok:true,status:nextStatus,publish_job_id:jobId,review_required:!autoPublish},201);
+      }
+      if(action==="approve"){
+        if(schedule.status!=="awaiting_review"||!schedule.publish_job_id)return json({ok:false,error:"This production is not waiting for approval."},409);
+        await env.DB.prepare("UPDATE publish_jobs SET status='queued',scheduled_at=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=? AND status='draft'")
+          .bind(schedule.publish_at,schedule.publish_job_id,user.id).run();
+        await env.DB.prepare("UPDATE production_schedules SET status='publish_queued',updated_at=unixepoch() WHERE id=? AND user_id=? AND status='awaiting_review'").bind(id,user.id).run();
+        return json({ok:true,status:"publish_queued",scheduled_at:schedule.publish_at});
+      }
+      return json({ok:false,error:"Unknown production schedule action."},404);
+    }
+
     if(path==="/api/publishing/youtube/analytics"&&method==="GET"){
       const connection=await env.DB.prepare("SELECT * FROM social_connections WHERE user_id=? AND platform='youtube' AND status='active' ORDER BY updated_at DESC LIMIT 1").bind(user.id).first();
       if(!connection)return json({ok:false,error:"Connect your YouTube channel first."},409);
@@ -1933,6 +2017,33 @@ async function runScheduledMaintenance(env, scheduledTime) {
     "UPDATE generations SET status='failed', error_message=COALESCE(error_message, 'Job timed out before completion. Please retry this step.'), updated_at=? WHERE status='processing' AND updated_at < ?"
   ).bind(now, staleBefore).run();
 
+  // Create projects for due content-production schedules and queue their first script.
+  const dueProductions=await env.DB.prepare("SELECT * FROM production_schedules WHERE status='scheduled' AND production_at<=? ORDER BY production_at ASC LIMIT 5").bind(now).all();
+  let startedProductions=0;
+  for(const schedule of dueProductions.results||[]){
+    const claim=await env.DB.prepare("UPDATE production_schedules SET status='starting',updated_at=? WHERE id=? AND status='scheduled' AND production_at<=?").bind(now,schedule.id,now).run();
+    if(Number(claim.meta?.changes||0)!==1)continue;
+    let projectId=null,generationId=null;
+    try{
+      projectId=crypto.randomUUID();generationId=crypto.randomUUID();
+      const title=String(schedule.topic||"Untitled video").slice(0,72);
+      await env.DB.prepare("INSERT INTO projects (id,user_id,title,topic,status,aspect_ratio,language,duration_seconds,style) VALUES (?,?,?,?,'queued','9:16','en',?,?)")
+        .bind(projectId,schedule.user_id,title,schedule.topic,schedule.duration_seconds,schedule.style).run();
+      const input={topic:schedule.topic,language:"en",duration_seconds:schedule.duration_seconds,style:schedule.style,scheduled_production_id:schedule.id,queued_at:new Date().toISOString()};
+      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'script','queued',?)")
+        .bind(generationId,projectId,schedule.user_id,JSON.stringify(input)).run();
+      await env.DB.prepare("UPDATE production_schedules SET project_id=?,status='script_queued',error_message=NULL,updated_at=? WHERE id=? AND status='starting'")
+        .bind(projectId,now,schedule.id).run();
+      await env.JOBS.send({type:"generate_script",generation_id:generationId,project_id:projectId,user_id:schedule.user_id});
+      startedProductions++;
+    }catch(error){
+      const detail=String(error?.message||error).slice(0,500);
+      await env.DB.prepare("UPDATE production_schedules SET status='failed',error_message=?,updated_at=? WHERE id=? AND status IN ('starting','script_queued')").bind(detail,now,schedule.id).run();
+      if(projectId)await env.DB.prepare("UPDATE projects SET status='failed',updated_at=? WHERE id=?").bind(now,projectId).run();
+      if(generationId)await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=? WHERE id=?").bind(detail,now,generationId).run();
+    }
+  }
+
   // Dispatch scheduled publishing jobs once their timestamp is due.
   const dueJobs = await env.DB.prepare(
     "SELECT id FROM publish_jobs WHERE status='queued' AND scheduled_at IS NOT NULL AND scheduled_at<=? ORDER BY scheduled_at ASC LIMIT 10"
@@ -1962,7 +2073,8 @@ async function runScheduledMaintenance(env, scheduledTime) {
     scheduled_at: new Date(scheduledTime || now * 1000).toISOString(),
     stale_jobs_recovered: Number(staleJobs.meta?.changes || 0),
     expired_sessions_removed: Number(expiredSessions.meta?.changes || 0),
-    scheduled_publish_jobs_dispatched: dispatchedSchedules
+    scheduled_publish_jobs_dispatched: dispatchedSchedules,
+    scheduled_productions_started: startedProductions
   }));
 }
 
