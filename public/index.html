@@ -2148,7 +2148,7 @@ function renderYouTubeAnalytics(data){
   }
  }
  const topEl=$("youtubeAnalyticsTop"),videos=Array.isArray(data.top_videos)?data.top_videos:[];
- if(topEl)topEl.innerHTML=videos.length?videos.map(v=>'<div class="youtube-analytics-video"><div style="min-width:0"><b title="'+escapeHtml(v.title)+'">'+escapeHtml(v.title)+'</b><small>'+formatAnalyticsNumber(v.likes)+' likes · '+formatAnalyticsNumber(v.comments)+' comments</small></div><strong>'+formatAnalyticsNumber(v.views)+'</strong></div>').join(""):'<div class="muted">No video performance data for this period yet.</div>';
+ if(topEl)topEl.innerHTML=videos.length?videos.map(v=>{const views=Math.max(0,Number(v.views)||0),engagement=views?((Number(v.likes||0)+Number(v.comments||0)+Number(v.shares||0))/views*100):0;return '<div class="youtube-analytics-video"><div style="min-width:0"><b title="'+escapeHtml(v.title)+'">'+escapeHtml(v.title)+'</b><small>'+formatAnalyticsNumber(v.likes)+' likes · '+formatAnalyticsNumber(v.comments)+' comments · '+engagement.toFixed(2)+'% engagement</small></div><strong>'+formatAnalyticsNumber(views)+'</strong></div>';}).join(""):'<div class="muted">No video performance data for this period yet.</div>';
  buildYouTubeContentInsights(videos);
  const updated=$("youtubeAnalyticsUpdated");if(updated)updated.textContent="Period: "+data.start_date+" – "+data.end_date+" · Updated "+(data.checked_at?new Date(data.checked_at).toLocaleString():"just now")+". YouTube reporting may be delayed.";
 }
