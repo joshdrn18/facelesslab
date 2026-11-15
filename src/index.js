@@ -1240,10 +1240,45 @@ async function handle(request, env) {
     }
 
     const subtitlesMatch = path.match(/^\/api\/projects\/([a-f0-9-]+)\/subtitles$/i);
-    if (subtitlesMatch && (method === "GET" || method === "POST")) {
+    if (subtitlesMatch && (method === "GET" || method === "POST" || method === "PUT")) {
       const projectId = subtitlesMatch[1];
       const project = await env.DB.prepare("SELECT id, duration_seconds FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
       if (!project) return json({ ok: false, error: "Project not found." }, 404);
+      if (method === "PUT") {
+        const saved = await env.DB.prepare("SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed' AND json_array_length(json_extract(output_json, '$.cues')) > 0 ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
+        if (!saved) return json({ ok: false, error: "Generate subtitles before editing caption text or timing." }, 409);
+        let subtitleData;
+        try { subtitleData = JSON.parse(saved.output_json || "{}"); } catch { subtitleData = {}; }
+        const body = await request.json().catch(() => null);
+        if (!Array.isArray(body?.cues) || body.cues.length < 1 || body.cues.length > 500) {
+          return json({ ok: false, error: "Submit between 1 and 500 caption lines." }, 400);
+        }
+        const duration = Number(subtitleData.duration_seconds) || Math.max(...(subtitleData.cues || []).map(cue => Number(cue.end) || 0));
+        if (!Number.isFinite(duration) || duration <= 0) return json({ ok: false, error: "The saved subtitle duration is invalid. Regenerate subtitles." }, 409);
+        const cues = [];
+        let previousStart = -1;
+        for (let index = 0; index < body.cues.length; index++) {
+          const item = body.cues[index] || {};
+          if (item.start === null || item.end === null || item.start === "" || item.end === "") {
+            return json({ ok: false, error: "Caption " + (index + 1) + " needs both start and end times." }, 400);
+          }
+          const start = Number(item.start), end = Number(item.end);
+          const text = String(item.text || "").replace(/\s+/g, " ").trim();
+          if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end - start < 0.08 || end > duration + 0.25) {
+            return json({ ok: false, error: "Caption " + (index + 1) + " has invalid timing. Keep it within the " + duration.toFixed(2) + " second audio duration." }, 400);
+          }
+          if (start < previousStart) return json({ ok: false, error: "Caption start times must stay in chronological order." }, 400);
+          if (!text || text.length > 180) return json({ ok: false, error: "Caption " + (index + 1) + " must contain 1–180 characters." }, 400);
+          previousStart = start;
+          cues.push({ index: index + 1, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)), text });
+        }
+        subtitleData.cues = cues;
+        subtitleData.edited_at = new Date().toISOString();
+        subtitleData.edit_source = "user";
+        await env.DB.prepare("UPDATE generations SET output_json = ?, updated_at = unixepoch() WHERE id = ? AND project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed'")
+          .bind(JSON.stringify(subtitleData), saved.id, projectId, user.id).run();
+        return json({ ok: true, subtitles: subtitleData, generation_id: saved.id });
+      }
       if (method === "GET") {
         const saved = await env.DB.prepare("SELECT id, output_json, created_at FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed' AND json_array_length(json_extract(output_json, '$.cues')) > 0 ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
         return json({ ok: true, subtitles: saved ? JSON.parse(saved.output_json) : null, generation_id: saved?.id || null });
