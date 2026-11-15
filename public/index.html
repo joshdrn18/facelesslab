@@ -832,7 +832,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .toolkit-no-ai,.toolkit-count{white-space:nowrap;border:1px solid rgba(112,229,220,.2);border-radius:999px;padding:6px 10px;background:rgba(112,229,220,.07);color:#91e9dc;font-size:9px;font-weight:850;letter-spacing:.6px}
 .toolkit-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:21px 23px;border:1px solid rgba(161,138,255,.2);border-radius:15px;background:radial-gradient(ellipse at 85% 0%,rgba(112,229,220,.12),transparent 40%),linear-gradient(112deg,rgba(42,35,72,.9),rgba(16,30,45,.96));margin-bottom:16px}
 .toolkit-kicker,.toolkit-step{font-size:9px;font-weight:850;letter-spacing:1.35px;color:#9fe6df}.toolkit-banner h3{font-size:19px;margin:5px 0}.toolkit-banner p{max-width:620px;color:#b1bfd1;font-size:11px;margin:0}.toolkit-banner-stats{min-width:108px;text-align:center;padding:6px 13px;border-left:1px solid rgba(255,255,255,.12)}.toolkit-banner-stats b{display:block;font-size:35px;line-height:1;color:#c7bbff}.toolkit-banner-stats span{display:block;font-size:9px;color:#a9b7cb;margin-top:6px}
-.toolkit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.toolkit-card{min-width:0;padding:17px;border:1px solid rgba(143,164,199,.15);border-radius:14px;background:linear-gradient(145deg,rgba(19,30,47,.9),rgba(12,20,32,.92))}.toolkit-blueprints,.toolkit-series-card,.toolkit-checklist-card{grid-column:1/-1}
+.toolkit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.toolkit-card{min-width:0;padding:17px;border:1px solid rgba(143,164,199,.15);border-radius:14px;background:linear-gradient(145deg,rgba(19,30,47,.9),rgba(12,20,32,.92))}.toolkit-blueprints,.toolkit-series-card,.toolkit-storyboard-card,.toolkit-checklist-card{grid-column:1/-1}
 .toolkit-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.toolkit-card-head h3{font-size:16px;margin:5px 0 4px;letter-spacing:-.25px}.toolkit-card-head p{max-width:630px;color:var(--muted);font-size:10px;line-height:1.55;margin:0}.toolkit-count{color:#c3b8ff;background:rgba(161,138,255,.08);border-color:rgba(161,138,255,.18)}
 .blueprint-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.blueprint-option{min-width:0;min-height:102px;text-align:left;padding:12px;border:1px solid rgba(143,164,199,.16);border-radius:11px;background:rgba(6,13,23,.45);color:var(--text);transition:border-color .16s,background .16s,transform .16s}.blueprint-option:hover{border-color:rgba(161,138,255,.45);transform:translateY(-1px)}.blueprint-option.is-selected{border-color:rgba(161,138,255,.62);background:linear-gradient(145deg,rgba(88,71,146,.25),rgba(23,49,62,.4));box-shadow:inset 0 0 0 1px rgba(161,138,255,.12)}.blueprint-icon{display:grid;place-items:center;width:27px;height:27px;border-radius:8px;background:rgba(161,138,255,.13);color:#c7baff;font-size:15px;margin-bottom:9px}.blueprint-option b,.blueprint-option small{display:block}.blueprint-option b{font-size:11px}.blueprint-option small{font-size:9px;line-height:1.45;color:#9caec5;margin-top:4px}
 .blueprint-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:13px;padding-top:12px;border-top:1px solid rgba(143,164,199,.12)}.blueprint-footer p{font-size:10px;color:#aebbd0;margin:0}.blueprint-footer .primary{padding:10px 13px;font-size:10px}
@@ -868,6 +868,20 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .series-sprint-foot{margin:11px 0 0;font-size:9px;line-height:1.5;color:#8494ab}
 @media(max-width:1100px){.series-sprint-form{grid-template-columns:repeat(3,minmax(0,1fr))}.series-sprint-form button{width:100%}}
 @media(max-width:700px){.series-sprint-form,.series-sprint-preview{grid-template-columns:1fr}.series-sprint-form button{width:100%}}
+
+/* Storyboard Builder */
+.storyboard-form{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(150px,.9fr) 135px 125px minmax(0,1fr) auto;gap:9px;align-items:end}
+.storyboard-form .field{margin:0 0 6px}.storyboard-form input,.storyboard-form select{min-height:40px;padding:9px 10px;font-size:10px}.storyboard-form button{min-height:40px;padding:9px 12px;font-size:10px;white-space:nowrap}
+.storyboard-result{margin-top:13px;padding:13px;border:1px solid rgba(161,138,255,.2);border-radius:12px;background:rgba(6,13,23,.44)}
+.storyboard-result-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:11px}.storyboard-result-head h4{font-size:14px;margin:5px 0 3px}.storyboard-result-head p{font-size:9px;color:#93a3ba;margin:0}
+.storyboard-scene-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.storyboard-scene{min-width:0;padding:11px;border:1px solid rgba(143,164,199,.14);border-radius:9px;background:rgba(17,27,42,.55)}
+.storyboard-scene-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}.storyboard-scene-top span{font-size:8px;font-weight:850;letter-spacing:.7px;color:#9fe6df}.storyboard-scene-top b{font-size:8px;color:#c8bcff}
+.storyboard-scene h5{font-size:11px;margin:0 0 7px}.storyboard-scene p{font-size:9px;line-height:1.55;color:#aebbd0;margin:5px 0 0}.storyboard-scene p strong{color:#e1e9f6}
+.storyboard-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.storyboard-actions button{font-size:10px;padding:9px 11px}
+.storyboard-foot{font-size:9px;color:#8494ab;line-height:1.5;margin:10px 0 0}
+@media(max-width:1150px){.storyboard-form{grid-template-columns:repeat(3,minmax(0,1fr))}.storyboard-form button{width:100%}}
+@media(max-width:700px){.storyboard-form,.storyboard-scene-list{grid-template-columns:1fr}.storyboard-result-head{flex-direction:column}.storyboard-actions{flex-direction:column}.storyboard-actions button{width:100%}}
 
 /* Idea Vault and script pacing tools */
 .idea-vault-form{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(150px,.8fr) minmax(150px,.8fr) auto;gap:10px;align-items:end}
@@ -1052,8 +1066,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   <section id="billingPanel" class="panel billing-panel"><div class="sectionhead"><div><h3>Points & billing</h3><p class="muted">Manage your FacelessLab usage and account.</p></div><span class="status">Account</span></div><div class="billing-grid"><article class="stat"><span>Available points</span><strong id="billingPoints">0</strong></article><article class="stat"><span>Projects created</span><strong id="billingProjects">0</strong></article><article class="stat"><span>Completed projects</span><strong id="billingVideos">0</strong></article></div><div class="content-card"><span class="content-label">CURRENT ACCESS</span><h3 id="accountPlan">Free workspace</h3><p id="billingDescription">Your workspace is active. Point top-ups and payment checkout are not enabled yet; no payment will be taken from this page.</p><div class="actions"><button class="secondary" type="button" onclick="refreshProjects()">↻ Refresh usage</button><button class="primary" type="button" onclick="navigateTo('create')">Create a video →</button></div></div><p class="production-note">Payment methods and point top-ups will appear here after a verified checkout and point ledger are connected.</p></section>
 
   <section id="toolkitPanel" class="panel toolkit-shell" aria-labelledby="toolkitTitle">
-   <div class="toolkit-heading"><div><span class="content-label">FACELESSLAB / CREATOR TOOLS</span><h2 id="toolkitTitle">Build a better short, before you render.</h2><p>Plan a series, prepare production prompts, organize ideas and check every short before rendering.</p></div><span class="toolkit-no-ai">✦ NO EXTRA AI CREDITS</span></div>
-   <div class="toolkit-banner"><div><span class="toolkit-kicker">YOUR CREATION WORKFLOW</span><h3>From one topic to a ready-to-produce series</h3><p>Generate an episode plan, save the briefs, send each one into Create Video, then run the quality gate before exporting.</p></div><div class="toolkit-banner-stats"><b>06</b><span>creator tools</span></div></div>
+   <div class="toolkit-heading"><div><span class="content-label">FACELESSLAB / CREATOR TOOLS</span><h2 id="toolkitTitle">Build a better short, before you render.</h2><p>Turn one idea into a scene-by-scene production brief, then organize, create and review every short.</p></div><span class="toolkit-no-ai">✦ NO EXTRA AI CREDITS</span></div>
+   <div class="toolkit-banner"><div><span class="toolkit-kicker">YOUR CREATION WORKFLOW</span><h3>From topic to storyboard to finished short</h3><p>Plan a series, generate scene timing and visual direction, send the brief into Create Video, then run the quality gate before exporting.</p></div><div class="toolkit-banner-stats"><b>07</b><span>creator tools</span></div></div>
    <div class="toolkit-grid">
     <article class="toolkit-card toolkit-blueprints"><div class="toolkit-card-head"><div><span class="toolkit-step">01 / VIDEO BLUEPRINTS</span><h3>Start with a proven format</h3><p>Select a structure to prefill the existing Create video form. Edit everything before saving.</p></div><span class="toolkit-count">6 formats</span></div>
      <div class="blueprint-grid" id="blueprintGrid">
@@ -1086,8 +1100,27 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
      <div id="seriesSprintPreview" class="series-sprint-preview hidden" aria-live="polite"></div>
      <p class="series-sprint-foot">Each episode is saved as a separate Idea Vault item. Review its prompt, status and target date before creating the video.</p>
     </article>
+    <article class="toolkit-card toolkit-storyboard-card" id="storyboardPanel">
+     <div class="toolkit-card-head"><div><span class="toolkit-step">04 / STORYBOARD BUILDER</span><h3>Map every scene before you render</h3><p>Turn one topic into a timed vertical storyboard with a narration beat and visual direction for each scene. Review it, save it, or send the full production brief to Create Video.</p></div><span class="toolkit-count">Scene planning · No AI</span></div>
+     <form id="storyboardForm" class="storyboard-form">
+      <div><label class="field" for="storyboardTopic">Video topic</label><input id="storyboardTopic" type="text" maxlength="180" placeholder="e.g. Why deep-sea animals glow" required></div>
+      <div><label class="field" for="storyboardAudience">Target audience (optional)</label><input id="storyboardAudience" type="text" maxlength="100" placeholder="e.g. science-curious viewers"></div>
+      <div><label class="field" for="storyboardFormat">Story format</label><select id="storyboardFormat"><option value="mini-doc">Mini documentary</option><option value="top-list">Top list</option><option value="myth-buster">Myth buster</option><option value="anime-story">Animated story</option><option value="quick-guide">Quick guide</option><option value="motivation">Motivation</option></select></div>
+      <div><label class="field" for="storyboardDuration">Target duration</label><select id="storyboardDuration"><option value="30">30 seconds</option><option value="45" selected>45 seconds</option><option value="60">60 seconds</option></select></div>
+      <div><label class="field" for="storyboardScenesCount">Number of scenes</label><select id="storyboardScenesCount"><option value="4">4 scenes</option><option value="5" selected>5 scenes</option><option value="6">6 scenes</option></select></div>
+      <div><label class="field" for="storyboardCta">Ending / CTA (optional)</label><input id="storyboardCta" type="text" maxlength="160" placeholder="e.g. Follow for more science stories"></div>
+      <button class="primary" type="submit" id="buildStoryboard">✦ Build storyboard</button>
+     </form>
+     <div class="notice" id="storyboardNotice" role="status" aria-live="polite"></div>
+     <div id="storyboardResult" class="storyboard-result hidden" aria-live="polite">
+      <div class="storyboard-result-head"><div><span class="toolkit-step">YOUR PRODUCTION BOARD</span><h4 id="storyboardResultTitle">Storyboard</h4><p id="storyboardResultMeta"></p></div><span class="toolkit-count" id="storyboardResultCount">5 scenes</span></div>
+      <div id="storyboardSceneList" class="storyboard-scene-list"></div>
+      <div class="storyboard-actions"><button type="button" class="secondary" id="copyStoryboard">Copy full storyboard</button><button type="button" class="secondary" id="saveStoryboardIdea">Save to Idea Vault</button><button type="button" class="primary" id="useStoryboardNow">Use in Create Video →</button></div>
+     </div>
+     <p class="storyboard-foot">Scene timings are pacing estimates. The storyboard creates a production brief, not a verified factual script; check factual claims and the rendered result before publishing.</p>
+    </article>
     <article class="toolkit-card toolkit-planner-card" id="ideaVaultPanel">
-     <div class="toolkit-card-head"><div><span class="toolkit-step">04 / IDEA VAULT & CONTENT PLANNER</span><h3>Keep your next videos organized</h3><p>Save ideas, assign a format and target date, then move an idea straight into the existing video workflow. Stored in this browser only.</p></div><span class="toolkit-count">Local library</span></div>
+     <div class="toolkit-card-head"><div><span class="toolkit-step">05 / IDEA VAULT & CONTENT PLANNER</span><h3>Keep your next videos organized</h3><p>Save ideas, assign a format and target date, then move an idea straight into the existing video workflow. Stored in this browser only.</p></div><span class="toolkit-count">Local library</span></div>
      <form id="ideaVaultForm" class="idea-vault-form">
       <div><label class="field" for="ideaVaultTitle">Video idea</label><input id="ideaVaultTitle" type="text" maxlength="180" placeholder="e.g. Why do some animals glow in the dark?" required></div>
       <div><label class="field" for="ideaVaultFormat">Format</label><select id="ideaVaultFormat"><option value="mini-doc">Mini documentary</option><option value="top-list">Top list</option><option value="myth-buster">Myth buster</option><option value="anime-story">Animated story</option><option value="quick-guide">Quick guide</option><option value="motivation">Motivation</option></select></div>
@@ -1100,7 +1133,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
      <div class="idea-vault-foot"><small>Ideas are saved in this browser profile. They are not synced to your account or other devices.</small><button type="button" class="secondary" id="exportIdeaVault">Export ideas</button></div>
     </article>
     <article class="toolkit-card toolkit-scriptcheck-card" id="scriptTimingPanel">
-     <div class="toolkit-card-head"><div><span class="toolkit-step">05 / SCRIPT TIMING CHECKER</span><h3>Check pacing before spending AI credits</h3><p>Estimate narration length and flag dense sentences before generating voice-over. This is a local text check, not a factuality review.</p></div><span class="toolkit-count">No AI calls</span></div>
+     <div class="toolkit-card-head"><div><span class="toolkit-step">06 / SCRIPT TIMING CHECKER</span><h3>Check pacing before spending AI credits</h3><p>Estimate narration length and flag dense sentences before generating voice-over. This is a local text check, not a factuality review.</p></div><span class="toolkit-count">No AI calls</span></div>
      <label class="field" for="scriptTimingText">Paste your narration script</label>
      <textarea id="scriptTimingText" maxlength="24000" rows="6" placeholder="Paste the narration here. You can copy it from your saved script workspace."></textarea>
      <div class="two toolkit-form-row">
@@ -1117,7 +1150,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
      </div>
     </article>
 
-<article class="toolkit-card toolkit-checklist-card"><div class="toolkit-card-head"><div><span class="toolkit-step">06 / EXPORT QUALITY GATE</span><h3>Run the final pre-publish check</h3><p>Tick each item after reviewing the actual video. Progress is saved in this browser.</p></div><span class="toolkit-count">8 checks</span></div>
+<article class="toolkit-card toolkit-checklist-card"><div class="toolkit-card-head"><div><span class="toolkit-step">07 / EXPORT QUALITY GATE</span><h3>Run the final pre-publish check</h3><p>Tick each item after reviewing the actual video. Progress is saved in this browser.</p></div><span class="toolkit-count">8 checks</span></div>
      <div class="preflight-summary"><div><b id="preflightProgress">0 / 8 completed</b><span id="preflightState">Ready for review</span></div><div class="preflight-track"><span id="preflightBar"></span></div></div>
      <div class="preflight-grid">
       <label><input type="checkbox" data-preflight="script"><span><b>Script reviewed</b><small>Hook, flow and factual claims make sense.</small></span></label>
@@ -2550,6 +2583,130 @@ $("exportIdeaVault").addEventListener("click",()=>{
  anchor.href=url;anchor.download="facelesslab-idea-vault.json";document.body.appendChild(anchor);anchor.click();anchor.remove();URL.revokeObjectURL(url);
 });
 renderIdeaVault();
+
+/* Storyboard Builder: scene-by-scene prompt assembly in the browser; no API or AI credits. */
+const storyboardTemplates={
+ "mini-doc":[
+  ["Cold open","Lead with one specific question or surprising, verifiable detail.","A cinematic close-up of the subject, a revealing detail held back, vertical 9:16 framing."],
+  ["Set the context","Explain where the story begins and why viewers should care.","A clear establishing shot that shows the place, time or subject without visual clutter."],
+  ["Explore the detail","Introduce the first meaningful piece of context or evidence.","A focused sequence of relevant details, close-ups or simple labeled visual explanations."],
+  ["The reveal","Show the key connection or discovery, distinguishing evidence from speculation.","A visual reveal that connects earlier details; use a simple comparison or clear visual metaphor."],
+  ["Why it matters","Explain the consequence or what the audience should understand now.","A wider perspective or human-scale comparison that makes the takeaway easy to grasp."],
+  ["Final takeaway","Close with one memorable conclusion and an optional viewer question.","Return to the opening visual with a resolved, confident ending."]
+ ],
+ "top-list":[
+  ["The hook","Promise a specific countdown and why the final entry is worth staying for.","A fast montage previewing the topic without revealing the final entry."],
+  ["Set the criteria","Tell viewers what qualifies for the list and how to follow it.","A clean ranked-list graphic with a simple number marker."],
+  ["Entry three","Present the first useful entry with one clear reason it belongs.","A distinct example shot with a concise number overlay."],
+  ["Entry two","Raise the stakes with a more surprising or useful entry.","A stronger visual example, with a clear transition from the prior entry."],
+  ["Number one","Deliver the strongest entry and explain its payoff.","The most visually memorable example, revealed after a brief anticipation beat."],
+  ["Wrap and invite","Summarize the list and ask a focused question.","A clean recap montage ending on the main subject."]
+ ],
+ "myth-buster":[
+  ["State the myth","Present one clear claim viewers may have heard.","A simple visual representation of the common belief, marked as a claim rather than fact."],
+  ["Why it sounds true","Explain the intuition or partial detail that makes the claim believable.","A relatable example or analogy showing why someone might believe it."],
+  ["Check the evidence","Introduce the type of reliable evidence that can test the claim.","A close-up of relevant evidence, source material or a neutral explanatory graphic."],
+  ["What the evidence says","Separate what is supported from what remains uncertain.","A balanced side-by-side comparison of claim and supported explanation."],
+  ["Real-world example","Show one concrete example that clarifies the distinction.","A grounded example in context, avoiding fabricated statistics or fake source labels."],
+  ["Corrected takeaway","State the most accurate concise version viewers should remember.","A clear final statement on screen with a calm visual callback."]
+ ],
+ "anime-story":[
+  ["Meet the character","Introduce the protagonist and the world in one vivid moment.","A cinematic anime establishing shot with a consistent character design and readable silhouette."],
+  ["The ordinary world","Show what the character wants before the problem appears.","A medium shot that establishes personality, setting and one recognizable visual detail."],
+  ["The challenge","Introduce a specific obstacle that changes the character's plan.","A dynamic composition showing the obstacle clearly while preserving character consistency."],
+  ["The turning point","Show the choice or discovery that changes the direction of the story.","A focused emotional close-up or dramatic action frame with clear visual continuity."],
+  ["The climax","Deliver the main visual and emotional payoff.","A carefully composed action or reveal shot, avoiding confusing extra characters or objects."],
+  ["The resolution","End with a meaningful change, lesson or emotional echo.","A final calm frame that visually mirrors the opening and resolves the story."]
+ ],
+ "quick-guide":[
+  ["Show the outcome","Tell viewers what they will be able to do by the end.","A clear before-and-after or finished-result shot."],
+  ["Prepare the essentials","State the one prerequisite or item viewers need first.","A tidy overhead or close-up view of the required tools or starting point."],
+  ["Step one","Give the first concrete action in the correct order.","A close-up demonstration of the first action with one concise on-screen label."],
+  ["Step two","Show the next action and explain the expected result.","A direct continuation shot with the result visible."],
+  ["Common mistake","Point out one mistake and how to avoid it.","A short incorrect-versus-correct comparison that is easy to read."],
+  ["Recap and act","Summarize the steps and give one next action.","A clean three-point recap ending on the finished result."]
+ ],
+ "motivation":[
+  ["The struggle","Open with a relatable obstacle without exaggerating it.","A grounded cinematic moment showing the challenge through one clear subject."],
+  ["The pause","Create a brief moment where the viewer recognizes the pattern.","A quieter close-up with restrained movement and deliberate pacing."],
+  ["The reframe","Offer one realistic new way to interpret the situation.","A visual shift in perspective that makes the new idea tangible."],
+  ["One small action","Give a specific step the viewer can take today.","A practical action shown clearly, not an abstract inspirational montage."],
+  ["Build momentum","Show how a small action can create a realistic next step.","A measured progression shot with continuity and believable scale."],
+  ["The takeaway","End with a concise memorable line and grounded encouragement.","A composed final frame with space for readable subtitles."]
+ ]
+};
+let currentStoryboard=null;
+function getStoryboardStyle(format){
+ const map={"mini-doc":"storytelling","top-list":"toplist","myth-buster":"educational","anime-story":"anime","quick-guide":"educational","motivation":"motivation"};
+ return map[format]||"storytelling";
+}
+function formatStoryboardTime(seconds){
+ const mm=Math.floor(seconds/60),ss=seconds%60;
+ return String(mm).padStart(2,"0")+":"+String(ss).padStart(2,"0");
+}
+function buildStoryboardData(topic,audience,format,duration,count,cta){
+ const beats=storyboardTemplates[format]||storyboardTemplates["mini-doc"];
+ const selected=Array.from({length:count},(_,index)=>beats[Math.round(index*(beats.length-1)/(count-1))]);
+ const base=Math.floor(duration/count),extra=duration%count;
+ let cursor=0;
+ const styleLabels={"mini-doc":"cinematic documentary","top-list":"fast countdown","myth-buster":"educational myth-versus-fact","anime-story":"cinematic anime","quick-guide":"practical how-to","motivation":"motivational story"};
+ const scenes=selected.map((beat,index)=>{
+  const seconds=base+(index<extra?1:0),start=cursor,end=cursor+seconds;cursor=end;
+  return {number:index+1,start,end,seconds,title:beat[0],narration:beat[1],visual:beat[2]};
+ });
+ const audienceLine=audience?"Target audience: "+audience.trim()+". ":"";
+ const ctaLine=cta?"End with this call to action: "+cta.trim()+".":"End with one natural, relevant takeaway; do not force engagement bait.";
+ const sceneText=scenes.map(scene=>"SCENE "+scene.number+" ("+formatStoryboardTime(scene.start)+"–"+formatStoryboardTime(scene.end)+", "+scene.seconds+"s) — "+scene.title+"\nNarration beat: "+scene.narration+"\nVisual direction: "+scene.visual).join("\n\n");
+ const prompt="Create a "+duration+"-second vertical 9:16 "+(styleLabels[format]||"cinematic")+" short about: "+topic.trim()+".\n"+audienceLine+"Use the following storyboard as the scene order and pacing guide. Match narration to the visual direction, keep transitions coherent, maintain consistent subjects and style, and leave safe space for readable subtitles.\n\n"+sceneText+"\n\n"+ctaLine+"\nAccuracy: use reliable, verifiable information for factual topics. Do not invent statistics, quotes, sources or events; make uncertainty clear. Review all text and visual continuity before export.";
+ return {topic:topic.trim(),audience:audience.trim(),format,duration,count,cta:cta.trim(),style:getStoryboardStyle(format),scenes,prompt};
+}
+function renderStoryboard(board){
+ $("storyboardResultTitle").textContent=board.topic+" · Storyboard";
+ $("storyboardResultMeta").textContent=board.duration+" seconds · "+board.count+" scenes · "+(board.audience||"General audience");
+ $("storyboardResultCount").textContent=board.count+" scenes";
+ $("storyboardSceneList").innerHTML=board.scenes.map(scene=>'<article class="storyboard-scene"><div class="storyboard-scene-top"><span>SCENE '+scene.number+'</span><b>'+formatStoryboardTime(scene.start)+' – '+formatStoryboardTime(scene.end)+'</b></div><h5>'+escapeHtml(scene.title)+'</h5><p><strong>Narration beat</strong><br>'+escapeHtml(scene.narration)+'</p><p><strong>Visual direction</strong><br>'+escapeHtml(scene.visual)+'</p></article>').join("");
+ $("storyboardResult").classList.remove("hidden");
+}
+$("storyboardForm").addEventListener("submit",event=>{
+ event.preventDefault();
+ const topic=$("storyboardTopic").value.trim(),notice=$("storyboardNotice");
+ if(!topic){notice.style.color="var(--red)";notice.textContent="Enter a video topic first.";$("storyboardTopic").focus();return;}
+ currentStoryboard=buildStoryboardData(topic,$("storyboardAudience").value,$("storyboardFormat").value,Number($("storyboardDuration").value),Number($("storyboardScenesCount").value),$("storyboardCta").value);
+ renderStoryboard(currentStoryboard);
+ $("saveStoryboardIdea").textContent="Save to Idea Vault";
+ notice.style.color="var(--cyan)";notice.textContent="Storyboard ready. Review the scene order and timing before creating your video.";
+});
+function storyboardAsText(board){return board.topic+" — "+board.duration+"s storyboard\n\n"+board.prompt;}
+async function copyStoryboardText(value,button){
+ const original=button.textContent;
+ try{
+  if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(value);
+  else throw new Error("Clipboard unavailable");
+  button.textContent="Copied ✓";
+ }catch(error){
+  const area=document.createElement("textarea");area.value=value;area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();
+  let copied=false;try{copied=document.execCommand("copy");}catch(copyError){}area.remove();
+  button.textContent=copied?"Copied ✓":"Copy unavailable";
+ }
+ window.setTimeout(()=>{button.textContent=original;},1600);
+}
+$("copyStoryboard").addEventListener("click",()=>{if(currentStoryboard)copyStoryboardText(storyboardAsText(currentStoryboard),$("copyStoryboard"));});
+$("saveStoryboardIdea").addEventListener("click",()=>{
+ if(!currentStoryboard)return;
+ const notice=$("storyboardNotice");
+ if(currentStoryboard.saved){notice.style.color="var(--cyan)";notice.textContent="This storyboard is already saved in your Idea Vault.";return;}
+ const previous=ideaVaultItems,id=(globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+"-storyboard";
+ ideaVaultItems=[...ideaVaultItems,{id,title:(currentStoryboard.topic+" — storyboard").slice(0,180),format:currentStoryboard.format,targetDate:"",status:"idea",createdAt:Date.now(),prompt:currentStoryboard.prompt,productionType:"storyboard"}];
+ if(!saveIdeaVault()){ideaVaultItems=previous;notice.style.color="var(--red)";notice.textContent="Could not save. Browser storage may be full; export older ideas and try again.";return;}
+ currentStoryboard.saved=true;$("saveStoryboardIdea").textContent="Saved to Idea Vault ✓";
+ renderIdeaVault();notice.style.color="var(--cyan)";notice.textContent="Storyboard saved. Find it in Idea Vault and use it whenever you're ready.";
+});
+$("useStoryboardNow").addEventListener("click",()=>{
+ if(!currentStoryboard)return;
+ $("topic").value=currentStoryboard.prompt;$("duration").value=String(currentStoryboard.duration);$("style").value=currentStoryboard.style;
+ $("createNotice").style.color="var(--cyan)";$("createNotice").textContent="Storyboard loaded into Create Video. Review and edit the production brief before saving the project.";
+ navigateTo("create");$("topic").focus();
+});
 
 /* Series Sprint Planner: batch-build episode briefs without API calls or model credits. */
 const seriesSprintTemplates=[
