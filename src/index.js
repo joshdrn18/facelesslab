@@ -135,6 +135,9 @@ async function fetchCloudflareAiAnalytics(env, startDate, endDate) {
 
 async function runTrackedAI(env, context, model, input) {
   const settings=await readAIUsageSettings(env);
+  // Resolve the role from D1 on the server; never trust a client-supplied role.
+  const account=await env.DB.prepare("SELECT role FROM users WHERE id=? AND status='active'").bind(context.user_id).first();
+  const isAdmin=account?.role==="admin";
   const now=Math.floor(Date.now()/1000),utcDayStart=Math.floor(now/86400)*86400;
   const utcDate=new Date(now*1000).toISOString().slice(0,10);
   const eventId=crypto.randomUUID(),stage=String(context.stage||"unknown").slice(0,40);
@@ -156,23 +159,30 @@ async function runTrackedAI(env, context, model, input) {
     .bind(utcDate,baselineRequests,baselineNeurons).run();
   if(analytics.success){
     await env.DB.prepare(
-      "UPDATE ai_usage_daily_counters SET pending_requests=MAX(0,pending_requests-MAX(0,?-analytics_requests)),"+
-      "analytics_requests=MAX(analytics_requests,?),analytics_neurons=MAX(analytics_neurons,?),updated_at=unixepoch() WHERE utc_date=?"
-    ).bind(baselineRequests,baselineRequests,baselineNeurons,utcDate).run();
+      "UPDATE ai_usage_daily_counters SET analytics_requests=MAX(analytics_requests,?),analytics_neurons=MAX(analytics_neurons,?),updated_at=unixepoch() WHERE utc_date=?"
+    ).bind(baselineRequests,baselineNeurons,utcDate).run();
   }
-  const reservation=await env.DB.prepare(
-    "UPDATE ai_usage_daily_counters SET pending_requests=pending_requests+1,updated_at=unixepoch() "+
-    "WHERE utc_date=? AND (?=0 OR analytics_requests+pending_requests<?)"
-  ).bind(utcDate,settings.daily_request_limit,settings.daily_request_limit).run();
-  if(Number(reservation.meta?.changes||0)!==1){
-    const error=new Error("FacelessLab daily Workers AI safety cap reached ("+settings.daily_request_limit+" model requests). Cloudflare has reported "+baselineRequests+" requests today. New AI calls are paused until 00:00 UTC or an administrator changes the cap.");
-    error.code="AI_DAILY_LIMIT_REACHED";throw error;
+  // The app cap is shared by non-admin members only. Admin calls remain logged
+  // and count against Cloudflare usage, but do not consume the member request cap.
+  let reservedMemberRequest=false;
+  if(!isAdmin){
+    const reservation=await env.DB.prepare(
+      "UPDATE ai_usage_daily_counters SET member_requests=member_requests+1,updated_at=unixepoch() "+
+      "WHERE utc_date=? AND (?=0 OR member_requests<?)"
+    ).bind(utcDate,settings.daily_request_limit,settings.daily_request_limit).run();
+    if(Number(reservation.meta?.changes||0)!==1){
+      const error=new Error("FacelessLab member Workers AI safety cap reached ("+settings.daily_request_limit+" non-admin model requests). Admin accounts are exempt from this app cap. Cloudflare's account-level Neuron allowance and model limits still apply.");
+      error.code="AI_DAILY_LIMIT_REACHED";throw error;
+    }
+    reservedMemberRequest=true;
   }
   try{
     await env.DB.prepare("INSERT INTO ai_inference_events (id,user_id,project_id,generation_id,stage,model,status,input_characters,input_bytes) VALUES (?,?,?,?,?,?,'processing',?,?)")
       .bind(eventId,context.user_id,context.project_id||null,context.generation_id||null,stage,model,inputCharacters,inputBytes).run();
   }catch(insertError){
-    await env.DB.prepare("UPDATE ai_usage_daily_counters SET pending_requests=MAX(0,pending_requests-1),updated_at=unixepoch() WHERE utc_date=?").bind(utcDate).run().catch(()=>{});
+    if(reservedMemberRequest){
+      await env.DB.prepare("UPDATE ai_usage_daily_counters SET member_requests=MAX(0,member_requests-1),updated_at=unixepoch() WHERE utc_date=?").bind(utcDate).run().catch(()=>{});
+    }
     throw insertError;
   }
   const startedAt=Date.now();
@@ -192,7 +202,6 @@ async function runTrackedAI(env, context, model, input) {
     throw error;
   }
 }
-
 function publicUser(user) {
   return {
     id: user.id,
@@ -869,7 +878,7 @@ async function handle(request, env) {
         const body = await request.json().catch(() => null);
         const limit = Number(body?.daily_request_limit);
         if (!Number.isSafeInteger(limit) || (limit !== 0 && (limit < 5 || limit > 500))) {
-          return json({ok:false,error:"Daily Workers AI request cap must be 0 (disabled) or a whole number from 5 to 500."},400);
+          return json({ok:false,error:"Daily non-admin member Workers AI request cap must be 0 (disabled) or a whole number from 5 to 500."},400);
         }
         await env.DB.prepare("INSERT INTO ai_usage_settings (id,daily_request_limit,warning_percent,updated_at) VALUES ('global',?,?,unixepoch()) ON CONFLICT(id) DO UPDATE SET daily_request_limit=excluded.daily_request_limit,warning_percent=excluded.warning_percent,updated_at=unixepoch()")
           .bind(limit,80).run();
@@ -1003,7 +1012,7 @@ async function handle(request, env) {
             "LEFT JOIN projects p ON p.id=e.project_id WHERE e.created_at>=? " +
             "ORDER BY e.created_at DESC LIMIT 25"
           ).bind(utcDayStart).all(),
-          env.DB.prepare("SELECT analytics_requests,pending_requests,analytics_neurons FROM ai_usage_daily_counters WHERE utc_date=?")
+          env.DB.prepare("SELECT analytics_requests,pending_requests,analytics_neurons,member_requests FROM ai_usage_daily_counters WHERE utc_date=?")
             .bind(new Date().toISOString().slice(0,10)).first()
         ]);
         const n = value => Number(value || 0);
@@ -1024,7 +1033,7 @@ async function handle(request, env) {
           today: {
             utc_day_start: utcDayStart,
             requests: n(todayTotals?.requests),
-            guard_requests: Math.max(n(todayTotals?.requests),n(dailyCounter?.analytics_requests)+n(dailyCounter?.pending_requests)),
+            guard_requests: n(dailyCounter?.member_requests),
             guard_neurons: n(dailyCounter?.analytics_neurons),
             completed: n(todayTotals?.completed),
             failed: n(todayTotals?.failed),
