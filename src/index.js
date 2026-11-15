@@ -2112,33 +2112,6 @@ async function runScheduledMaintenance(env, scheduledTime) {
     "UPDATE generations SET status='failed', error_message=COALESCE(error_message, 'Job timed out before completion. Please retry this step.'), updated_at=? WHERE status='processing' AND updated_at < ?"
   ).bind(now, staleBefore).run();
 
-  // Create projects for due content-production schedules and queue their first script.
-  const dueProductions=await env.DB.prepare("SELECT * FROM production_schedules WHERE status='scheduled' AND production_at<=? ORDER BY production_at ASC LIMIT 5").bind(now).all();
-  let startedProductions=0;
-  for(const schedule of dueProductions.results||[]){
-    const claim=await env.DB.prepare("UPDATE production_schedules SET status='starting',updated_at=? WHERE id=? AND status='scheduled' AND production_at<=?").bind(now,schedule.id,now).run();
-    if(Number(claim.meta?.changes||0)!==1)continue;
-    let projectId=null,generationId=null;
-    try{
-      projectId=crypto.randomUUID();generationId=crypto.randomUUID();
-      const title=String(schedule.topic||"Untitled video").slice(0,72);
-      await env.DB.prepare("INSERT INTO projects (id,user_id,title,topic,status,aspect_ratio,language,duration_seconds,style) VALUES (?,?,?,?,'queued','9:16','en',?,?)")
-        .bind(projectId,schedule.user_id,title,schedule.topic,schedule.duration_seconds,schedule.style).run();
-      const input={topic:schedule.topic,language:"en",duration_seconds:schedule.duration_seconds,style:schedule.style,scheduled_production_id:schedule.id,queued_at:new Date().toISOString()};
-      await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'script','queued',?)")
-        .bind(generationId,projectId,schedule.user_id,JSON.stringify(input)).run();
-      await env.DB.prepare("UPDATE production_schedules SET project_id=?,status='script_queued',error_message=NULL,updated_at=? WHERE id=? AND status='starting'")
-        .bind(projectId,now,schedule.id).run();
-      await env.JOBS.send({type:"generate_script",generation_id:generationId,project_id:projectId,user_id:schedule.user_id});
-      startedProductions++;
-    }catch(error){
-      const detail=String(error?.message||error).slice(0,500);
-      await env.DB.prepare("UPDATE production_schedules SET status='failed',error_message=?,updated_at=? WHERE id=? AND status IN ('starting','script_queued')").bind(detail,now,schedule.id).run();
-      if(projectId)await env.DB.prepare("UPDATE projects SET status='failed',updated_at=? WHERE id=?").bind(now,projectId).run();
-      if(generationId)await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=? WHERE id=?").bind(detail,now,generationId).run();
-    }
-  }
-
   // Dispatch scheduled publishing jobs once their timestamp is due.
   const dueJobs = await env.DB.prepare(
     "SELECT id FROM publish_jobs WHERE status='queued' AND scheduled_at IS NOT NULL AND scheduled_at<=? ORDER BY scheduled_at ASC LIMIT 10"
@@ -2169,7 +2142,6 @@ async function runScheduledMaintenance(env, scheduledTime) {
     stale_jobs_recovered: Number(staleJobs.meta?.changes || 0),
     expired_sessions_removed: Number(expiredSessions.meta?.changes || 0),
     scheduled_publish_jobs_dispatched: dispatchedSchedules,
-    scheduled_productions_started: startedProductions
   }));
 }
 
