@@ -505,6 +505,48 @@ async function handle(request, env) {
     if (path.startsWith("/api/admin/")) {
       if (user.role !== "admin") return json({ ok: false, error: "Administrator access required." }, 403);
 
+      if (path === "/api/admin/cloudflare-billing" && method === "GET") {
+        if (!env.CF_API_TOKEN) return json({ ok: false, error: "Cloudflare billing token is not configured." }, 503);
+        const accountId = "7fba808c5a694f2755dc45ab94cee505";
+        const headers = { authorization: "Bearer " + env.CF_API_TOKEN, accept: "application/json" };
+        const requestBilling = async (endpoint) => {
+          try {
+            const response = await fetch("https://api.cloudflare.com/client/v4" + endpoint, {
+              headers, signal: AbortSignal.timeout(12000)
+            });
+            const payload = await response.json().catch(() => ({}));
+            return { http_status: response.status, success: response.ok && payload.success === true, result: payload.result ?? null,
+              errors: (payload.errors || []).map(item => ({ code: item.code, message: String(item.message || "").slice(0, 180) })) };
+          } catch (error) {
+            return { http_status: 0, success: false, result: null, errors: [{ message: String(error.message || error).slice(0, 180) }] };
+          }
+        };
+        const [credits, billable] = await Promise.all([
+          requestBilling("/accounts/" + accountId + "/billing/credits"),
+          requestBilling("/accounts/" + accountId + "/billable-usage")
+        ]);
+        const rows = Array.isArray(billable.result) ? billable.result : [];
+        const services = {};
+        let totalCost = 0;
+        for (const row of rows) {
+          const service = String(row.ServiceName || row.ServiceFamilyName || "Other").slice(0, 80);
+          const cost = Number(row.BilledCost ?? row.EffectiveCost ?? 0);
+          if (Number.isFinite(cost)) totalCost += cost;
+          if (!services[service]) services[service] = { cost: 0, records: 0 };
+          services[service].cost += Number.isFinite(cost) ? cost : 0;
+          services[service].records += 1;
+        }
+        return json({
+          ok: credits.success || billable.success,
+          checked_at: new Date().toISOString(),
+          credits: { success: credits.success, http_status: credits.http_status, result: credits.result, errors: credits.errors },
+          billable_usage: { success: billable.success, http_status: billable.http_status, billing_period: rows[0]?.BillingPeriodStart || null,
+            currency: rows[0]?.BillingCurrency || null, total_billed_cost: Number(totalCost.toFixed(6)),
+            record_count: rows.length, services: Object.entries(services).map(([name, value]) => ({ name, cost: Number(value.cost.toFixed(6)), records: value.records })),
+            errors: billable.errors }
+        });
+      }
+
       if (path === "/api/admin/overview" && method === "GET") {
         const [members, activeMembers, suspendedMembers, projects, generations, publishJobs, points] = await Promise.all([
           env.DB.prepare("SELECT COUNT(*) AS count FROM users").first(),
