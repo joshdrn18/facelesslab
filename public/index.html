@@ -947,7 +947,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     <article class="content-card"><span class="content-label">TIKTOK</span><h3 style="margin:8px 0">TikTok</h3><div id="tiktokConnection" class="library-storage">Checking connection…</div><button class="primary" id="connectTiktok" type="button" style="margin-top:12px;width:100%">Connect TikTok</button></article>
    </div>
    <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. Save a draft, review the details, then press Publish now to upload it to your connected channel.</p>
-    <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
+    <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div id="publishTagsField" style="margin-top:12px"><label class="field" for="publishTags">YouTube tags · search keywords</label><textarea id="publishTags" maxlength="1200" rows="2" placeholder="anime story, animated short, mystery explained"></textarea><div class="muted" style="font-size:11px;line-height:1.55;margin-top:5px">Separate tags with commas or new lines. Up to 30 tags and 500 characters total. These are separate from hashtags.</div><div id="publishTagsCount" class="muted" aria-live="polite" style="font-size:11px;text-align:right;margin-top:4px">0/30 tags · 0/500 characters</div></div><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
     </form>
    </div>
    <div class="sectionhead"><div><h3>Publishing drafts</h3><span class="muted" style="font-size:12px">Review your prepared posts</span></div></div><div id="publishingJobs" class="project-list"><div class="empty">Loading publishing drafts…</div></div>
@@ -2005,8 +2005,30 @@ function syncPublishPrivacyOptions(){
  privacy.innerHTML=platform==="tiktok"?'<option value="private">Only me</option><option value="public">Everyone (requires TikTok app approval)</option>':'<option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>';
  privacy.value=[...privacy.options].some(o=>o.value===current)?current:"private";
 }
-$("publishPlatform")?.addEventListener("change",syncPublishPrivacyOptions);
+function parseYouTubeTagInput(){
+ const seen=new Set(),tags=[];let characters=0;
+ for(const entry of String($("publishTags")?.value||"").split(/[,\n;]+/)){
+  const tag=entry.trim().replace(/^#+/,"").replace(/\s+/g," ");
+  if(!tag)continue;
+  const key=tag.toLocaleLowerCase();if(seen.has(key))continue;
+  seen.add(key);tags.push(tag);
+  characters+=new TextEncoder().encode(tag).byteLength+(tags.length>1?1:0);
+ }
+ return {tags,characters};
+}
+function syncPublishingTagInput(){
+ const field=$("publishTagsField"),counter=$("publishTagsCount"),data=parseYouTubeTagInput();
+ const isYouTube=$("publishPlatform")?.value==="youtube";
+ if(field)field.style.display=isYouTube?"block":"none";
+ if(counter){
+  counter.textContent=data.tags.length+"/30 tags · "+data.characters+"/500 characters";
+  counter.style.color=data.tags.length>30||data.characters>500?"var(--red)":"var(--muted)";
+ }
+}
+$("publishPlatform")?.addEventListener("change",()=>{syncPublishPrivacyOptions();syncPublishingTagInput();});
+$("publishTags")?.addEventListener("input",syncPublishingTagInput);
 syncPublishPrivacyOptions();
+syncPublishingTagInput();
 async function connectSocial(platform){
  const button=$("connect"+(platform==="youtube"?"Youtube":"Tiktok"));if(button){button.disabled=true;button.textContent="Preparing secure connection…";}
  try{const data=await api("/api/publishing/connect/"+platform,{method:"POST",body:"{}"});if(!data.authorization_url)throw new Error("Authorization URL was not returned.");location.href=data.authorization_url;}
@@ -2026,8 +2048,10 @@ $("connectYoutube")?.addEventListener("click",()=>connectSocial("youtube"));
 $("connectTiktok")?.addEventListener("click",()=>connectSocial("tiktok"));
 $("refreshPublishing")?.addEventListener("click",refreshPublishing);
 $("publishDraftForm")?.addEventListener("submit",async event=>{
- event.preventDefault();const button=$("savePublishDraft"),notice=$("publishDraftNotice");button.disabled=true;button.textContent="Saving…";notice.textContent="";
- try{await api("/api/publishing/jobs",{method:"POST",body:JSON.stringify({backup_id:$("publishBackup").value,platform:$("publishPlatform").value,title:$("publishTitle").value,description:$("publishDescription").value,hashtags:$("publishHashtags").value,privacy:$("publishPrivacy").value})});notice.style.color="#8fe0c4";notice.textContent="Publishing draft saved.";await refreshPublishing();}
+ event.preventDefault();const button=$("savePublishDraft"),notice=$("publishDraftNotice"),selectedPlatform=$("publishPlatform").value,tagData=parseYouTubeTagInput();
+ if(selectedPlatform==="youtube"&&(tagData.tags.length>30||tagData.characters>500)){notice.style.color="var(--red)";notice.textContent="YouTube tags must be limited to 30 tags and 500 characters total.";return;}
+ button.disabled=true;button.textContent="Saving…";notice.textContent="";
+ try{await api("/api/publishing/jobs",{method:"POST",body:JSON.stringify({backup_id:$("publishBackup").value,platform:selectedPlatform,title:$("publishTitle").value,description:$("publishDescription").value,hashtags:$("publishHashtags").value,tags:selectedPlatform==="youtube"?tagData.tags:[],privacy:$("publishPrivacy").value})});notice.style.color="#8fe0c4";notice.textContent="Publishing draft saved.";await refreshPublishing();}
  catch(error){notice.style.color="";notice.textContent=error.message||"Could not save publishing draft.";}
  finally{button.disabled=false;button.textContent="Save publishing draft";}
 });
