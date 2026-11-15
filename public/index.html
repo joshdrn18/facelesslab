@@ -958,6 +958,21 @@ textarea{line-height:1.65}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 
 
+
+/* Live publishing queue statistics */
+.publishing-draft-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin:16px 0 18px}
+.publishing-stat{position:relative;display:flex;flex-direction:column;gap:5px;min-width:0;padding:13px 14px;border:1px solid rgba(145,160,190,.14);border-radius:12px;background:linear-gradient(145deg,rgba(24,34,51,.82),rgba(13,20,32,.94))}
+.publishing-stat>span{font-size:9px;letter-spacing:.45px;font-weight:700;color:#9baac0}
+.publishing-stat>strong{font-size:25px;line-height:1.1;letter-spacing:-.8px;color:#f1f4fb;font-variant-numeric:tabular-nums}
+.publishing-stat>small{font-size:9px;color:#7788a1;line-height:1.35}
+.publishing-stat-total{border-color:rgba(169,149,255,.28);background:linear-gradient(145deg,rgba(72,57,112,.28),rgba(18,25,39,.96))}
+.publishing-stat-total>strong,.publishing-stat:nth-child(2)>strong{color:#c6b9ff}
+.publishing-stat:nth-child(3)>strong{color:#f3ca83}
+.publishing-stat:nth-child(4)>strong{color:#83dec0}
+.publishing-stat:nth-child(5)>strong{color:#f08f9d}
+@media(max-width:900px){.publishing-draft-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.publishing-draft-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.publishing-stat{padding:11px}.publishing-stat>strong{font-size:22px}}
+
 /* Publishing drafts — dedicated outbox layout */
 #publishingDraftsSection{margin-top:26px;padding:22px;border:1px solid rgba(145,160,190,.16);border-radius:17px;background:linear-gradient(145deg,rgba(17,25,39,.94),rgba(11,17,28,.96));box-shadow:0 12px 32px rgba(0,0,0,.12)}
 .publishing-drafts-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
@@ -1038,6 +1053,13 @@ textarea{line-height:1.65}
       <div><div class="publishing-drafts-eyebrow">CONTENT WORKSPACE <span> / </span> OUTBOX</div><h3 id="publishingDraftsTitle">Publishing drafts</h3><p>Review, manage and publish your prepared videos.</p></div>
      </div>
      <button class="secondary publishing-refresh" type="button" onclick="refreshPublishing()" aria-label="Refresh publishing drafts"><span aria-hidden="true">↻</span> Refresh queue</button>
+    </div>
+    <div class="publishing-draft-stats" id="publishingDraftStats" aria-live="polite" aria-label="Publishing queue statistics">
+     <article class="publishing-stat publishing-stat-total"><span>Total posts</span><strong id="publishStatTotal">—</strong><small>All queue items</small></article>
+     <article class="publishing-stat"><span>Drafts</span><strong id="publishStatDrafts">—</strong><small>Ready to publish</small></article>
+     <article class="publishing-stat"><span>In progress</span><strong id="publishStatProgress">—</strong><small>Uploading or processing</small></article>
+     <article class="publishing-stat"><span>Published</span><strong id="publishStatPublished">—</strong><small>Successfully posted</small></article>
+     <article class="publishing-stat"><span>Failed</span><strong id="publishStatFailed">—</strong><small>Needs attention</small></article>
     </div>
     <div class="publishing-drafts-divider"><span>YOUR QUEUE</span><span>Latest activity</span></div>
     <div id="publishingJobs" class="project-list"><div class="empty">Loading publishing drafts…</div></div>
@@ -2087,6 +2109,16 @@ async function refreshPublishing(){
   const select=$("publishBackup"),selected=select?.value;
   if(select){select.innerHTML='<option value="">Choose a cloud video…</option>'+(backupData.backups||[]).map(b=>'<option value="'+escapeHtml(b.id)+'">'+escapeHtml(b.title)+' · '+(Number(b.size||0)/1048576).toFixed(1)+' MB</option>').join("");if(selected&&[...select.options].some(o=>o.value===selected))select.value=selected;}
   const jobs=jobsData.jobs||[];
+  const statusOf=j=>String(j.status||"").toLowerCase();
+  const countStatuses=values=>jobs.filter(j=>values.includes(statusOf(j))).length;
+  const statValues={
+   publishStatTotal:jobs.length,
+   publishStatDrafts:countStatuses(["draft"]),
+   publishStatProgress:countStatuses(["processing","queued","pending","uploading","in_progress"]),
+   publishStatPublished:countStatuses(["published","posted","success","succeeded","completed","complete"]),
+   publishStatFailed:countStatuses(["failed","error"])
+  };
+  for(const [id,value] of Object.entries(statValues)){const node=$(id);if(node)node.textContent=String(value);}
    if(jobsEl)jobsEl.innerHTML=jobs.length?jobs.map(j=>'<article class="cloud-backup-row"><b>'+escapeHtml(j.title)+'</b><small>'+escapeHtml(j.platform.toUpperCase())+' · '+escapeHtml(j.status)+' · '+new Date(j.created_at*1000).toLocaleString()+'</small><small>'+escapeHtml(j.account_name||"Connected account")+'</small>'+(j.error_message?'<small>'+escapeHtml(j.error_message)+'</small>':'')+((j.status==="draft"||j.status==="failed")?'<button class="primary" type="button" onclick="publishDraftNow(\''+j.id+'\')">Publish now</button><button class="secondary" type="button" onclick="deletePublishDraft(\''+j.id+'\')">Delete draft</button>':'')+(j.status==="processing"&&j.platform==="youtube"?'<button class="secondary" type="button" onclick="refreshYouTubePublishStatus(\''+j.id+'\')">Refresh YouTube status</button>':'')+(j.provider_url?'<a class="mini-btn" href="'+escapeHtml(j.provider_url)+'" target="_blank" rel="noopener">Open post</a>':'')+'</article>').join(""):'<div class="empty cloud-empty"><span class="empty-icon">↗</span><b>No publishing drafts yet</b><span>Choose a saved Cloudflare backup above, add your title and description, then prepare a draft here.</span><button class="secondary" type="button" onclick="document.getElementById(\'publishBackup\').focus()">Choose a cloud video</button></div>';
  }catch(error){if(jobsEl)jobsEl.innerHTML='<div class="empty">'+escapeHtml(error.message||"Could not load publishing details.")+'</div>';}
 }
