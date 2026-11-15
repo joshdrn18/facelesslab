@@ -1115,7 +1115,7 @@ async function refreshAdminAiUsage(){
  try{
   const period=$("aiUsagePeriod")?.value||"30d",q=$("aiUsageSearch")?.value.trim()||"";
   const params=new URLSearchParams({period,q});
-  const data=await api("/api/admin/ai-usage?"+params.toString()),t=data.totals||{};
+  const data=await api("/api/admin/ai-usage?"+params.toString()),t=data.totals||{},aiAnalytics=window.facelessAiAnalytics||{},aiToday=aiAnalytics.today||{};
   const number=value=>Number(value||0).toLocaleString();
   $("aiUsageTotalJobs").textContent=number(t.total_jobs);
   $("aiUsageCloudflareJobs").textContent=number(t.cloudflare_ai_jobs);
@@ -1124,7 +1124,7 @@ async function refreshAdminAiUsage(){
   const audioMb=(Number(t.subtitle_audio_bytes||0)/1048576).toFixed(2);
   $("aiUsageWorkload").innerHTML='<span><b>'+number(t.tts_characters)+'</b> voice characters</span><span><b>'+number(Number(t.scene_image_jobs||0)+Number(t.character_image_jobs||0))+'</b> image jobs</span><span><b>'+audioMb+' MB</b> audio analyzed</span><span><b>'+number(t.active_users)+'</b> active accounts</span>';
 
-  const today=data.today||{},settings=data.settings||{},cap=Number(today.cap??settings.daily_request_limit??20),used=Number(today.requests||0),warnAt=Number(today.warning_at??Math.ceil(cap*.8));
+  const today=data.today||{},settings=data.settings||{},cap=Number(today.cap??settings.daily_request_limit??20),used=Math.max(Number(today.guard_requests??today.requests??0),Number(aiAnalytics.success?aiToday.requests||0:0)),warnAt=Number(today.warning_at??Math.ceil(cap*.8));
   const pct=cap>0?Math.min(100,Math.round(used/cap*100)):0,remaining=cap>0?Math.max(0,cap-used):null;
   const warn=cap>0&&used>=warnAt,limited=cap>0&&used>=cap;
   $("aiDailyUsed").textContent=number(used);
@@ -1138,21 +1138,28 @@ async function refreshAdminAiUsage(){
   capState.dataset.state=limited?"limit":warn?"warning":"safe";
   capState.textContent=cap===0?"CAP DISABLED":limited?"REQUEST CAP REACHED":warn?"APPROACHING CAP":"WITHIN INTERNAL CAP";
   $("aiDailyCapHint").textContent=cap===0?"Internal request cap is disabled. Cloudflare's account-level daily quota still applies.":number(used)+" of "+number(cap)+" model requests used ("+pct+"%). "+number(remaining)+" requests remaining before FacelessLab pauses new AI calls.";
-  $("aiDailyNeurons").textContent=today.reported_neurons===null||today.reported_neurons===undefined?"Not reported":number(today.reported_neurons)+" Neurons";
-  $("aiDailyNeuronNote").textContent=Number(today.neuron_records||0)?number(today.neuron_records)+" inference records returned Neuron data":"Provider responses have not included actual Neuron totals; see Cloudflare's daily billable feed.";
+  const neuronUsed=aiAnalytics.success?Number(aiToday.neurons||0):null,neuronAllowance=Number(aiToday.allowance_neurons||10000),neuronPct=neuronUsed===null?0:Math.min(100,neuronAllowance?neuronUsed/neuronAllowance*100:0),neuronRemaining=neuronUsed===null?null:Math.max(0,neuronAllowance-neuronUsed);
+  $("aiDailyNeurons").textContent=neuronUsed===null?"Not available":number(neuronUsed)+" / "+number(neuronAllowance);
+  $("aiDailyNeuronNote").textContent=neuronUsed===null?(aiAnalytics.error||"Requires Cloudflare Account Analytics:Read permission"):(number(neuronRemaining)+" Neurons remaining · "+neuronPct.toFixed(2)+"% used today");
+  $("aiDailyNeuronProgressFill").style.width=neuronPct+"%";
+  $("aiDailyNeuronProgress").setAttribute("aria-valuenow",String(neuronPct));
   $("aiDailyDataBytes").textContent=(Number(today.input_bytes||0)/1048576).toFixed(2)+" / "+(Number(today.output_bytes||0)/1048576).toFixed(2)+" MB";
   $("aiDailyTokens").textContent=(Number(today.prompt_tokens||0)+Number(today.completion_tokens||0))?number(today.prompt_tokens)+" in · "+number(today.completion_tokens)+" out":"Not reported";
   $("aiDailyTokenNote").textContent=(Number(today.prompt_tokens||0)+Number(today.completion_tokens||0))?"Reported token totals from model responses":"Only model responses with usage metadata are included";
   const capInput=$("aiDailyCapInput");if(capInput)capInput.value=String(cap);
-  const modelRows=data.today_by_model||[];
-  $("aiDailyModelCount").textContent=modelRows.length+" groups";
+  const modelRows=aiAnalytics.success&&Array.isArray(aiAnalytics.by_model)?aiAnalytics.by_model:(data.today_by_model||[]);
+  $("aiDailyModelCount").textContent=modelRows.length+" models";
   $("aiDailyModelBreakdown").innerHTML=modelRows.length?modelRows.map(item=>{
-   const nNeurons=Number(item.reported_neurons||0),duration=Number(item.avg_duration_ms||0);
-   return '<div class="ai-model-row"><div><b>'+escapeHtml(aiStageLabels[item.stage]||item.stage)+' · '+escapeHtml(item.model||"Model not recorded")+'</b><small>'+number(item.input_characters)+' input characters · '+(Number(item.input_bytes||0)/1048576).toFixed(2)+' MB input · '+(Number(item.output_bytes||0)/1048576).toFixed(2)+' MB output'+(duration?' · '+(duration/1000).toFixed(1)+'s avg':'')+'</small></div><div><strong>'+number(item.requests)+' requests</strong><small>'+number(item.completed)+' completed · '+number(item.failed)+' failed'+(nNeurons?' · '+number(nNeurons)+' reported Neurons':'')+'</small></div></div>';
+   const model=item.model||"Model not recorded",label=aiStageLabels[item.stage]||model,nNeurons=Number(item.neurons??item.reported_neurons??0),duration=Number(item.inference_ms??item.avg_duration_ms??0),requests=Number(item.requests??item.jobs??0);
+   const details=aiAnalytics.success?number(item.audio_seconds||0)+" audio seconds · "+(Number(item.input_bytes||0)/1048576).toFixed(2)+" MB input · "+(Number(item.output_bytes||0)/1048576).toFixed(2)+" MB output":number(item.input_characters||0)+" input characters · "+(Number(item.input_bytes||0)/1048576).toFixed(2)+" MB input";
+   return '<div class="ai-model-row"><div><b>'+escapeHtml(label)+'</b><small>'+escapeHtml(model)+' · '+details+(duration?' · '+(duration/1000).toFixed(1)+'s inference':'')+'</small></div><div><strong>'+number(requests)+' requests</strong><small>'+number(nNeurons)+' Neurons</small></div></div>';
   }).join(""):'<div class="empty">No model calls recorded today.</div>';
-  const dayTotals={};(data.last_7_days||[]).forEach(row=>{dayTotals[row.day]=(dayTotals[row.day]||0)+Number(row.requests||0);});
-  const dayEntries=Object.entries(dayTotals).sort((x,y)=>x[0].localeCompare(y[0])),maxDay=Math.max(1,...dayEntries.map(x=>x[1]));
-  $("aiDailyHistory").innerHTML=dayEntries.length?dayEntries.map(([day,count])=>'<div class="ai-usage-day-row"><span>'+escapeHtml(day)+'</span><div class="ai-usage-day-track"><span style="width:'+Math.round(count/maxDay*100)+'%"></span></div><b>'+number(count)+'</b></div>').join(""):'<div class="empty">No recorded inference activity in the last seven days.</div>';
+  const history=aiAnalytics.success?aiAnalytics.by_day:(data.last_7_days||[]);
+  const maxNeuronDay=Math.max(1,...history.map(row=>Number(row.neurons||row.requests||0)));
+  $("aiDailyHistory").innerHTML=history.length?history.map(row=>{
+   const day=row.date||row.day,count=Number(row.requests||0),neurons=Number(row.neurons||0),barValue=aiAnalytics.success?neurons:count;
+   return '<div class="ai-usage-day-row"><span>'+escapeHtml(day)+'</span><div><div class="ai-usage-day-track"><span style="width:'+Math.round(barValue/maxNeuronDay*100)+'%"></span></div><small style="display:block;font-size:8px;color:var(--muted);margin-top:3px">'+number(count)+' requests · '+number(neurons)+' Neurons</small></div><b>'+number(aiAnalytics.success?neurons:count)+'</b></div>';
+  }).join(""):'<div class="empty">No recorded inference activity in the last seven days.</div>';
   const inferences=data.recent_inferences||[];
   $("aiInferenceLogCount").textContent=inferences.length+" calls";
   $("aiInferenceLog").innerHTML=inferences.length?inferences.map(item=>{
@@ -1236,7 +1243,7 @@ async function loadAdminMembers(append=false){
 }
 $("adminRefreshBtn").addEventListener("click",()=>refreshAdminPanel());
 $("adminCloudflareRefresh").addEventListener("click",()=>refreshCloudflareBilling());
-$("adminAiUsageRefresh").addEventListener("click",()=>refreshAdminAiUsage());
+$("adminAiUsageRefresh").addEventListener("click",async()=>{await refreshCloudflareBilling();await refreshAdminAiUsage();});
 
 $("aiDailyCapSave").addEventListener("click",async()=>{
  const button=$("aiDailyCapSave"),status=$("aiDailyCapSaveStatus"),value=Number($("aiDailyCapInput").value);
