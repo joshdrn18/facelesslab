@@ -947,7 +947,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
     <article class="content-card"><span class="content-label">TIKTOK</span><h3 style="margin:8px 0">TikTok</h3><div id="tiktokConnection" class="library-storage">Checking connection…</div><button class="primary" id="connectTiktok" type="button" style="margin-top:12px;width:100%">Connect TikTok</button></article>
    </div>
    <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. Save a draft, review the details, then press Publish now to upload it to your connected channel.</p>
-    <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div id="publishTagsField" style="margin-top:12px"><label class="field" for="publishTags">YouTube tags · search keywords</label><textarea id="publishTags" maxlength="1200" rows="2" placeholder="anime story, animated short, mystery explained"></textarea><div class="muted" style="font-size:11px;line-height:1.55;margin-top:5px">Separate tags with commas or new lines. Up to 30 tags and 500 characters total. These are separate from hashtags.</div><div id="publishTagsCount" class="muted" aria-live="polite" style="font-size:11px;text-align:right;margin-top:4px">0/30 tags · 0/500 characters</div></div><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
+    <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><div class="actions" style="margin:10px 0 12px"><button class="secondary" id="importLatestYoutubePack" type="button" onclick="importLatestYouTubePack(this)">✦ Import latest AI publishing pack</button><span id="publishPackStatus" class="muted" style="font-size:11px">Reuse the title, description, hashtags and tags generated with your latest script.</span></div><label class="field" for="publishTitleVariant">AI title options</label><select id="publishTitleVariant" style="display:none;margin-bottom:10px" aria-label="Choose an AI-generated YouTube title"></select><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div id="publishTagsField" style="margin-top:12px"><label class="field" for="publishTags">YouTube tags · search keywords</label><textarea id="publishTags" maxlength="1200" rows="2" placeholder="anime story, animated short, mystery explained"></textarea><div class="muted" style="font-size:11px;line-height:1.55;margin-top:5px">Separate tags with commas or new lines. Up to 30 tags and 500 characters total. These are separate from hashtags.</div><div id="publishTagsCount" class="muted" aria-live="polite" style="font-size:11px;text-align:right;margin-top:4px">0/30 tags · 0/500 characters</div></div><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
     </form>
    </div>
    <div class="sectionhead"><div><h3>Publishing drafts</h3><span class="muted" style="font-size:12px">Review your prepared posts</span></div></div><div id="publishingJobs" class="project-list"><div class="empty">Loading publishing drafts…</div></div>
@@ -2004,6 +2004,34 @@ function syncPublishPrivacyOptions(){
  const current=privacy.value;
  privacy.innerHTML=platform==="tiktok"?'<option value="private">Only me</option><option value="public">Everyone (requires TikTok app approval)</option>':'<option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>';
  privacy.value=[...privacy.options].some(o=>o.value===current)?current:"private";
+}
+function importLatestYouTubePack(button){
+ const scripts=window.facelessScripts||{},ids=Object.keys(scripts);
+ const status=$("publishPackStatus"),variant=$("publishTitleVariant");
+ if(!ids.length){
+  if(status)status.textContent="Open a generated script first, then import its publishing pack.";
+  return;
+ }
+ const script=scripts[ids[ids.length-1]]||{};
+ const titles=(Array.isArray(script.youtube_title_options)?script.youtube_title_options:[]).map(x=>String(x||"").trim()).filter(x=>x&&x.length<=100);
+ if(!titles.length&&script.title)titles.push(String(script.title).slice(0,100));
+ if(!titles.length){
+  if(status)status.textContent="This script has no valid title options yet.";
+  return;
+ }
+ if(variant){
+  variant.innerHTML=titles.map((title,index)=>'<option value="'+index+'">'+escapeHtml("Option "+(index+1)+" · "+title)+'</option>').join("");
+  variant.style.display=titles.length>1?"block":"none";
+  variant.onchange=()=>{const selected=titles[Number(variant.value)||0];if($("publishTitle"))$("publishTitle").value=selected;};
+  variant.value="0";
+ }
+ if($("publishTitle"))$("publishTitle").value=titles[0];
+ if($("publishDescription"))$("publishDescription").value=String(script.youtube_description||"").slice(0,5000);
+ if($("publishHashtags"))$("publishHashtags").value=(Array.isArray(script.hashtags)?script.hashtags:[]).map(x=>String(x||"").trim()).filter(Boolean).join(" ").slice(0,1000);
+ if($("publishTags"))$("publishTags").value=(Array.isArray(script.youtube_tags)?script.youtube_tags:[]).map(x=>String(x||"").trim()).filter(Boolean).join(", ").slice(0,1200);
+ syncPublishingTagInput();
+ if(status)status.textContent="Imported "+titles.length+" title option(s) and the latest script's description, hashtags and YouTube tags. Review before saving.";
+ if(button){const old=button.textContent;button.textContent="✓ Publishing pack imported";button.disabled=true;setTimeout(()=>{button.textContent=old;button.disabled=false;},1400);}
 }
 function parseYouTubeTagInput(){
  const seen=new Set(),tags=[];let characters=0;
