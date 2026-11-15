@@ -1075,6 +1075,11 @@ textarea{line-height:1.65}
       <article class="youtube-analytics-card"><h4>Views over time</h4><div id="youtubeAnalyticsChart" class="muted">Your daily views chart will appear here.</div></article>
       <article class="youtube-analytics-card"><h4>Top videos</h4><div id="youtubeAnalyticsTop" class="youtube-analytics-top"><div class="muted">Top videos will appear here.</div></div></article>
      </div>
+     <section id="youtubeContentIntelligence" class="youtube-analytics-card" style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap"><div><span class="content-label">PERFORMANCE-LED IDEAS</span><h4 style="margin:6px 0">Content intelligence</h4><p class="muted" style="margin:0;font-size:11px">Lightweight recommendations based only on your real top-video analytics and titles. No AI credits used.</p></div><span class="status">Heuristic insights</span></div>
+      <div id="youtubeContentInsights" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:13px"><div class="muted">Refresh analytics to generate content ideas.</div></div>
+      <div id="youtubeContentCopyNotice" class="muted" role="status" aria-live="polite" style="font-size:11px;margin-top:9px"></div>
+     </section>
      <p class="youtube-analytics-note" id="youtubeAnalyticsUpdated">Analytics data can be delayed by YouTube. This panel uses real API data and never fills missing metrics with estimates.</p>
     </section>
     <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. Save a draft, review the details, then press Publish now to upload it to your connected channel.</p>
@@ -2144,8 +2149,38 @@ function renderYouTubeAnalytics(data){
  }
  const topEl=$("youtubeAnalyticsTop"),videos=Array.isArray(data.top_videos)?data.top_videos:[];
  if(topEl)topEl.innerHTML=videos.length?videos.map(v=>'<div class="youtube-analytics-video"><div style="min-width:0"><b title="'+escapeHtml(v.title)+'">'+escapeHtml(v.title)+'</b><small>'+formatAnalyticsNumber(v.likes)+' likes · '+formatAnalyticsNumber(v.comments)+' comments</small></div><strong>'+formatAnalyticsNumber(v.views)+'</strong></div>').join(""):'<div class="muted">No video performance data for this period yet.</div>';
+ buildYouTubeContentInsights(videos);
  const updated=$("youtubeAnalyticsUpdated");if(updated)updated.textContent="Period: "+data.start_date+" – "+data.end_date+" · Updated "+(data.checked_at?new Date(data.checked_at).toLocaleString():"just now")+". YouTube reporting may be delayed.";
 }
+function buildYouTubeContentInsights(videos){
+ const host=$("youtubeContentInsights");if(!host)return;
+ const ranked=(Array.isArray(videos)?videos:[]).map(v=>{
+  const views=Math.max(0,Number(v.views)||0),likes=Math.max(0,Number(v.likes)||0),comments=Math.max(0,Number(v.comments)||0),shares=Math.max(0,Number(v.shares)||0),subs=Math.max(0,Number(v.subscribers_gained)||0);
+  return {...v,views,likes,comments,shares,subs,engagement:views?((likes+comments+shares)/views*100):0,subRate:views?(subs/views*1000):0};
+ }).filter(v=>v.views>0).sort((a,b)=>b.views-a.views);
+ if(!ranked.length){host.innerHTML='<div class="muted">Not enough video data yet. Once YouTube reports views, this area will suggest follow-up topics.</div>';return;}
+ const top=ranked.slice(0,3);
+ const ideaFor=(v,index)=>{
+  const title=String(v.title||"this topic").trim();
+  const angles=["The detail viewers may have missed","What happened before this story?","The surprising reason behind this moment"];
+  const angle=angles[index%angles.length];
+  return {title:angle+": "+title,source:title,views:v.views,engagement:v.engagement,subs:v.subs,
+   brief:"Create a short follow-up to the successful video titled '"+title+"'. Angle: "+angle+". Keep the same broad subject and pacing, but add genuinely new information or a different perspective. Open with a specific curiosity gap, build 3 clear beats, and end with a satisfying payoff. Do not copy the original video or invent facts. Use a concise, natural voice-over and matching vertical visuals."};
+ };
+ const ideas=top.map(ideaFor);
+ host.innerHTML=ideas.map((idea,i)=>'<article style="padding:12px;border:1px solid var(--line-soft);border-radius:10px;background:rgba(10,15,25,.45);min-width:0"><div class="content-label">IDEA '+(i+1)+' · BASED ON TOP VIDEO</div><b style="display:block;font-size:12px;line-height:1.5;margin:7px 0;overflow-wrap:anywhere">'+escapeHtml(idea.title)+'</b><div class="muted" style="font-size:10px;line-height:1.6">Source: '+escapeHtml(idea.source)+'<br>'+formatAnalyticsNumber(idea.views)+' views · '+idea.engagement.toFixed(2)+'% engagement · '+formatAnalyticsNumber(idea.subs)+' subscribers gained</div><button class="secondary youtube-copy-idea" type="button" data-idea-index="'+i+'" style="margin-top:10px;width:100%">Copy script brief</button></article>').join("");
+ host.dataset.ideas=JSON.stringify(ideas);
+}
+$("youtubeContentIntelligence")?.addEventListener("click",async event=>{
+ const button=event.target.closest(".youtube-copy-idea");if(!button)return;
+ const host=$("youtubeContentInsights"),notice=$("youtubeContentCopyNotice");
+ try{
+  const ideas=JSON.parse(host?.dataset.ideas||"[]"),idea=ideas[Number(button.dataset.ideaIndex)];
+  if(!idea)throw new Error("This idea is no longer available. Refresh analytics.");
+  await navigator.clipboard.writeText(idea.brief);
+  if(notice)notice.textContent="Script brief copied. Paste it into your project topic or script workflow.";
+ }catch(error){if(notice)notice.textContent=error.message||"Could not copy the script brief. Check browser clipboard permissions.";}
+});
 async function refreshYouTubeAnalytics(){
  const button=$("refreshYoutubeAnalytics"),notice=$("youtubeAnalyticsNotice"),range=$("youtubeAnalyticsRange")?.value||"28d";
  if(button){button.disabled=true;button.textContent="Loading…";}
