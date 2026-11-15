@@ -1113,6 +1113,44 @@ async function refreshAdminAiUsage(){
   $("aiUsageFailedJobs").textContent=number(t.failed_jobs);
   const audioMb=(Number(t.subtitle_audio_bytes||0)/1048576).toFixed(2);
   $("aiUsageWorkload").innerHTML='<span><b>'+number(t.tts_characters)+'</b> voice characters</span><span><b>'+number(Number(t.scene_image_jobs||0)+Number(t.character_image_jobs||0))+'</b> image jobs</span><span><b>'+audioMb+' MB</b> audio analyzed</span><span><b>'+number(t.active_users)+'</b> active accounts</span>';
+
+  const today=data.today||{},settings=data.settings||{},cap=Number(today.cap??settings.daily_request_limit??20),used=Number(today.requests||0),warnAt=Number(today.warning_at??Math.ceil(cap*.8));
+  const pct=cap>0?Math.min(100,Math.round(used/cap*100)):0,remaining=cap>0?Math.max(0,cap-used):null;
+  const warn=cap>0&&used>=warnAt,limited=cap>0&&used>=cap;
+  $("aiDailyUsed").textContent=number(used);
+  $("aiDailyRemaining").textContent=cap===0?"Cap disabled":number(remaining)+" remaining";
+  $("aiDailyProgressFill").style.width=pct+"%";
+  $("aiDailyProgress").setAttribute("aria-valuenow",String(pct));
+  $("aiDailyCompleted").textContent=number(today.completed);
+  $("aiDailyFailed").textContent=number(today.failed);
+  $("aiDailyProcessing").textContent=number(today.processing);
+  const capState=$("aiDailyCapState");
+  capState.dataset.state=limited?"limit":warn?"warning":"safe";
+  capState.textContent=cap===0?"CAP DISABLED":limited?"REQUEST CAP REACHED":warn?"APPROACHING CAP":"WITHIN INTERNAL CAP";
+  $("aiDailyCapHint").textContent=cap===0?"Internal request cap is disabled. Cloudflare's account-level daily quota still applies.":number(used)+" of "+number(cap)+" model requests used ("+pct+"%). "+number(remaining)+" requests remaining before FacelessLab pauses new AI calls.";
+  $("aiDailyNeurons").textContent=today.reported_neurons===null||today.reported_neurons===undefined?"Not reported":number(today.reported_neurons)+" Neurons";
+  $("aiDailyNeuronNote").textContent=Number(today.neuron_records||0)?number(today.neuron_records)+" inference records returned Neuron data":"Provider responses have not included actual Neuron totals; see Cloudflare's daily billable feed.";
+  $("aiDailyDataBytes").textContent=(Number(today.input_bytes||0)/1048576).toFixed(2)+" / "+(Number(today.output_bytes||0)/1048576).toFixed(2)+" MB";
+  $("aiDailyTokens").textContent=(Number(today.prompt_tokens||0)+Number(today.completion_tokens||0))?number(today.prompt_tokens)+" in · "+number(today.completion_tokens)+" out":"Not reported";
+  $("aiDailyTokenNote").textContent=(Number(today.prompt_tokens||0)+Number(today.completion_tokens||0))?"Reported token totals from model responses":"Only model responses with usage metadata are included";
+  const capInput=$("aiDailyCapInput");if(capInput)capInput.value=String(cap);
+  const modelRows=data.today_by_model||[];
+  $("aiDailyModelCount").textContent=modelRows.length+" groups";
+  $("aiDailyModelBreakdown").innerHTML=modelRows.length?modelRows.map(item=>{
+   const nNeurons=Number(item.reported_neurons||0),duration=Number(item.avg_duration_ms||0);
+   return '<div class="ai-model-row"><div><b>'+escapeHtml(aiStageLabels[item.stage]||item.stage)+' · '+escapeHtml(item.model||"Model not recorded")+'</b><small>'+number(item.input_characters)+' input characters · '+(Number(item.input_bytes||0)/1048576).toFixed(2)+' MB input · '+(Number(item.output_bytes||0)/1048576).toFixed(2)+' MB output'+(duration?' · '+(duration/1000).toFixed(1)+'s avg':'')+'</small></div><div><strong>'+number(item.requests)+' requests</strong><small>'+number(item.completed)+' completed · '+number(item.failed)+' failed'+(nNeurons?' · '+number(nNeurons)+' reported Neurons':'')+'</small></div></div>';
+  }).join(""):'<div class="empty">No model calls recorded today.</div>';
+  const dayTotals={};(data.last_7_days||[]).forEach(row=>{dayTotals[row.day]=(dayTotals[row.day]||0)+Number(row.requests||0);});
+  const dayEntries=Object.entries(dayTotals).sort((x,y)=>x[0].localeCompare(y[0])),maxDay=Math.max(1,...dayEntries.map(x=>x[1]));
+  $("aiDailyHistory").innerHTML=dayEntries.length?dayEntries.map(([day,count])=>'<div class="ai-usage-day-row"><span>'+escapeHtml(day)+'</span><div class="ai-usage-day-track"><span style="width:'+Math.round(count/maxDay*100)+'%"></span></div><b>'+number(count)+'</b></div>').join(""):'<div class="empty">No recorded inference activity in the last seven days.</div>';
+  const inferences=data.recent_inferences||[];
+  $("aiInferenceLogCount").textContent=inferences.length+" calls";
+  $("aiInferenceLog").innerHTML=inferences.length?inferences.map(item=>{
+   const stage=aiStageLabels[item.stage]||item.stage||"AI call",date=item.created_at?new Date(Number(item.created_at)*1000).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"";
+   const state=String(item.status||"unknown").toLowerCase(),size=(Number(item.input_bytes||0)/1048576).toFixed(2)+" MB in · "+(Number(item.output_bytes||0)/1048576).toFixed(2)+" MB out";
+   const bits=[number(item.input_characters)+" chars",size,Number(item.duration_ms)>0?(Number(item.duration_ms)/1000).toFixed(1)+"s":null,item.prompt_tokens!==null?number(item.prompt_tokens)+" prompt tokens":null,item.completion_tokens!==null?number(item.completion_tokens)+" completion tokens":null,item.neurons!==null?number(item.neurons)+" Neurons":null].filter(Boolean).join(" · ");
+   return '<article class="ai-inference-row"><div class="ai-inference-row-head"><div><b>'+escapeHtml(stage)+' · '+escapeHtml(item.display_name||item.email||"Member")+'</b><small>'+escapeHtml(item.model||"Model not recorded")+' · '+escapeHtml(item.project_title||"Project")+'</small></div><span class="ai-job-status status-'+(state==="completed"?"complete":state==="failed"?"failed":"active")+'">'+escapeHtml(state)+'</span></div><div class="ai-inference-meta"><span>'+escapeHtml(date)+'</span><span>'+escapeHtml(bits)+'</span></div></article>';
+  }).join(""):'<div class="empty">Per-inference logging starts with new model calls after deployment. Older activity is retained in generation history above.</div>';
   const members=data.members||[];
   $("aiUsageMembers").innerHTML=members.length?members.map(member=>{
    const label=member.display_name||String(member.email||"").split("@")[0]||"Member";
@@ -1189,6 +1227,19 @@ async function loadAdminMembers(append=false){
 $("adminRefreshBtn").addEventListener("click",()=>refreshAdminPanel());
 $("adminCloudflareRefresh").addEventListener("click",()=>refreshCloudflareBilling());
 $("adminAiUsageRefresh").addEventListener("click",()=>refreshAdminAiUsage());
+
+$("aiDailyCapSave").addEventListener("click",async()=>{
+ const button=$("aiDailyCapSave"),status=$("aiDailyCapSaveStatus"),value=Number($("aiDailyCapInput").value);
+ if(!Number.isSafeInteger(value)||(value!==0&&(value<5||value>500))){status.textContent="Use 0 to disable, or choose 5–500.";return;}
+ button.disabled=true;status.textContent="Saving safety cap…";
+ try{
+  const saved=await api("/api/admin/ai-usage-settings",{method:"POST",body:JSON.stringify({daily_request_limit:value})});
+  status.textContent="Saved · "+(saved.settings.daily_request_limit===0?"guard disabled":saved.settings.daily_request_limit+" requests/day");
+  await refreshAdminAiUsage();
+ }catch(error){status.textContent=error.message||"Could not save safety cap.";}
+ finally{button.disabled=false;}
+});
+
 $("aiUsagePeriod").addEventListener("change",()=>refreshAdminAiUsage());
 $("aiUsageSearch").addEventListener("input",()=>{clearTimeout(aiUsageSearchTimer);aiUsageSearchTimer=setTimeout(()=>refreshAdminAiUsage(),250);});
 $("adminSearch").addEventListener("input",()=>{
