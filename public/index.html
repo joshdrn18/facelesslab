@@ -1118,7 +1118,6 @@ async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=
   ctx.textAlign="left";ctx.textBaseline="middle";ctx.lineJoin="round";ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.98)";
   shown.forEach((items,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;let cursor=(width-measureLine(items))/2;items.forEach(word=>{const isHighlight=chosen&&word===chosen.word;const size=isHighlight?fontSize*1.08:fontSize;ctx.font=(isHighlight?"900 ":"800 ")+size+"px Arial, sans-serif";const wordWidth=ctx.measureText(word).width;ctx.fillStyle=isHighlight?"#facc15":"#ffffff";ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=3;ctx.strokeText(word,cursor,ty);ctx.fillText(word,cursor,ty);ctx.shadowBlur=0;cursor+=wordWidth+fontSize*0.28;});});
  }
- }
  if(watermarkEnabled){
   const label="FacelessLab",fontSize=Math.max(12,Math.round(width*0.022)),pad=Math.round(width*0.034);
   ctx.save();
