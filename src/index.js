@@ -1183,7 +1183,7 @@ async function handle(request, env) {
     if(path==="/api/publishing/youtube/analytics"&&method==="GET"){
       const connection=await env.DB.prepare("SELECT * FROM social_connections WHERE user_id=? AND platform='youtube' AND status='active' ORDER BY updated_at DESC LIMIT 1").bind(user.id).first();
       if(!connection)return json({ok:false,error:"Connect your YouTube channel first."},409);
-      const granted=String(connection.scopes||"").split(/\\s+/);
+      const granted=String(connection.scopes||"").split(/\s+/);
       if(!granted.includes("https://www.googleapis.com/auth/yt-analytics.readonly"))return json({ok:false,needs_reconnect:true,error:"Reconnect YouTube to grant read-only YouTube Analytics access."},409);
       const range=String(url.searchParams.get("range")||"28d"),days=({"7d":7,"28d":28,"90d":90,"365d":365})[range]||28;
       const end=new Date(Date.now()-86400000),start=new Date(end.getTime()-(days-1)*86400000),iso=d=>d.toISOString().slice(0,10),startDate=iso(start),endDate=iso(end);
