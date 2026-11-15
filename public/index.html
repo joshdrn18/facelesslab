@@ -147,6 +147,130 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
 .admin-audit-list{display:grid;gap:8px}.admin-audit-item{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #242c3d;font-size:11px}.admin-audit-item:last-child{border:0}.admin-audit-item small{display:block;color:var(--muted);margin-top:4px}.admin-audit-item time{color:var(--muted);white-space:nowrap;font-size:10px}
 @media(max-width:800px){.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-table-head{display:none}.admin-member-row{grid-template-columns:minmax(0,1fr) auto;gap:8px}.admin-member-row>span:nth-child(2){grid-column:1}.admin-member-row>span:nth-child(3),.admin-member-row>span:nth-child(4){grid-column:2}.admin-member-actions{grid-column:1/-1}.admin-toolbar{align-items:flex-start;flex-direction:column}.admin-search{width:100%}.admin-search input{width:100%;flex:1}}
 @media(max-width:480px){.admin-metrics{gap:8px}.admin-metrics .stat{padding:11px}.admin-metrics .stat strong{font-size:19px}.admin-member-row{padding:12px 4px}.admin-search{flex-wrap:wrap}.admin-search input{flex-basis:100%}.admin-search button{width:100%}}
+ 
+
+/* FacelessLab premium visual system */
+:root{
+ --bg:#080b13;--surface:#101827;--surface-raised:#151f31;--line-soft:rgba(153,171,204,.15);
+ --text:#f5f7fc;--muted:#95a2b8;--accent:#a995ff;--accent-2:#70e5dc;
+ --shadow-lg:0 22px 70px rgba(0,0,0,.28);--radius-lg:18px;
+}
+html{scroll-behavior:smooth}
+body{min-height:100vh;background:
+ radial-gradient(ellipse at 84% -8%,rgba(125,94,220,.20),transparent 32%),
+ radial-gradient(ellipse at -8% 72%,rgba(53,150,151,.09),transparent 30%),
+ linear-gradient(180deg,#090d17 0%,#080b13 72%);background-attachment:fixed;color:var(--text)}
+::selection{background:rgba(169,149,255,.32);color:#fff}
+.auth-wrap{position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(ellipse at 50% 30%,rgba(111,91,194,.17),transparent 45%)}
+.auth-wrap:before,.auth-wrap:after{content:"";position:absolute;z-index:-1;border:1px solid rgba(175,159,255,.12);border-radius:50%;pointer-events:none}
+.auth-wrap:before{width:540px;height:540px;top:-330px;left:-180px;box-shadow:0 0 0 34px rgba(175,159,255,.025),0 0 0 74px rgba(175,159,255,.018)}
+.auth-wrap:after{width:430px;height:430px;right:-230px;bottom:-270px;box-shadow:0 0 0 30px rgba(112,229,220,.025),0 0 0 70px rgba(112,229,220,.015)}
+.auth-card{position:relative;overflow:hidden;width:min(100%,460px);padding:34px;border:1px solid rgba(160,174,205,.2);border-radius:24px;background:linear-gradient(145deg,rgba(22,30,47,.97),rgba(12,17,29,.98));box-shadow:var(--shadow-lg),0 0 80px rgba(130,108,224,.08)}
+.auth-card:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,#a995ff,#70e5dc,transparent);opacity:.8}
+.brand{letter-spacing:-.55px}.logo{position:relative;border:1px solid rgba(255,255,255,.16);box-shadow:0 8px 26px rgba(143,120,255,.28)}
+.eyebrow{letter-spacing:1.7px}.auth-card h1,.auth-card h2{letter-spacing:-.8px;font-size:28px}
+.app{grid-template-columns:258px minmax(0,1fr)}
+.side{background:rgba(8,12,22,.88);backdrop-filter:blur(22px);border-right:1px solid var(--line-soft);padding:26px 17px}
+.side .brand{margin-bottom:22px;padding-bottom:24px;border-bottom:1px solid var(--line-soft)}
+.side .brand:after{content:"AI VIDEO STUDIO";display:block;position:absolute;left:66px;top:58px;font-size:8px;letter-spacing:1.45px;color:#76849d;font-weight:800}
+.navlabel{padding-top:20px;color:#71809a;font-size:9px}
+.nav a{position:relative;border:1px solid transparent;border-radius:11px;color:#aebbd0;padding:11px 12px}
+.nav a .ico{width:20px;text-align:center;font-size:15px;color:#93a2bd}
+.nav a.active,.nav a:hover{border-color:rgba(169,149,255,.16);background:linear-gradient(100deg,rgba(169,149,255,.18),rgba(112,229,220,.055));color:#fff}
+.nav a.active .ico{color:#c6b7ff}
+.sidebottom{border-top:1px solid var(--line-soft);margin-top:18px;padding-top:16px;letter-spacing:.08em;font-size:9px}
+.main{max-width:1580px;padding:32px clamp(20px,4vw,64px) 54px}
+.top{align-items:center;margin-bottom:26px}
+.top h1{font-size:clamp(22px,2.3vw,30px);letter-spacing:-1.2px}
+.top .sub{font-size:12px}
+.userbox{border:1px solid var(--line-soft);border-radius:15px;padding:9px 11px;background:rgba(17,25,40,.72);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.userbox>b,.userbox #userName{font-size:12px}
+.avatar{background:linear-gradient(135deg,#30264f,#183a40);border:1px solid rgba(181,164,255,.28);box-shadow:0 5px 18px rgba(0,0,0,.22)}
+.hero{border-radius:20px;padding:30px 32px;background:linear-gradient(112deg,rgba(46,34,82,.97),rgba(19,30,48,.98) 66%,rgba(17,49,52,.84));box-shadow:0 20px 56px rgba(0,0,0,.16)}
+.hero h2{font-size:clamp(21px,2.1vw,26px);letter-spacing:-.7px}
+.hero p{max-width:560px;font-size:12px;line-height:1.7}
+.stats{gap:13px}
+.stat{border-radius:16px;padding:17px 18px;background:linear-gradient(145deg,rgba(22,31,49,.96),rgba(13,19,31,.96));border-color:var(--line-soft);box-shadow:0 9px 28px rgba(0,0,0,.10)}
+.stat span{font-size:10px;letter-spacing:.035em;text-transform:uppercase}
+.stat strong{font-size:25px;letter-spacing:-.8px}
+.panel,.content-card,.production-card,.script-workspace,.cloud-backup-panel{border-color:var(--line-soft);border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.09)}
+.panel{padding:20px;background:linear-gradient(145deg,rgba(20,29,45,.98),rgba(12,18,30,.98))}
+.panel h3,.content-card h3{letter-spacing:-.4px}
+.content-card,.production-card{background:linear-gradient(145deg,rgba(20,29,45,.96),rgba(14,21,34,.98));padding:17px}
+.production-card{transition:border-color .2s,transform .2s,box-shadow .2s}
+.production-card:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(0,0,0,.16)}
+.content-label{color:#9cabc3;letter-spacing:1.5px}
+.sectionhead{margin:28px 0 14px}
+.sectionhead h3{font-size:17px}
+input,select,textarea{border-radius:11px;border-color:rgba(143,161,194,.24);background:rgba(7,12,22,.76);padding:12px 13px}
+input::placeholder,textarea::placeholder{color:#6f7d94}
+input:focus,select:focus,textarea:focus{border-color:rgba(169,149,255,.78);box-shadow:0 0 0 4px rgba(169,149,255,.11)}
+.field{font-size:11px;font-weight:700;color:#c0cbe0;letter-spacing:.02em}
+button{font-weight:700}
+.primary{border-radius:11px;background:linear-gradient(105deg,#b9a8ff,#7be6df);box-shadow:0 9px 25px rgba(145,125,255,.18);padding:12px 17px}
+.primary:hover{filter:brightness(1.08);box-shadow:0 11px 30px rgba(145,125,255,.25)}
+.secondary{border-radius:11px;border-color:rgba(146,164,198,.2);background:rgba(29,40,59,.9);padding:11px 14px}
+.secondary:hover{border-color:rgba(169,149,255,.42);background:#222d43}
+.mini-btn{border-radius:9px;border-color:rgba(169,149,255,.26);background:rgba(51,42,83,.78)}
+.project{border-radius:14px;border-color:var(--line-soft);box-shadow:0 7px 20px rgba(0,0,0,.08)}
+.project:hover,.visual-scene:hover,.library-card:hover{border-color:rgba(169,149,255,.35);background-color:#151e30}
+.script-workspace{padding:21px;background:linear-gradient(145deg,rgba(14,21,34,.98),rgba(11,17,28,.98))}
+.content-card p,.script-output p{line-height:1.75}
+.hook-card{border-color:rgba(169,149,255,.2);box-shadow:inset 3px 0 rgba(169,149,255,.65)}
+.production-icon{border:1px solid rgba(169,149,255,.15);background:linear-gradient(135deg,rgba(169,149,255,.18),rgba(112,229,220,.08))}
+.scene-details,.voice-result-details,.visual-scene{border-color:var(--line-soft);border-radius:12px}
+.scene-card{border-color:var(--line-soft);border-radius:12px}
+.editor-card{border-color:rgba(169,149,255,.32);background:linear-gradient(145deg,rgba(34,31,58,.97),rgba(15,23,37,.98))}
+.editor-preview,.library-preview{border:1px solid var(--line-soft);box-shadow:0 14px 34px rgba(0,0,0,.25)}
+.editor-brand-note{display:flex;align-items:center;gap:7px;border:1px solid rgba(169,149,255,.16);border-radius:10px;padding:9px 11px;background:rgba(169,149,255,.055);color:#b9c5dc;font-size:10px;line-height:1.6;margin:10px 0 0}
+.editor-brand-note:before{content:"✦";color:#b9a8ff;font-size:13px}
+.empty{border-color:rgba(143,161,194,.22);background:rgba(7,12,22,.24);padding:25px}
+.library-card,.cloud-backup-row{border-color:var(--line-soft);border-radius:13px;background:rgba(14,22,35,.88)}
+.health-pill{font-weight:700}
+.admin-metrics .stat{border-radius:13px}
+.admin-toolbar{padding-bottom:12px;border-bottom:1px solid var(--line-soft)}
+.admin-member-row{border-color:var(--line-soft)}
+.admin-audit-item{border-color:var(--line-soft);padding:12px 2px}
+.admin-usage-table th,.admin-usage-table td{padding:10px 9px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.admin-usage-table th{color:#9cabc3;font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+.admin-usage-table td{color:#d8e0ee}
+.profile-avatar-card{border-color:var(--line-soft);border-radius:15px}
+.profile-info-row{border-color:var(--line-soft)}
+.footer{border-color:var(--line-soft)}
+@media(max-width:850px){
+ .app{grid-template-columns:minmax(0,1fr)}
+ .side{position:sticky;top:0;z-index:50;height:auto;max-height:none;padding:10px 16px;background:rgba(8,12,22,.94);backdrop-filter:blur(22px);border-right:0;border-bottom:1px solid var(--line-soft)}
+ .side .brand{padding:0 4px 8px;margin:0;border:0;font-size:16px}
+ .side .brand:after{display:none}
+ .side .brand .logo{width:29px;height:29px}
+ .side .navlabel,.sidebottom{display:none}
+ .side nav{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}
+ .side nav::-webkit-scrollbar{display:none}
+ .side .nav a{white-space:nowrap;padding:8px 10px;font-size:11px}
+ .main{padding:20px clamp(14px,3vw,26px) 36px}
+}
+@media(max-width:600px){
+ .top{align-items:stretch}
+ .top h1{font-size:22px}
+ .userbox{flex-wrap:wrap}
+ .hero{padding:19px}
+ .hero .primary{width:100%}
+ .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .stats .stat:last-child{grid-column:1/-1}
+ .billing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .billing-grid .stat:last-child{grid-column:1/-1}
+ .panel,.content-card,.production-card{padding:14px}
+ .admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .admin-member-row{grid-template-columns:minmax(0,1fr) auto}
+}
+@media(max-width:380px){
+ .side{padding-left:10px;padding-right:10px}
+ .side .nav a{padding:8px;font-size:10px}
+ .main{padding-left:10px;padding-right:10px}
+ .stats,.billing-grid{gap:7px}
+ .stat strong{font-size:19px}
+ .admin-metrics .stat strong{font-size:17px}
+}
 </style>
 </head>
 <body>
@@ -608,7 +732,7 @@ function renderScript(script, projectId) {
 const scenes = (script.scenes || []).map(scene => '<article class="scene-card"><div class="scene-head"><b>Scene ' + escapeHtml(scene.scene) + '</b><span>' + escapeHtml(scene.duration_seconds) + ' sec</span></div><p><b>Voiceover</b>' + escapeHtml(scene.voiceover) + '</p><p><b>Visual direction</b>' + escapeHtml(scene.visual_prompt) + '</p><p><b>Screen text</b>' + escapeHtml(scene.on_screen_text || '—') + '</p><button class="mini-btn" id="visual-btn-' + projectId + '-' + (Number(scene.scene)||0) + '" onclick="generateSceneVisual(\'' + projectId + '\',' + (Number(scene.scene)||0) + ',this)">✦ Generate visual</button><div id="visual-result-' + projectId + '-' + (Number(scene.scene)||0) + '"></div></article>').join("");
  const workspaceOpen=localStorage.getItem('facelesslab_workspace_'+projectId)==='1';
  const youtubePack='<section class="content-card" style="grid-column:1/-1"><div class="content-label">YOUTUBE PUBLISHING PACK · READY TO COPY</div><p><b>Title options</b></p>'+ytTitles.map((t,i)=>'<p id="yt-title-'+projectId+'-'+i+'">'+escapeHtml(t)+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-title-'+projectId+'-'+i+'\',this)">Copy title '+(i+1)+'</button>').join(' ')+'<p><b>Description</b></p><p id="yt-desc-'+projectId+'">'+escapeHtml(ytDescription||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-desc-'+projectId+'\',this)">Copy description</button><p><b>Tags</b></p><p id="yt-tags-'+projectId+'">'+escapeHtml(ytTags||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-tags-'+projectId+'\',this)">Copy tags</button><p><b>Hashtags</b></p><p id="yt-hashtags-'+projectId+'">'+escapeHtml(ytHashtags||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-hashtags-'+projectId+'\',this)">Copy hashtags</button><p><b>Thumbnail text</b></p><p id="yt-thumb-'+projectId+'">'+escapeHtml(script.thumbnail_text||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-thumb-'+projectId+'\',this)">Copy thumbnail text</button><p><b>Pinned comment</b></p><p id="yt-comment-'+projectId+'">'+escapeHtml(script.pinned_comment||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-comment-'+projectId+'\',this)">Copy pinned comment</button></section>';
- return '<details class="script-workspace" id="script-workspace-' + projectId + '"' + (workspaceOpen?' open':'') + '><summary class="script-heading script-toggle"><div><span class="eyebrow">AI SCRIPT · CLICK TO COLLAPSE</span><h3>' + escapeHtml(script.title || "Generated script") + '</h3><p>Script, voice-over and subtitles · <span class="status status-ready">Ready</span></p></div><span class="collapse-mark">⌄</span></summary><div class="script-body"><div class="script-grid"><article class="content-card hook-card"><span class="content-label">OPENING HOOK</span><p>' + escapeHtml(script.hook || "—") + '</p></article><article class="content-card narration-card"><span class="content-label">FULL NARRATION</span><p>' + escapeHtml(script.narration || "—") + '</p><div class="script-meta">' + (script.narration || "").trim().split(/\s+/).filter(Boolean).length + ' words · ' + escapeHtml(script.estimated_duration_seconds || "—") + ' sec estimated</div></article></div' + youtubePack + youtubeReadiness(script,projectId) + characterManager + '<details class="scene-details"><summary>Scene breakdown <span>' + (script.scenes || []).length + ' scenes</span></summary><div class="scene-tools"><button class="secondary mini-btn" id="visual-all-btn-' + projectId + '" onclick="generateAllSceneVisuals(\'' + projectId + '\',this)">✦ Generate all visuals</button><span id="visual-all-status-' + projectId + '" class="muted"></span></div><div class="scene-list">' + scenes + '</div></details><div class="production-grid"><section class="production-card editor-card"><div class="production-title"><span class="production-icon">🎬</span><div><h4>Auto Video Editor</h4><p>Render your scenes into a vertical MP4.</p></div></div><div class="editor-controls"><label>Export quality<select id="editor-quality-' + projectId + '"><option value="480">480p · Faster</option><option value="720" selected>720p · Recommended</option></select></label><label>Subtitle style<select id="editor-captions-' + projectId + '"><option value="burn" selected>Burn into video</option><option value="soft">Separate subtitle track</option><option value="off">No subtitles</option></select></label></div><button class="primary" id="editor-btn-' + projectId + '" onclick="renderProjectVideo(\'' + projectId + '\',this)">▶ Render MP4</button><div id="editor-progress-' + projectId + '" class="editor-progress hidden"><span></span></div><div id="editor-status-' + projectId + '" class="editor-status">Requires saved voice-over, subtitles and all scene visuals.</div><div id="editor-result-' + projectId + '"></div><p class="editor-note">Rendering runs in your browser using FFmpeg.wasm. First use downloads the FFmpeg engine (~30 MB). Keep this tab open.</p></section><section class="production-card"><div class="production-title"><span class="production-icon">🎙️</span><div><h4>AI Voice-over</h4><p>Generate natural English narration with AI and save it directly to your project.</p></div></div><button class="primary" id="voice-btn-' + projectId + '" onclick="generateVoice(\'' + projectId + '\', this)">Generate voice-over →</button><div id="voice-result-' + projectId + '"></div></section><section class="production-card"><div class="production-title"><span class="production-icon">💬</span><div><h4>Auto subtitles</h4><p>Analyze your saved voice-over and time captions to the spoken words.</p></div></div><button class="secondary" id="subtitle-btn-' + projectId + '" onclick="generateSubtitles(\'' + projectId + '\', this)">Generate subtitles →</button><div id="subtitle-result-' + projectId + '"></div><p class="production-note">Captions are timed from the actual generated voice-over audio using speech recognition.</p></section></div></div></details>';
+ return '<details class="script-workspace" id="script-workspace-' + projectId + '"' + (workspaceOpen?' open':'') + '><summary class="script-heading script-toggle"><div><span class="eyebrow">AI SCRIPT · CLICK TO COLLAPSE</span><h3>' + escapeHtml(script.title || "Generated script") + '</h3><p>Script, voice-over and subtitles · <span class="status status-ready">Ready</span></p></div><span class="collapse-mark">⌄</span></summary><div class="script-body"><div class="script-grid"><article class="content-card hook-card"><span class="content-label">OPENING HOOK</span><p>' + escapeHtml(script.hook || "—") + '</p></article><article class="content-card narration-card"><span class="content-label">FULL NARRATION</span><p>' + escapeHtml(script.narration || "—") + '</p><div class="script-meta">' + (script.narration || "").trim().split(/\s+/).filter(Boolean).length + ' words · ' + escapeHtml(script.estimated_duration_seconds || "—") + ' sec estimated</div></article></div' + youtubePack + youtubeReadiness(script,projectId) + characterManager + '<details class="scene-details"><summary>Scene breakdown <span>' + (script.scenes || []).length + ' scenes</span></summary><div class="scene-tools"><button class="secondary mini-btn" id="visual-all-btn-' + projectId + '" onclick="generateAllSceneVisuals(\'' + projectId + '\',this)">✦ Generate all visuals</button><span id="visual-all-status-' + projectId + '" class="muted"></span></div><div class="scene-list">' + scenes + '</div></details><div class="production-grid"><section class="production-card editor-card"><div class="production-title"><span class="production-icon">🎬</span><div><h4>Auto Video Editor</h4><p>Render your scenes into a vertical MP4.</p></div></div><div class="editor-controls"><label>Export quality<select id="editor-quality-' + projectId + '"><option value="480">480p · Faster</option><option value="720" selected>720p · Recommended</option></select></label><label>Subtitle style<select id="editor-captions-' + projectId + '"><option value="burn" selected>Burn into video</option><option value="soft">Separate subtitle track</option><option value="off">No subtitles</option></select></label></div><button class="primary" id="editor-btn-' + projectId + '" onclick="renderProjectVideo(\'' + projectId + '\',this)">▶ Render MP4</button><div id="editor-progress-' + projectId + '" class="editor-progress hidden"><span></span></div><div id="editor-status-' + projectId + '" class="editor-status">Requires saved voice-over, subtitles and all scene visuals.</div><div id="editor-result-' + projectId + '"></div><p class="editor-note">Rendering runs in your browser using FFmpeg.wasm. First use downloads the FFmpeg engine (~30 MB). Keep this tab open.</p><p class="editor-brand-note">✦ Member exports include a subtle FacelessLab watermark. Administrator exports are watermark-free.</p></section><section class="production-card"><div class="production-title"><span class="production-icon">🎙️</span><div><h4>AI Voice-over</h4><p>Generate natural English narration with AI and save it directly to your project.</p></div></div><button class="primary" id="voice-btn-' + projectId + '" onclick="generateVoice(\'' + projectId + '\', this)">Generate voice-over →</button><div id="voice-result-' + projectId + '"></div></section><section class="production-card"><div class="production-title"><span class="production-icon">💬</span><div><h4>Auto subtitles</h4><p>Analyze your saved voice-over and time captions to the spoken words.</p></div></div><button class="secondary" id="subtitle-btn-' + projectId + '" onclick="generateSubtitles(\'' + projectId + '\', this)">Generate subtitles →</button><div id="subtitle-result-' + projectId + '"></div><p class="production-note">Captions are timed from the actual generated voice-over audio using speech recognition.</p></section></div></div></details>';
 }
 
 async function loadSavedVoice(projectId) {
@@ -963,7 +1087,7 @@ async function deleteLocalVideo(id){if(!confirm("Delete this video from this bro
 async function importLocalVideo(file){const d=await videoDB(),row={id:crypto.randomUUID(),owner:String(currentUser?.email||"guest").toLowerCase(),title:file.name.replace(/\.mp4$/i,""),blob:file,size:file.size,duration:0,quality:0,createdAt:Date.now()};await new Promise((ok,no)=>{const tx=d.transaction("videos","readwrite");tx.objectStore("videos").add(row);tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});d.close();refreshVideoLibrary();}
 document.addEventListener("change",e=>{if(e.target?.id==="libraryImport"){Array.from(e.target.files||[]).forEach(f=>importLocalVideo(f).catch(err=>alert(err.message)));e.target.value="";}});
 
-async function makeCaptionFrame(imageBlob,caption,width,height){
+async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=false){
  const bitmap=await createImageBitmap(imageBlob);
  const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
  const ctx=canvas.getContext("2d",{alpha:false});
@@ -993,6 +1117,24 @@ async function makeCaptionFrame(imageBlob,caption,width,height){
   ctx.fillStyle="rgba(4,7,14,0.84)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,Math.round(fontSize*0.24));ctx.fill();
   ctx.textAlign="left";ctx.textBaseline="middle";ctx.lineJoin="round";ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.98)";
   shown.forEach((items,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;let cursor=(width-measureLine(items))/2;items.forEach(word=>{const isHighlight=chosen&&word===chosen.word;const size=isHighlight?fontSize*1.08:fontSize;ctx.font=(isHighlight?"900 ":"800 ")+size+"px Arial, sans-serif";const wordWidth=ctx.measureText(word).width;ctx.fillStyle=isHighlight?"#facc15":"#ffffff";ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=3;ctx.strokeText(word,cursor,ty);ctx.fillText(word,cursor,ty);ctx.shadowBlur=0;cursor+=wordWidth+fontSize*0.28;});});
+ }
+ }
+ if(watermarkEnabled){
+  const label="FacelessLab",fontSize=Math.max(12,Math.round(width*0.022)),pad=Math.round(width*0.034);
+  ctx.save();
+  ctx.font="700 "+fontSize+"px Arial, sans-serif";
+  const iconSize=Math.round(fontSize*1.22),gap=Math.round(fontSize*0.48),innerPad=Math.round(fontSize*0.72);
+  const textWidth=ctx.measureText(label).width,badgeWidth=innerPad*2+iconSize+gap+textWidth,badgeHeight=Math.round(fontSize*2.05);
+  const x=width-pad-badgeWidth,y=pad;
+  ctx.shadowColor="rgba(0,0,0,.32)";ctx.shadowBlur=Math.round(fontSize*.8);
+  ctx.fillStyle="rgba(5,9,18,.68)";ctx.strokeStyle="rgba(255,255,255,.24)";ctx.lineWidth=Math.max(1,width*.0014);
+  ctx.beginPath();ctx.roundRect(x,y,badgeWidth,badgeHeight,badgeHeight/2);ctx.fill();ctx.stroke();
+  const ix=x+innerPad,iy=y+(badgeHeight-iconSize)/2;
+  const gradient=ctx.createLinearGradient(ix,iy,ix+iconSize,iy+iconSize);gradient.addColorStop(0,"#b5a2ff");gradient.addColorStop(1,"#68ded7");
+  ctx.fillStyle=gradient;ctx.beginPath();ctx.roundRect(ix,iy,iconSize,iconSize,Math.round(fontSize*.28));ctx.fill();
+  ctx.shadowBlur=0;ctx.fillStyle="#101322";ctx.font="900 "+Math.round(fontSize*.78)+"px Arial, sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("F",ix+iconSize/2,iy+iconSize/2+0.5);
+  ctx.font="700 "+fontSize+"px Arial, sans-serif";ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillStyle="rgba(255,255,255,.96)";ctx.fillText(label,ix+iconSize+gap,y+badgeHeight/2);
+  ctx.restore();
  }
  const blob=await new Promise((resolve,reject)=>canvas.toBlob(v=>v?resolve(v):reject(new Error("Could not create caption frame.")),"image/jpeg",0.92));
  return new Uint8Array(await blob.arrayBuffer());
@@ -1049,6 +1191,7 @@ async function renderProjectVideo(projectId,button) {
    :plannedDurations.map(duration=>duration*timelineScale);
   temporaryFiles.add(voiceFile);await ffmpeg.writeFile(voiceFile,new Uint8Array(await voiceBlob.arrayBuffer()));
   const quality=Number($("editor-quality-"+projectId)?.value)||720,frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
+  const addBrandWatermark=currentUser?.role!=="admin";
   const rawCues=(subtitleData?.cues||[]).map(c=>({start:Number(c.start),end:Number(c.end),text:String(c.text||"").replace(/\s+/g," ").trim()}))
    .filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start&&c.text)
    .sort((a,b)=>a.start-b.start);
@@ -1074,11 +1217,11 @@ async function renderProjectVideo(projectId,button) {
      const from=unique[j],to=unique[j+1],mid=(from+to)/2,active=cues.filter(c=>c.start<=mid&&c.end>mid).map(c=>c.text).join(" ");
      const segmentFile="caption_segment_"+String(segmentNumber++).padStart(4,"0")+".jpg";
      status.textContent="Burning captions · scene "+(i+1)+" of "+scenes.length+"…";
-     temporaryFiles.add(segmentFile);await ffmpeg.writeFile(segmentFile,await makeCaptionFrame(imageBlob,active,frameWidth,frameHeight));
+     temporaryFiles.add(segmentFile);await ffmpeg.writeFile(segmentFile,await makeCaptionFrame(imageBlob,active,frameWidth,frameHeight,addBrandWatermark));
      concat.push("file '"+segmentFile+"'","duration "+(to-from).toFixed(3));
     }
    }else{
-    temporaryFiles.add(filename);await ffmpeg.writeFile(filename,await makeCaptionFrame(imageBlob,"",frameWidth,frameHeight));
+    temporaryFiles.add(filename);await ffmpeg.writeFile(filename,await makeCaptionFrame(imageBlob,"",frameWidth,frameHeight,addBrandWatermark));
     concat.push("file '"+filename+"'","duration "+duration.toFixed(3));
    }
    totalDuration=sceneEnd;sceneRanges.push({start:sceneStart,end:sceneEnd});
