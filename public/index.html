@@ -1434,6 +1434,7 @@ function highlightSubtitlePreview(value) {
 function renderSubtitleResult(projectId, subtitleData) {
  const result=$("subtitle-result-"+projectId);
  if(!result || !subtitleData)return;
+ const editorWasOpen=result.querySelector(".subtitle-editor-panel")?.open===true;
  const cues=Array.isArray(subtitleData.cues)?subtitleData.cues:[];
  const first=cues[0];
  const captionStage=first?'<div class="caption-preview-card"><div class="caption-preview-frame"><span>'+highlightSubtitlePreview(first.text)+'</span></div><div class="caption-preview-meta"><b>CAPTION PREVIEW</b><small>'+formatSubtitleTime(first.start,",")+' → '+formatSubtitleTime(first.end,",")+'</small></div></div>':"";
@@ -1445,6 +1446,8 @@ function renderSubtitleResult(projectId, subtitleData) {
  window.facelessSubtitles[projectId]=JSON.parse(JSON.stringify(subtitleData));
  window.facelessSubtitleOriginals[projectId]=JSON.parse(JSON.stringify(subtitleData));
  result.innerHTML='<div class="muted" style="font-size:11px;margin-top:10px">✓ '+cues.length+' caption lines · '+Number(subtitleData.duration_seconds||0).toFixed(1)+'s audio · '+timingLabel+'</div>'+captionStage+preview+(cues.length>5?'<p class="muted" style="font-size:11px">+ '+(cues.length-5)+' more caption lines</p>':"")+'<details class="subtitle-editor-panel"><summary>Edit captions & timing <span>'+cues.length+' lines</span></summary><p class="production-note">Correct the wording or adjust start/end seconds before exporting. Changes are saved to this project.</p><div class="subtitle-cue-editor">'+editor+'</div><div class="subtitle-edit-actions"><button class="secondary mini-btn" type="button" onclick="resetSubtitleEdits(\''+projectId+'\')">Reset unsaved edits</button><button class="primary mini-btn" id="subtitle-save-'+projectId+'" type="button" onclick="saveSubtitleEdits(\''+projectId+'\',this)">Save caption edits</button><span id="subtitle-edit-status-'+projectId+'" class="subtitle-edit-status" aria-live="polite"></span></div></details><button class="mini-btn" style="margin-top:9px" onclick="downloadSubtitles(\''+projectId+'\')">↓ Download .SRT</button>';
+ const editorPanel=result.querySelector(".subtitle-editor-panel");
+ if(editorPanel)editorPanel.open=editorWasOpen;
 }
 function updateSubtitleCue(projectId,index,field,value) {
  const cue=window.facelessSubtitles?.[projectId]?.cues?.[index];
