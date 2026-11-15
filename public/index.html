@@ -957,6 +957,35 @@ textarea{line-height:1.65}
 @media(max-width:600px){.side{padding:10px 12px}.side .brand{padding:0 5px 8px;font-size:15px}.main{padding:17px 12px 36px}.top{align-items:flex-start;gap:8px;padding-bottom:14px;margin-bottom:17px}.top h1{font-size:24px}.top-heading{min-width:0}.top-kicker{font-size:8px}.userbox{gap:6px}.user-meta{padding:0}.user-email{max-width:130px;overflow:hidden;text-overflow:ellipsis}.userbox .secondary{font-size:9px;padding:7px 8px}.hero{padding:22px 19px;min-height:0;border-radius:16px}.hero h2{font-size:21px}.hero>button{width:100%}.stats{gap:8px}.stat{min-height:82px;padding:12px}.stat strong{font-size:22px}.panel{padding:15px}.workspace{gap:10px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 
+
+/* Publishing drafts — dedicated outbox layout */
+#publishingDraftsSection{margin-top:26px;padding:22px;border:1px solid rgba(145,160,190,.16);border-radius:17px;background:linear-gradient(145deg,rgba(17,25,39,.94),rgba(11,17,28,.96));box-shadow:0 12px 32px rgba(0,0,0,.12)}
+.publishing-drafts-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.publishing-drafts-heading-main{display:flex;align-items:center;gap:14px;min-width:0}
+.publishing-drafts-icon{width:43px;height:43px;flex:0 0 43px;display:grid;place-items:center;border-radius:13px;border:1px solid rgba(169,149,255,.22);background:linear-gradient(145deg,rgba(169,149,255,.17),rgba(117,228,215,.09));color:#c2b4ff;font-size:22px}
+.publishing-drafts-eyebrow{font-size:8px;letter-spacing:1.65px;font-weight:800;color:#8f9db4;margin-bottom:5px}
+.publishing-drafts-eyebrow span{color:#58667d;padding:0 4px}
+.publishing-drafts-heading h3{font-size:19px;letter-spacing:-.5px;margin:0;color:#f1f4fb}
+.publishing-drafts-heading p{font-size:11px;color:#93a2b8;margin:5px 0 0}
+.publishing-refresh{display:flex;align-items:center;gap:8px;white-space:nowrap;padding:9px 12px}
+.publishing-refresh span{font-size:16px;color:#b9aaff}
+.publishing-drafts-divider{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:21px 0 10px;padding-top:13px;border-top:1px solid rgba(145,160,190,.12);font-size:8px;letter-spacing:1.3px;font-weight:800;color:#71819a}
+#publishingJobs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:0}
+#publishingJobs>.cloud-backup-row{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;padding:16px;border:1px solid rgba(145,160,190,.15);border-radius:13px;background:linear-gradient(145deg,rgba(24,34,51,.86),rgba(14,21,33,.96));transition:border-color .18s,transform .18s,background .18s}
+#publishingJobs>.cloud-backup-row:hover{border-color:rgba(169,149,255,.34);transform:translateY(-1px);background:linear-gradient(145deg,rgba(29,39,59,.94),rgba(15,23,36,.98))}
+#publishingJobs>.cloud-backup-row>b{display:block;width:100%;font-size:13px;line-height:1.5;color:#edf2fc;overflow-wrap:anywhere}
+#publishingJobs>.cloud-backup-row>small{display:block;width:100%;font-size:10px;line-height:1.55;color:#91a1b8;overflow-wrap:anywhere}
+#publishingJobs>.cloud-backup-row>small:first-of-type{color:#b5a9ff;font-weight:700;letter-spacing:.25px}
+#publishingJobs>.cloud-backup-row>button,#publishingJobs>.cloud-backup-row>a{display:inline-flex;align-items:center;justify-content:center;min-height:34px;margin:4px 6px 0 0;padding:8px 11px;border-radius:9px;font-size:10px;text-decoration:none}
+#publishingJobs>.cloud-backup-row>button.primary{color:#11131c}
+#publishingJobs>.cloud-backup-row>.secondary{background:#1c2940}
+#publishingJobs>.cloud-backup-row>.mini-btn{border:1px solid #34435d;color:#cbd6e8;background:#172237}
+#publishingJobs>.empty{grid-column:1/-1;min-height:170px;display:flex;align-items:center;justify-content:center;gap:9px;padding:25px;border:1px dashed rgba(145,160,190,.24);border-radius:13px;background:rgba(10,16,27,.35)}
+#publishingJobs>.empty b{font-size:13px;color:#e3eaf7}
+#publishingJobs>.empty span{max-width:430px;font-size:11px;line-height:1.6;color:#92a2b9;text-align:center}
+#publishingJobs>.empty .empty-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:rgba(169,149,255,.12);color:#c1b3ff;font-size:20px}
+@media(max-width:760px){#publishingDraftsSection{padding:16px;margin-top:18px}#publishingJobs{grid-template-columns:1fr}.publishing-drafts-heading{align-items:flex-start;flex-direction:column}.publishing-refresh{align-self:flex-start}.publishing-drafts-heading h3{font-size:17px}}
+
 </style>
 </head>
 <body>
@@ -1002,7 +1031,17 @@ textarea{line-height:1.65}
     <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div id="publishTagsField" style="margin-top:12px"><label class="field" for="publishTags">YouTube tags · search keywords</label><textarea id="publishTags" maxlength="1200" rows="2" placeholder="anime story, animated short, mystery explained"></textarea><div class="muted" style="font-size:11px;line-height:1.55;margin-top:5px">Separate tags with commas or new lines. Up to 30 tags and 500 characters total. These are separate from hashtags.</div><div id="publishTagsCount" class="muted" aria-live="polite" style="font-size:11px;text-align:right;margin-top:4px">0/30 tags · 0/500 characters</div></div><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
     </form>
    </div>
-   <div class="sectionhead"><div><h3>Publishing drafts</h3><span class="muted" style="font-size:12px">Review your prepared posts</span></div></div><div id="publishingJobs" class="project-list"><div class="empty">Loading publishing drafts…</div></div>
+   <section id="publishingDraftsSection" aria-labelledby="publishingDraftsTitle">
+    <div class="publishing-drafts-heading">
+     <div class="publishing-drafts-heading-main">
+      <div class="publishing-drafts-icon" aria-hidden="true">↗</div>
+      <div><div class="publishing-drafts-eyebrow">CONTENT WORKSPACE <span> / </span> OUTBOX</div><h3 id="publishingDraftsTitle">Publishing drafts</h3><p>Review, manage and publish your prepared videos.</p></div>
+     </div>
+     <button class="secondary publishing-refresh" type="button" onclick="refreshPublishing()" aria-label="Refresh publishing drafts"><span aria-hidden="true">↻</span> Refresh queue</button>
+    </div>
+    <div class="publishing-drafts-divider"><span>YOUR QUEUE</span><span>Latest activity</span></div>
+    <div id="publishingJobs" class="project-list"><div class="empty">Loading publishing drafts…</div></div>
+   </section>
    <p class="production-note">A saved draft is not uploaded until you press Publish now. YouTube uploads are streamed from Cloudflare R2 and checked while YouTube processes the video. YouTube API quota limits and compliance rules still apply; check Google Cloud Console if an upload is blocked. TikTok public posting also requires approval of the Content Posting API app.</p>
   </section>
   <section id="profilePanel" class="panel billing-panel" style="display:none">
