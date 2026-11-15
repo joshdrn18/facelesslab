@@ -769,6 +769,72 @@ async function handle(request, env) {
             ORDER BY g.created_at DESC LIMIT 15
           `).bind(since).all()
         ]);
+
+        const usageSettings = await readAIUsageSettings(env);
+        const nowUtc = Math.floor(Date.now() / 1000);
+        const utcDayStart = Math.floor(nowUtc / 86400) * 86400;
+        const [todayTotals, todayStages, dailyHistory, recentInferences] = await Promise.all([
+          env.DB.prepare(
+            "SELECT COUNT(*) AS requests," +
+            "SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed," +
+            "SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed," +
+            "SUM(CASE WHEN status='processing' THEN 1 ELSE 0 END) AS processing," +
+            "SUM(COALESCE(neurons,0)) AS reported_neurons," +
+            "SUM(CASE WHEN neurons IS NOT NULL THEN 1 ELSE 0 END) AS neuron_records," +
+            "SUM(COALESCE(prompt_tokens,0)) AS prompt_tokens," +
+            "SUM(COALESCE(completion_tokens,0)) AS completion_tokens," +
+            "SUM(COALESCE(input_characters,0)) AS input_characters," +
+            "SUM(COALESCE(input_bytes,0)) AS input_bytes," +
+            "SUM(COALESCE(output_bytes,0)) AS output_bytes FROM (" +
+            "SELECT status,neurons,prompt_tokens,completion_tokens,input_characters,input_bytes,output_bytes " +
+            "FROM ai_inference_events WHERE created_at>=? " +
+            "UNION ALL SELECT status,NULL,NULL,NULL," +
+            "COALESCE(CAST(json_extract(input_json,'$.characters') AS INTEGER),0)," +
+            "COALESCE(CAST(json_extract(input_json,'$.audio_bytes') AS INTEGER),0)," +
+            "COALESCE(CAST(json_extract(output_json,'$.bytes') AS INTEGER),0) " +
+            "FROM generations g WHERE g.created_at>=? " +
+            "AND g.stage IN ('voice','visuals','character_reference','subtitles') " +
+            "AND NOT EXISTS (SELECT 1 FROM ai_inference_events e WHERE e.generation_id=g.id))"
+          ).bind(utcDayStart,utcDayStart).first(),
+          env.DB.prepare(
+            "SELECT stage,model,COUNT(*) AS requests," +
+            "SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed," +
+            "SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed," +
+            "SUM(COALESCE(prompt_tokens,0)) AS prompt_tokens," +
+            "SUM(COALESCE(completion_tokens,0)) AS completion_tokens," +
+            "SUM(COALESCE(input_characters,0)) AS input_characters," +
+            "SUM(COALESCE(input_bytes,0)) AS input_bytes," +
+            "SUM(COALESCE(output_bytes,0)) AS output_bytes," +
+            "SUM(COALESCE(neurons,0)) AS reported_neurons,AVG(duration_ms) AS avg_duration_ms FROM (" +
+            "SELECT stage,model,status,prompt_tokens,completion_tokens,input_characters,input_bytes,output_bytes,neurons,duration_ms " +
+            "FROM ai_inference_events WHERE created_at>=? " +
+            "UNION ALL SELECT g.stage," +
+            "COALESCE(json_extract(g.output_json,'$.model'),json_extract(g.input_json,'$.model'),'Model not recorded')," +
+            "g.status,NULL,NULL," +
+            "COALESCE(CAST(json_extract(g.input_json,'$.characters') AS INTEGER),0)," +
+            "COALESCE(CAST(json_extract(g.input_json,'$.audio_bytes') AS INTEGER),0)," +
+            "COALESCE(CAST(json_extract(g.output_json,'$.bytes') AS INTEGER),0),NULL,NULL " +
+            "FROM generations g WHERE g.created_at>=? " +
+            "AND g.stage IN ('voice','visuals','character_reference','subtitles') " +
+            "AND NOT EXISTS (SELECT 1 FROM ai_inference_events e WHERE e.generation_id=g.id)) " +
+            "GROUP BY stage,model ORDER BY requests DESC,stage,model"
+          ).bind(utcDayStart,utcDayStart).all(),
+          env.DB.prepare(
+            "SELECT date(created_at,'unixepoch') AS day,stage,COUNT(*) AS requests FROM (" +
+            "SELECT created_at,stage FROM ai_inference_events WHERE created_at>=? " +
+            "UNION ALL SELECT g.created_at,g.stage FROM generations g WHERE g.created_at>=? " +
+            "AND g.stage IN ('voice','visuals','character_reference','subtitles') " +
+            "AND NOT EXISTS (SELECT 1 FROM ai_inference_events e WHERE e.generation_id=g.id)) " +
+            "GROUP BY day,stage ORDER BY day,stage"
+          ).bind(nowUtc-7*86400,nowUtc-7*86400).all(),
+          env.DB.prepare(
+            "SELECT e.id,e.stage,e.model,e.status,e.created_at,e.duration_ms,e.input_characters,e.input_bytes," +
+            "e.output_bytes,e.prompt_tokens,e.completion_tokens,e.neurons,u.email,u.display_name,p.title AS project_title " +
+            "FROM ai_inference_events e JOIN users u ON u.id=e.user_id " +
+            "LEFT JOIN projects p ON p.id=e.project_id WHERE e.created_at>=? " +
+            "ORDER BY e.created_at DESC LIMIT 25"
+          ).bind(utcDayStart).all()
+        ]);
         const n = value => Number(value || 0);
         return json({
           ok: true, period, since,
@@ -783,6 +849,26 @@ async function handle(request, env) {
           members: members.results || [],
           models: models.results || [],
           recent: recent.results || [],
+          settings: usageSettings,
+          today: {
+            utc_day_start: utcDayStart,
+            requests: n(todayTotals?.requests),
+            completed: n(todayTotals?.completed),
+            failed: n(todayTotals?.failed),
+            processing: n(todayTotals?.processing),
+            reported_neurons: n(todayTotals?.neuron_records) ? n(todayTotals?.reported_neurons) : null,
+            neuron_records: n(todayTotals?.neuron_records),
+            prompt_tokens: n(todayTotals?.prompt_tokens),
+            completion_tokens: n(todayTotals?.completion_tokens),
+            input_characters: n(todayTotals?.input_characters),
+            input_bytes: n(todayTotals?.input_bytes),
+            output_bytes: n(todayTotals?.output_bytes),
+            cap: usageSettings.daily_request_limit,
+            warning_at: usageSettings.daily_request_limit ? Math.ceil(usageSettings.daily_request_limit * usageSettings.warning_percent / 100) : null
+          },
+          today_by_model: todayStages.results || [],
+          last_7_days: dailyHistory.results || [],
+          recent_inferences: recentInferences.results || [],
           accounting_note: "Generation counts and workload measures are recorded per user. Exact Neurons and USD charges are account-level Cloudflare billing data and are not apportioned to individual users by this endpoint."
         });
       }
