@@ -1066,6 +1066,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
       <div><label class="field" for="ideaVaultDate">Target publish date</label><input id="ideaVaultDate" type="date"></div>
       <button class="primary" type="submit" id="ideaVaultAdd">＋ Save idea</button>
      </form>
+     <div class="notice" id="ideaVaultNotice" role="status"></div>
      <div class="idea-vault-toolbar"><input id="ideaVaultSearch" type="search" placeholder="Search saved ideas…" aria-label="Search saved ideas"><select id="ideaVaultFilter" aria-label="Filter ideas by status"><option value="all">All statuses</option><option value="idea">Idea</option><option value="writing">In progress</option><option value="ready">Ready to make</option></select><span id="ideaVaultCount">0 ideas saved</span></div>
      <div id="ideaVaultList" class="idea-vault-list" aria-live="polite"><div class="empty">Your idea vault is empty. Save a video idea above to get started.</div></div>
      <div class="idea-vault-foot"><small>Ideas are saved in this browser profile. They are not synced to your account or other devices.</small><button type="button" class="secondary" id="exportIdeaVault">Export ideas</button></div>
@@ -2490,6 +2491,7 @@ $("ideaVaultForm").addEventListener("submit",event=>{
  const id=(globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+"-"+Math.random().toString(36).slice(2,8);
  ideaVaultItems.push({id,title,format:$("ideaVaultFormat").value,targetDate:$("ideaVaultDate").value||"",status:"idea",createdAt:Date.now()});
  if(!saveIdeaVault()){ideaVaultItems.pop();return;}
+ $("ideaVaultNotice").style.color="var(--cyan)";$("ideaVaultNotice").textContent="Idea saved in this browser.";
  $("ideaVaultTitle").value="";$("ideaVaultDate").value="";renderIdeaVault();$("ideaVaultTitle").focus();
 });
 $("ideaVaultSearch").addEventListener("input",renderIdeaVault);
