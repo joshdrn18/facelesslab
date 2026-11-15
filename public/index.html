@@ -813,6 +813,37 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
 @media(max-width:700px){.cf-neuron-summary-grid{grid-template-columns:1fr 1fr}.ai-daily-grid{grid-template-columns:1fr}.ai-daily-head{flex-direction:column}.ai-daily-cap-controls>div{width:100%}.ai-daily-cap-controls input{flex:1;width:auto}.ai-usage-day-row{grid-template-columns:76px 1fr 32px}}
 
 .ai-neuron-track{height:7px;margin-top:8px;border-radius:99px;overflow:hidden;background:#273248}.ai-neuron-track span{display:block;width:0;height:100%;border-radius:99px;background:linear-gradient(90deg,#70e5dc,#a18aff);transition:width .2s}
+
+/* Workspace visual refresh */
+:root{--bg:#080d16;--panel:#111a29;--line:#26344b;--muted:#91a0b8;--text:#f4f7fc;--purple:#a894ff;--cyan:#76e8dc}
+body{background:radial-gradient(ellipse at 78% -12%,rgba(91,76,160,.25),transparent 36%),radial-gradient(ellipse at 0% 48%,rgba(45,116,126,.09),transparent 34%),#080d16}
+.app{grid-template-columns:248px minmax(0,1fr)}.side{position:sticky;top:0;height:100vh;align-self:start;overflow-y:auto;border-right:1px solid rgba(143,164,199,.14);background:rgba(9,15,26,.92);backdrop-filter:blur(18px);padding:24px 14px}
+.side .brand{padding-bottom:24px;letter-spacing:-.4px}.navlabel{padding:15px 11px 8px;color:#73829b;font-size:9px;letter-spacing:1.7px}
+.nav a{min-height:43px;align-items:center;border:1px solid transparent;transition:background .18s,border-color .18s,transform .18s}.nav a.active{background:linear-gradient(100deg,rgba(161,138,255,.17),rgba(112,229,220,.07));border-color:rgba(161,138,255,.17);box-shadow:inset 2px 0 #a894ff;color:#fff}.nav a:hover{background:rgba(145,163,195,.1);border-color:rgba(145,163,195,.12);transform:translateX(2px)}
+.main{max-width:1660px;padding:clamp(20px,3.4vw,48px) clamp(16px,4vw,62px)}.top{padding-bottom:20px;border-bottom:1px solid rgba(143,164,199,.13);margin-bottom:24px}.top h1{font-size:clamp(24px,2.2vw,32px);letter-spacing:-1.1px}.top-context{font-size:9px;font-weight:850;letter-spacing:1.3px;color:#a8b5ca}
+.hero{border-color:rgba(161,138,255,.25);background:radial-gradient(ellipse at 80% 20%,rgba(112,229,220,.12),transparent 40%),linear-gradient(115deg,rgba(45,37,79,.92),rgba(17,29,44,.96));box-shadow:0 18px 45px rgba(0,0,0,.18)}
+.stat,.panel{border-color:rgba(143,164,199,.15);box-shadow:0 12px 32px rgba(0,0,0,.13)}.stat{background:linear-gradient(145deg,rgba(20,31,48,.98),rgba(13,21,34,.98))}.panel{background:linear-gradient(145deg,rgba(17,27,42,.98),rgba(12,20,32,.98))}
+.primary{box-shadow:0 7px 19px rgba(115,230,220,.1);transition:transform .16s,filter .16s}.primary:hover{filter:brightness(1.06);transform:translateY(-1px)}.secondary,.mini-btn{transition:background .16s,border-color .16s}.secondary:hover,.mini-btn:hover{background:#2a3550;border-color:#596985}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #a894ff;outline-offset:2px}input,select,textarea{border-color:rgba(143,164,199,.24);background:rgba(7,13,23,.72)}
+.main:not([data-view="toolkit"]) #toolkitPanel{display:none!important}
+.main[data-view="toolkit"] #overviewHero,.main[data-view="toolkit"] .stats,.main[data-view="toolkit"] #mainWorkspace,.main[data-view="toolkit"] #projects,.main[data-view="toolkit"] #videoLibrary,.main[data-view="toolkit"] #publishingPanel,.main[data-view="toolkit"] #profilePanel,.main[data-view="toolkit"] #adminPanel,.main[data-view="toolkit"] #billingPanel{display:none!important}
+.main[data-view="toolkit"] #toolkitPanel{display:block!important}
+.toolkit-shell{padding:clamp(15px,2vw,24px);overflow:hidden}.toolkit-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.toolkit-heading h2{font-size:clamp(21px,2.5vw,30px);line-height:1.15;letter-spacing:-.9px;margin:7px 0}.toolkit-heading p{margin:0;color:var(--muted);font-size:12px}
+.toolkit-no-ai,.toolkit-count{white-space:nowrap;border:1px solid rgba(112,229,220,.2);border-radius:999px;padding:6px 10px;background:rgba(112,229,220,.07);color:#91e9dc;font-size:9px;font-weight:850;letter-spacing:.6px}
+.toolkit-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:21px 23px;border:1px solid rgba(161,138,255,.2);border-radius:15px;background:radial-gradient(ellipse at 85% 0%,rgba(112,229,220,.12),transparent 40%),linear-gradient(112deg,rgba(42,35,72,.9),rgba(16,30,45,.96));margin-bottom:16px}
+.toolkit-kicker,.toolkit-step{font-size:9px;font-weight:850;letter-spacing:1.35px;color:#9fe6df}.toolkit-banner h3{font-size:19px;margin:5px 0}.toolkit-banner p{max-width:620px;color:#b1bfd1;font-size:11px;margin:0}.toolkit-banner-stats{min-width:108px;text-align:center;padding:6px 13px;border-left:1px solid rgba(255,255,255,.12)}.toolkit-banner-stats b{display:block;font-size:35px;line-height:1;color:#c7bbff}.toolkit-banner-stats span{display:block;font-size:9px;color:#a9b7cb;margin-top:6px}
+.toolkit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.toolkit-card{min-width:0;padding:17px;border:1px solid rgba(143,164,199,.15);border-radius:14px;background:linear-gradient(145deg,rgba(19,30,47,.9),rgba(12,20,32,.92))}.toolkit-blueprints,.toolkit-checklist-card{grid-column:1/-1}
+.toolkit-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.toolkit-card-head h3{font-size:16px;margin:5px 0 4px;letter-spacing:-.25px}.toolkit-card-head p{max-width:630px;color:var(--muted);font-size:10px;line-height:1.55;margin:0}.toolkit-count{color:#c3b8ff;background:rgba(161,138,255,.08);border-color:rgba(161,138,255,.18)}
+.blueprint-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.blueprint-option{min-width:0;min-height:102px;text-align:left;padding:12px;border:1px solid rgba(143,164,199,.16);border-radius:11px;background:rgba(6,13,23,.45);color:var(--text);transition:border-color .16s,background .16s,transform .16s}.blueprint-option:hover{border-color:rgba(161,138,255,.45);transform:translateY(-1px)}.blueprint-option.is-selected{border-color:rgba(161,138,255,.62);background:linear-gradient(145deg,rgba(88,71,146,.25),rgba(23,49,62,.4));box-shadow:inset 0 0 0 1px rgba(161,138,255,.12)}.blueprint-icon{display:grid;place-items:center;width:27px;height:27px;border-radius:8px;background:rgba(161,138,255,.13);color:#c7baff;font-size:15px;margin-bottom:9px}.blueprint-option b,.blueprint-option small{display:block}.blueprint-option b{font-size:11px}.blueprint-option small{font-size:9px;line-height:1.45;color:#9caec5;margin-top:4px}
+.blueprint-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:13px;padding-top:12px;border-top:1px solid rgba(143,164,199,.12)}.blueprint-footer p{font-size:10px;color:#aebbd0;margin:0}.blueprint-footer .primary{padding:10px 13px;font-size:10px}
+.toolkit-form-row{margin-top:3px}.toolkit-hook-card .field{margin-top:10px}.toolkit-hook-card input,.toolkit-hook-card select{min-height:41px}.toolkit-hook-card .actions{margin-top:12px}.toolkit-hook-card .actions .primary{font-size:10px;padding:10px 13px}
+.toolkit-pack-result{margin-top:13px;padding:13px;border:1px solid rgba(112,229,220,.16);border-radius:11px;background:rgba(6,14,24,.52)}.toolkit-output-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.toolkit-output-grid>div{min-width:0;padding:10px;border:1px solid rgba(143,164,199,.11);border-radius:9px;background:rgba(19,29,44,.42)}.toolkit-output-grid h4{margin:0 0 8px;font-size:10px;color:#c9c1ff;letter-spacing:.35px}.toolkit-output-grid ol{padding-left:19px;margin:0}.toolkit-output-grid li,.toolkit-copy-block p{font-size:10px;line-height:1.55;color:#c3cede;margin:5px 0;overflow-wrap:anywhere}.toolkit-copy-block p{white-space:pre-wrap}.toolkit-pack-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px}.toolkit-pack-actions small,.preflight-footer small{font-size:9px;color:#8595ad;line-height:1.5}.toolkit-pack-actions button{font-size:10px;padding:8px 12px}
+.preflight-summary{padding:11px 12px;border:1px solid rgba(143,164,199,.12);border-radius:10px;background:rgba(6,13,23,.38);margin-bottom:11px}.preflight-summary>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:10px}.preflight-summary b{font-size:11px}.preflight-summary span{color:#93a4bc}.preflight-track{height:7px;border-radius:99px;background:#263349;overflow:hidden;margin-top:9px}.preflight-track span{display:block;width:0;height:100%;border-radius:99px;background:linear-gradient(90deg,#70e5dc,#a18aff);transition:width .2s}
+.preflight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.preflight-grid label{display:flex;align-items:flex-start;gap:10px;min-width:0;padding:10px;border:1px solid rgba(143,164,199,.12);border-radius:9px;background:rgba(7,14,24,.36);cursor:pointer}.preflight-grid label:has(input:checked){border-color:rgba(112,229,220,.32);background:rgba(31,76,70,.15)}.preflight-grid input{width:15px;height:15px;flex:0 0 15px;margin:2px 0 0;accent-color:#75e2d6}.preflight-grid b,.preflight-grid small{display:block}.preflight-grid b{font-size:10px;color:#dfe7f4}.preflight-grid small{font-size:9px;color:#8fa0b8;line-height:1.45;margin-top:3px}.preflight-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(143,164,199,.12)}.preflight-footer button{font-size:9px;padding:8px 11px}
+@media(max-width:1100px){.blueprint-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:850px){.app{grid-template-columns:1fr}.side{display:none}}
+@media(max-width:700px){.toolkit-grid{grid-template-columns:1fr}.toolkit-blueprints,.toolkit-checklist-card{grid-column:auto}.toolkit-heading,.toolkit-banner{align-items:flex-start;flex-direction:column}.toolkit-banner-stats{border-left:0;border-top:1px solid rgba(255,255,255,.12);width:100%;text-align:left;padding:12px 0 0}.toolkit-output-grid,.preflight-grid{grid-template-columns:1fr}.blueprint-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.blueprint-footer,.toolkit-pack-actions,.preflight-footer{align-items:stretch;flex-direction:column}.blueprint-footer .primary,.preflight-footer button{width:100%}.top{align-items:flex-start}.userbox{flex-wrap:wrap;justify-content:flex-end}}
+@media(max-width:600px){.side{display:block!important;position:sticky;top:0;z-index:20;height:auto;max-height:none;padding:10px 12px;border-right:0;border-bottom:1px solid rgba(143,164,199,.2)}.side .brand{padding:0 5px 7px;margin:0 0 5px;font-size:16px}.side .brand .logo{width:28px;height:28px}.side .navlabel,.sidebottom{display:none}.side nav{display:flex;gap:5px;overflow-x:auto;white-space:nowrap;padding:2px 0 4px;scrollbar-width:thin}.side nav a{flex:0 0 auto;min-height:35px;padding:8px 10px;margin:0;font-size:10px;gap:6px}.side nav a .ico{width:auto;flex-basis:auto}.main{padding:18px 12px}.top{gap:10px;margin-bottom:18px;padding-bottom:15px}.top h1{font-size:23px}.userbox{gap:6px}.userbox .secondary{padding:7px 9px;font-size:10px}.toolkit-card{padding:13px}}@media(max-width:380px){.blueprint-grid{grid-template-columns:1fr}.toolkit-heading h2{font-size:21px}}
+
 </style>
 </head>
 <body>
@@ -831,7 +862,7 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
  </div>
 </section>
 <div id="appScreen" class="app hidden">
- <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a><a href="#publishing" data-view="publishing"><span class="ico">↗</span>Publishing</a><a href="#admin" data-view="admin" id="adminNav" style="display:none"><span class="ico">⚙</span>Admin panel</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
+ <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a><a href="#publishing" data-view="publishing"><span class="ico">↗</span>Publishing</a><a href="#toolkit" data-view="toolkit"><span class="ico">✧</span>Creator toolkit</a><a href="#admin" data-view="admin" id="adminNav" style="display:none"><span class="ico">⚙</span>Admin panel</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
  <main class="main">
   <header class="top"><div class="top-heading"><div class="top-kicker"><span class="eyebrow" id="pageEyebrow">FACELessLAB STUDIO</span><span class="top-separator">/</span><span class="top-context" id="pageContext">OVERVIEW</span></div><h1 id="pageTitle">Overview</h1><p class="sub" id="pageSubtitle">Your creative workspace at a glance.</p></div><div class="userbox"><div class="user-meta"><div class="user-identity"><b id="userName">Creator</b><span class="role-pill" id="userRolePill">MEMBER</span></div><div class="muted user-email" id="userEmail"></div><button id="systemHealth" class="health-pill health-pill-button" type="button" title="Click to check service status" aria-live="polite"><span></span>Checking core systems…</button></div><button class="avatar avatar-button" id="avatar" type="button" title="Open profile settings" aria-label="Open profile settings">FL</button><button class="secondary" id="logoutBtn">Log out</button></div></header>
   <section class="hero" id="overviewHero"><div><div class="eyebrow">CREATE WITHOUT A CAMERA</div><h2>Your next video starts with an idea.</h2><p>Generate scripts, voiceovers, visuals and subtitles in one workflow.</p></div><button class="primary" onclick="document.querySelector('#topic').focus()">＋ Create a video</button></section>
@@ -972,6 +1003,42 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
    <p class="production-note">Account suspension prevents sign-in. Point adjustments are recorded in the member's transaction history and the admin audit trail. The final active administrator cannot be suspended.</p>
   </section>
   <section id="billingPanel" class="panel billing-panel"><div class="sectionhead"><div><h3>Points & billing</h3><p class="muted">Manage your FacelessLab usage and account.</p></div><span class="status">Account</span></div><div class="billing-grid"><article class="stat"><span>Available points</span><strong id="billingPoints">0</strong></article><article class="stat"><span>Projects created</span><strong id="billingProjects">0</strong></article><article class="stat"><span>Completed projects</span><strong id="billingVideos">0</strong></article></div><div class="content-card"><span class="content-label">CURRENT ACCESS</span><h3 id="accountPlan">Free workspace</h3><p id="billingDescription">Your workspace is active. Point top-ups and payment checkout are not enabled yet; no payment will be taken from this page.</p><div class="actions"><button class="secondary" type="button" onclick="refreshProjects()">↻ Refresh usage</button><button class="primary" type="button" onclick="navigateTo('create')">Create a video →</button></div></div><p class="production-note">Payment methods and point top-ups will appear here after a verified checkout and point ledger are connected.</p></section>
+
+  <section id="toolkitPanel" class="panel toolkit-shell" aria-labelledby="toolkitTitle">
+   <div class="toolkit-heading"><div><span class="content-label">FACELESSLAB / CREATOR TOOLS</span><h2 id="toolkitTitle">Build a better short, before you render.</h2><p>Reusable video structures, opening hooks and a final quality check in one workspace.</p></div><span class="toolkit-no-ai">✦ NO EXTRA AI CREDITS</span></div>
+   <div class="toolkit-banner"><div><span class="toolkit-kicker">YOUR CREATION WORKFLOW</span><h3>From rough idea to publish-ready</h3><p>Pick a structure, sharpen the opening, then run through the quality gate before exporting.</p></div><div class="toolkit-banner-stats"><b>03</b><span>practical tools</span></div></div>
+   <div class="toolkit-grid">
+    <article class="toolkit-card toolkit-blueprints"><div class="toolkit-card-head"><div><span class="toolkit-step">01 / VIDEO BLUEPRINTS</span><h3>Start with a proven format</h3><p>Select a structure to prefill the existing Create video form. Edit everything before saving.</p></div><span class="toolkit-count">6 formats</span></div>
+     <div class="blueprint-grid" id="blueprintGrid">
+      <button type="button" class="blueprint-option is-selected" data-blueprint="mini-doc" aria-pressed="true"><span class="blueprint-icon">◉</span><b>Mini documentary</b><small>Curiosity, context and a clear reveal.</small></button>
+      <button type="button" class="blueprint-option" data-blueprint="top-list" aria-pressed="false"><span class="blueprint-icon">≡</span><b>Top list</b><small>Fast countdown with a strong payoff.</small></button>
+      <button type="button" class="blueprint-option" data-blueprint="myth-buster" aria-pressed="false"><span class="blueprint-icon">◇</span><b>Myth buster</b><small>Separate common belief from evidence.</small></button>
+      <button type="button" class="blueprint-option" data-blueprint="anime-story" aria-pressed="false"><span class="blueprint-icon">✧</span><b>Animated story</b><small>Character-led scenes and a visual arc.</small></button>
+      <button type="button" class="blueprint-option" data-blueprint="quick-guide" aria-pressed="false"><span class="blueprint-icon">↗</span><b>Quick guide</b><small>Simple steps viewers can apply.</small></button>
+      <button type="button" class="blueprint-option" data-blueprint="motivation" aria-pressed="false"><span class="blueprint-icon">↑</span><b>Motivation</b><small>A relatable struggle and practical lift.</small></button>
+     </div><div class="blueprint-footer"><p id="blueprintSummary">Mini documentary · 60 seconds · Cinematic storytelling</p><button type="button" class="primary" id="applyBlueprint">Use this blueprint →</button></div>
+    </article>
+    <article class="toolkit-card toolkit-hook-card"><div class="toolkit-card-head"><div><span class="toolkit-step">02 / HOOK & PACKAGING LAB</span><h3>Give the video a stronger opening</h3><p>Generate editable hook and title starting points from your topic. These are local writing formulas, not AI calls.</p></div><span class="toolkit-count">Instant</span></div>
+     <label class="field" for="toolkitTopic">Your video topic</label><input id="toolkitTopic" type="text" maxlength="180" placeholder="e.g. Why deep-sea creatures look so unusual">
+     <div class="two toolkit-form-row"><div><label class="field" for="toolkitHookTone">Hook direction</label><select id="toolkitHookTone"><option value="curiosity">Curiosity</option><option value="bold">Bold statement</option><option value="story">Story opening</option><option value="myth">Myth vs fact</option><option value="challenge">Challenge</option></select></div><div><label class="field" for="toolkitPlatform">Platform</label><select id="toolkitPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option><option value="reels">Instagram Reels</option></select></div></div>
+     <div class="actions"><button type="button" class="primary" id="generateHookPack">Generate hook & title pack ✦</button></div><div class="notice" id="toolkitNotice" role="status"></div>
+     <div id="toolkitPackResult" class="toolkit-pack-result hidden" aria-live="polite"><div class="toolkit-output-grid"><div><h4>Opening hook ideas</h4><ol id="toolkitHookList"></ol></div><div><h4>Title directions</h4><ol id="toolkitTitleList"></ol></div><div class="toolkit-copy-block"><h4>Caption starter</h4><p id="toolkitCaption"></p></div><div class="toolkit-copy-block"><h4>Hashtag suggestions</h4><p id="toolkitHashtags"></p></div></div><div class="toolkit-pack-actions"><small>Review every claim and adapt the wording to the finished video.</small><button type="button" class="secondary" id="copyToolkitPack">Copy full pack</button></div></div>
+    </article>
+    <article class="toolkit-card toolkit-checklist-card"><div class="toolkit-card-head"><div><span class="toolkit-step">03 / EXPORT QUALITY GATE</span><h3>Run the final pre-publish check</h3><p>Tick each item after reviewing the actual video. Progress is saved in this browser.</p></div><span class="toolkit-count">8 checks</span></div>
+     <div class="preflight-summary"><div><b id="preflightProgress">0 / 8 completed</b><span id="preflightState">Ready for review</span></div><div class="preflight-track"><span id="preflightBar"></span></div></div>
+     <div class="preflight-grid">
+      <label><input type="checkbox" data-preflight="script"><span><b>Script reviewed</b><small>Hook, flow and factual claims make sense.</small></span></label>
+      <label><input type="checkbox" data-preflight="voice"><span><b>Voice-over checked</b><small>No cut-off words, odd pauses or volume jumps.</small></span></label>
+      <label><input type="checkbox" data-preflight="visuals"><span><b>Visuals match narration</b><small>No unrelated, repeated or broken scenes.</small></span></label>
+      <label><input type="checkbox" data-preflight="captions"><span><b>Subtitles are readable</b><small>Timing, spelling and safe areas look right.</small></span></label>
+      <label><input type="checkbox" data-preflight="format"><span><b>Vertical format verified</b><small>9:16 framing and important details are visible.</small></span></label>
+      <label><input type="checkbox" data-preflight="audio"><span><b>Audio is balanced</b><small>Music never overpowers narration.</small></span></label>
+      <label><input type="checkbox" data-preflight="playback"><span><b>Full export watched</b><small>Check the beginning, middle and ending.</small></span></label>
+      <label><input type="checkbox" data-preflight="metadata"><span><b>Post details reviewed</b><small>Title, caption, tags and audience settings are correct.</small></span></label>
+     </div><div class="preflight-footer"><small>Stored only in this browser; it does not change or upload your project.</small><button type="button" class="secondary" id="resetPreflight">Reset checklist</button></div>
+    </article>
+   </div>
+  </section>
   <div class="footer">FacelessLab · Your ideas deserve to be seen.</div>
  </main>
 </div>
@@ -1028,13 +1095,14 @@ function escapeHtml(value) {
 }
 
 function navigateTo(view,updateHash=true){
- const allowed=["overview","create","projects","library","publishing","billing","profile","admin"];if(!allowed.includes(view)||(view==="admin"&&currentUser?.role!=="admin"))view="overview";
+ const allowed=["overview","create","projects","library","publishing","toolkit","billing","profile","admin"];if(!allowed.includes(view)||(view==="admin"&&currentUser?.role!=="admin"))view="overview";
  const pageMeta={
   overview:{title:"Overview",subtitle:"Your creative workspace at a glance.",context:"WORKSPACE"},
   create:{title:"Create a video",subtitle:"Turn one idea into a script, visuals, voice-over and subtitles.",context:"PRODUCTION"},
   projects:{title:"My projects",subtitle:"Pick up where you left off and manage every production.",context:"WORKSPACE"},
   library:{title:"Rendered videos",subtitle:"Browse local exports and manage your Cloudflare backups.",context:"YOUR LIBRARY"},
   publishing:{title:"Publishing",subtitle:"Connect channels and prepare your next post.",context:"DISTRIBUTION"},
+  toolkit:{title:"Creator toolkit",subtitle:"Plan stronger short-form videos with reusable formats and publishing checks.",context:"CREATOR TOOLS"},
   admin:{title:"Admin control center",subtitle:"Manage members and monitor platform activity and usage.",context:"ADMINISTRATION"},
   profile:{title:"Profile & settings",subtitle:"Manage your personal details and account security.",context:"ACCOUNT"},
   billing:{title:"Points & billing",subtitle:"Review your account access and current usage.",context:"ACCOUNT"}
@@ -2251,5 +2319,74 @@ $("createForm").addEventListener("submit", async (event) => {
 });
 setAuthMode("login");
 loadSession();
+
+/* Creator Toolkit: local writing helpers only; no API calls and no model credits. */
+const creatorBlueprints={
+ "mini-doc":{style:"storytelling",duration:60,summary:"Mini documentary · 60 seconds · Cinematic storytelling",prompt:"Create a 60-second mini-documentary about [YOUR TOPIC]. Open with a specific curiosity gap, establish context, reveal 2–3 meaningful details, then end with a clear takeaway. Match visuals to each narration beat. Keep claims factual and avoid invented statistics."},
+ "top-list":{style:"toplist",duration:45,summary:"Top list · 45 seconds · Countdown format",prompt:"Create a 45-second countdown video about [YOUR TOPIC]. Start with why the list matters, present five concise entries with a compelling payoff near the end, use short transitions and finish with a question. Keep entries specific and verifiable."},
+ "myth-buster":{style:"educational",duration:45,summary:"Myth buster · 45 seconds · Educational explainer",prompt:"Create a 45-second myth-versus-fact explainer about [YOUR TOPIC]. State a common misconception, explain what the evidence supports, give one concrete example and close with the corrected takeaway. Separate established facts from uncertainty."},
+ "anime-story":{style:"anime",duration:60,summary:"Animated story · 60 seconds · AI anime",prompt:"Create a 60-second cinematic anime-style story about [YOUR TOPIC]. Establish one main character and a visual setting, show a clear challenge, build tension through 3–5 connected scenes and finish with an emotional payoff. Keep character appearance and scene continuity consistent."},
+ "quick-guide":{style:"educational",duration:45,summary:"Quick guide · 45 seconds · Practical how-to",prompt:"Create a 45-second practical guide about [YOUR TOPIC]. Start with the outcome viewers will get, explain 3–4 actionable steps in plain language, show matching visuals, mention one common mistake and end with a recap. Avoid vague advice."},
+ "motivation":{style:"motivation",duration:30,summary:"Motivation · 30 seconds · Motivational storytelling",prompt:"Create a 30-second motivational short about [YOUR TOPIC]. Begin with a relatable struggle, deliver one grounded reframing idea, give one small action the viewer can take today and end with a concise memorable line. Avoid unrealistic promises."}
+};
+let selectedCreatorBlueprint="mini-doc";
+function selectCreatorBlueprint(key){
+ const blueprint=creatorBlueprints[key];if(!blueprint)return;selectedCreatorBlueprint=key;
+ document.querySelectorAll(".blueprint-option").forEach(button=>{const active=button.dataset.blueprint===key;button.classList.toggle("is-selected",active);button.setAttribute("aria-pressed",active?"true":"false");});
+ $("blueprintSummary").textContent=blueprint.summary;
+}
+document.querySelectorAll(".blueprint-option").forEach(button=>button.addEventListener("click",()=>selectCreatorBlueprint(button.dataset.blueprint)));
+$("applyBlueprint").addEventListener("click",()=>{
+ const blueprint=creatorBlueprints[selectedCreatorBlueprint];if(!blueprint)return;
+ $("topic").value=blueprint.prompt;$("style").value=blueprint.style;$("duration").value=String(blueprint.duration);
+ $("createNotice").style.color="var(--cyan)";$("createNotice").textContent="Blueprint loaded. Replace [YOUR TOPIC] with your subject, then save when ready.";
+ navigateTo("create");$("topic").focus();
+});
+function makeCreatorPack(topic,tone,platform){
+ const subject=topic.trim().replace(/[.!?]+$/,"");
+ const hooks={
+  curiosity:["What most people miss about "+subject+" is worth a closer look.","There's a detail about "+subject+" that changes how the whole story looks.","Before you scroll past "+subject+", here's the question to ask.","The surprising part of "+subject+" isn't what most people expect."],
+  bold:["Let's get one thing straight about "+subject+".","Stop repeating the simple version of "+subject+"—here's the bigger picture.","The usual explanation of "+subject+" leaves out an important detail.","Here's the part of "+subject+" that deserves more attention."],
+  story:["It started with one question: what is really happening with "+subject+"?","At first, "+subject+" seemed simple. Then one detail changed the story.","To understand "+subject+", start with this moment.","Here's the short story behind "+subject+"."],
+  myth:["A common belief about "+subject+" needs a closer look.","Fact or fiction? Let's unpack one popular claim about "+subject+".","There's a difference between the myth and the evidence on "+subject+".","Before accepting the usual story about "+subject+", check this."],
+  challenge:["Could you explain "+subject+" in 30 seconds? Let's try.","Think you know "+subject+"? Test that idea with these details.","Here's a quick challenge: what do you actually know about "+subject+"?","Stay to the end and see whether your first assumption about "+subject+" still holds."]
+ };
+ const titles=["The Bigger Story Behind "+subject,"What Most People Miss About "+subject,subject+": 3 Things Worth Knowing","A Clearer Look at "+subject,"The Question You Should Ask About "+subject];
+ const captions={youtube:"A quick, clear look at "+subject+". Watch to the end, then share the detail that surprised you most. Subscribe for more concise explainers.",tiktok:"Let's unpack "+subject+" in under a minute. Which point stood out to you? Follow for more short explainers.",reels:"A fresh perspective on "+subject+". Save this for later and share it with someone who would find it useful."};
+ const stop=new Set(["about","after","again","also","because","before","being","between","could","every","first","from","have","into","just","more","most","other","over","some","than","that","their","there","these","they","this","through","under","very","what","when","where","which","with","your","will","would","does","look","really","story","quick","video"]);
+ const words=(subject.toLowerCase().match(/[a-z0-9]+/g)||[]).filter(word=>word.length>3&&!stop.has(word));
+ const tags=[...new Set(["#Shorts",...words.slice(0,4).map(word=>"#"+word),platform==="tiktok"?"#LearnOnTikTok":platform==="reels"?"#Reels":"#YouTubeShorts"])];
+ return {hooks:hooks[tone]||hooks.curiosity,titles,caption:captions[platform]||captions.youtube,hashtags:tags.join(" ")};
+}
+let latestCreatorPack=null;
+function renderCreatorPack(pack){
+ $("toolkitHookList").innerHTML=pack.hooks.map(item=>"<li>"+escapeHtml(item)+"</li>").join("");
+ $("toolkitTitleList").innerHTML=pack.titles.map(item=>"<li>"+escapeHtml(item)+"</li>").join("");
+ $("toolkitCaption").textContent=pack.caption;$("toolkitHashtags").textContent=pack.hashtags;$("toolkitPackResult").classList.remove("hidden");
+}
+$("generateHookPack").addEventListener("click",()=>{
+ const topic=$("toolkitTopic").value.trim(),notice=$("toolkitNotice");
+ if(!topic){notice.style.color="var(--red)";notice.textContent="Enter a topic first.";$("toolkitTopic").focus();return;}
+ latestCreatorPack=makeCreatorPack(topic,$("toolkitHookTone").value,$("toolkitPlatform").value);
+ notice.style.color="var(--cyan)";notice.textContent="Starter pack ready — no AI credits used.";renderCreatorPack(latestCreatorPack);
+});
+function creatorPackAsText(pack){return ["HOOK IDEAS",...pack.hooks.map((item,index)=>(index+1)+". "+item),"","TITLE DIRECTIONS",...pack.titles.map((item,index)=>(index+1)+". "+item),"","CAPTION",pack.caption,"","HASHTAGS",pack.hashtags].join(String.fromCharCode(10));}
+$("copyToolkitPack").addEventListener("click",async()=>{
+ if(!latestCreatorPack)return;const button=$("copyToolkitPack"),copyText=creatorPackAsText(latestCreatorPack);
+ try{if(navigator.clipboard&&navigator.clipboard.writeText)await navigator.clipboard.writeText(copyText);else throw new Error("Clipboard unavailable");button.textContent="Copied ✓";}
+ catch(error){const area=document.createElement("textarea");area.value=copyText;area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();let copied=false;try{copied=document.execCommand("copy");}catch(error){}area.remove();button.textContent=copied?"Copied ✓":"Select and copy manually";}
+ setTimeout(()=>{button.textContent="Copy full pack";},1800);
+});
+const PREFLIGHT_STORAGE_KEY="facelesslab_creator_preflight_v1";
+function readPreflightState(){try{return JSON.parse(localStorage.getItem(PREFLIGHT_STORAGE_KEY)||"{}")||{};}catch(error){return {};}}
+function refreshPreflight(){
+ const state=readPreflightState(),items=[...document.querySelectorAll("[data-preflight]")];items.forEach(item=>{item.checked=state[item.dataset.preflight]===true;});
+ const completed=items.filter(item=>item.checked).length,total=items.length,percent=total?Math.round(completed/total*100):0;
+ $("preflightProgress").textContent=completed+" / "+total+" completed";$("preflightState").textContent=completed===total?"All checks completed":completed===0?"Ready for review":percent+"% reviewed";$("preflightBar").style.width=percent+"%";
+}
+document.querySelectorAll("[data-preflight]").forEach(item=>item.addEventListener("change",()=>{const state=readPreflightState();state[item.dataset.preflight]=item.checked;try{localStorage.setItem(PREFLIGHT_STORAGE_KEY,JSON.stringify(state));}catch(error){}refreshPreflight();}));
+$("resetPreflight").addEventListener("click",()=>{try{localStorage.removeItem(PREFLIGHT_STORAGE_KEY);}catch(error){}refreshPreflight();});
+selectCreatorBlueprint("mini-doc");refreshPreflight();
+
 </script>
 </body></html>
