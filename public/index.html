@@ -832,7 +832,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .toolkit-no-ai,.toolkit-count{white-space:nowrap;border:1px solid rgba(112,229,220,.2);border-radius:999px;padding:6px 10px;background:rgba(112,229,220,.07);color:#91e9dc;font-size:9px;font-weight:850;letter-spacing:.6px}
 .toolkit-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:21px 23px;border:1px solid rgba(161,138,255,.2);border-radius:15px;background:radial-gradient(ellipse at 85% 0%,rgba(112,229,220,.12),transparent 40%),linear-gradient(112deg,rgba(42,35,72,.9),rgba(16,30,45,.96));margin-bottom:16px}
 .toolkit-kicker,.toolkit-step{font-size:9px;font-weight:850;letter-spacing:1.35px;color:#9fe6df}.toolkit-banner h3{font-size:19px;margin:5px 0}.toolkit-banner p{max-width:620px;color:#b1bfd1;font-size:11px;margin:0}.toolkit-banner-stats{min-width:108px;text-align:center;padding:6px 13px;border-left:1px solid rgba(255,255,255,.12)}.toolkit-banner-stats b{display:block;font-size:35px;line-height:1;color:#c7bbff}.toolkit-banner-stats span{display:block;font-size:9px;color:#a9b7cb;margin-top:6px}
-.toolkit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.toolkit-card{min-width:0;padding:17px;border:1px solid rgba(143,164,199,.15);border-radius:14px;background:linear-gradient(145deg,rgba(19,30,47,.9),rgba(12,20,32,.92))}.toolkit-blueprints,.toolkit-checklist-card{grid-column:1/-1}
+.toolkit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.toolkit-card{min-width:0;padding:17px;border:1px solid rgba(143,164,199,.15);border-radius:14px;background:linear-gradient(145deg,rgba(19,30,47,.9),rgba(12,20,32,.92))}.toolkit-blueprints,.toolkit-series-card,.toolkit-checklist-card{grid-column:1/-1}
 .toolkit-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.toolkit-card-head h3{font-size:16px;margin:5px 0 4px;letter-spacing:-.25px}.toolkit-card-head p{max-width:630px;color:var(--muted);font-size:10px;line-height:1.55;margin:0}.toolkit-count{color:#c3b8ff;background:rgba(161,138,255,.08);border-color:rgba(161,138,255,.18)}
 .blueprint-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.blueprint-option{min-width:0;min-height:102px;text-align:left;padding:12px;border:1px solid rgba(143,164,199,.16);border-radius:11px;background:rgba(6,13,23,.45);color:var(--text);transition:border-color .16s,background .16s,transform .16s}.blueprint-option:hover{border-color:rgba(161,138,255,.45);transform:translateY(-1px)}.blueprint-option.is-selected{border-color:rgba(161,138,255,.62);background:linear-gradient(145deg,rgba(88,71,146,.25),rgba(23,49,62,.4));box-shadow:inset 0 0 0 1px rgba(161,138,255,.12)}.blueprint-icon{display:grid;place-items:center;width:27px;height:27px;border-radius:8px;background:rgba(161,138,255,.13);color:#c7baff;font-size:15px;margin-bottom:9px}.blueprint-option b,.blueprint-option small{display:block}.blueprint-option b{font-size:11px}.blueprint-option small{font-size:9px;line-height:1.45;color:#9caec5;margin-top:4px}
 .blueprint-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:13px;padding-top:12px;border-top:1px solid rgba(143,164,199,.12)}.blueprint-footer p{font-size:10px;color:#aebbd0;margin:0}.blueprint-footer .primary{padding:10px 13px;font-size:10px}
@@ -854,6 +854,20 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
  .main{padding:22px clamp(16px,3vw,30px)}
 }
 
+
+/* Series Sprint Planner */
+.series-sprint-form{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) 130px minmax(145px,.8fr) 135px auto;gap:9px;align-items:end}
+.series-sprint-form .field{margin:0 0 6px}.series-sprint-form input,.series-sprint-form select{min-height:40px;padding:9px 10px;font-size:10px}.series-sprint-form button{min-height:40px;padding:9px 12px;font-size:10px;white-space:nowrap}
+.series-sprint-preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:13px}
+.series-sprint-episode{min-width:0;padding:10px 11px;border:1px solid rgba(143,164,199,.14);border-radius:9px;background:rgba(6,13,23,.38)}
+.series-sprint-episode-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+.series-sprint-episode-head span{font-size:8px;font-weight:850;letter-spacing:.8px;color:#9fe6df}
+.series-sprint-episode-head small{font-size:8px;color:#91a0b8}
+.series-sprint-episode b{display:block;font-size:10px;line-height:1.45;overflow-wrap:anywhere}
+.series-sprint-episode p{margin:5px 0 0;font-size:8px;line-height:1.45;color:#91a0b8}
+.series-sprint-foot{margin:11px 0 0;font-size:9px;line-height:1.5;color:#8494ab}
+@media(max-width:1100px){.series-sprint-form{grid-template-columns:repeat(3,minmax(0,1fr))}.series-sprint-form button{width:100%}}
+@media(max-width:700px){.series-sprint-form,.series-sprint-preview{grid-template-columns:1fr}.series-sprint-form button{width:100%}}
 
 /* Idea Vault and script pacing tools */
 .idea-vault-form{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(150px,.8fr) minmax(150px,.8fr) auto;gap:10px;align-items:end}
@@ -1038,8 +1052,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   <section id="billingPanel" class="panel billing-panel"><div class="sectionhead"><div><h3>Points & billing</h3><p class="muted">Manage your FacelessLab usage and account.</p></div><span class="status">Account</span></div><div class="billing-grid"><article class="stat"><span>Available points</span><strong id="billingPoints">0</strong></article><article class="stat"><span>Projects created</span><strong id="billingProjects">0</strong></article><article class="stat"><span>Completed projects</span><strong id="billingVideos">0</strong></article></div><div class="content-card"><span class="content-label">CURRENT ACCESS</span><h3 id="accountPlan">Free workspace</h3><p id="billingDescription">Your workspace is active. Point top-ups and payment checkout are not enabled yet; no payment will be taken from this page.</p><div class="actions"><button class="secondary" type="button" onclick="refreshProjects()">↻ Refresh usage</button><button class="primary" type="button" onclick="navigateTo('create')">Create a video →</button></div></div><p class="production-note">Payment methods and point top-ups will appear here after a verified checkout and point ledger are connected.</p></section>
 
   <section id="toolkitPanel" class="panel toolkit-shell" aria-labelledby="toolkitTitle">
-   <div class="toolkit-heading"><div><span class="content-label">FACELESSLAB / CREATOR TOOLS</span><h2 id="toolkitTitle">Build a better short, before you render.</h2><p>Reusable video structures, opening hooks and a final quality check in one workspace.</p></div><span class="toolkit-no-ai">✦ NO EXTRA AI CREDITS</span></div>
-   <div class="toolkit-banner"><div><span class="toolkit-kicker">YOUR CREATION WORKFLOW</span><h3>From rough idea to publish-ready</h3><p>Pick a structure, sharpen the opening, then run through the quality gate before exporting.</p></div><div class="toolkit-banner-stats"><b>05</b><span>creator tools</span></div></div>
+   <div class="toolkit-heading"><div><span class="content-label">FACELESSLAB / CREATOR TOOLS</span><h2 id="toolkitTitle">Build a better short, before you render.</h2><p>Plan a series, prepare production prompts, organize ideas and check every short before rendering.</p></div><span class="toolkit-no-ai">✦ NO EXTRA AI CREDITS</span></div>
+   <div class="toolkit-banner"><div><span class="toolkit-kicker">YOUR CREATION WORKFLOW</span><h3>From one topic to a ready-to-produce series</h3><p>Generate an episode plan, save the briefs, send each one into Create Video, then run the quality gate before exporting.</p></div><div class="toolkit-banner-stats"><b>06</b><span>creator tools</span></div></div>
    <div class="toolkit-grid">
     <article class="toolkit-card toolkit-blueprints"><div class="toolkit-card-head"><div><span class="toolkit-step">01 / VIDEO BLUEPRINTS</span><h3>Start with a proven format</h3><p>Select a structure to prefill the existing Create video form. Edit everything before saving.</p></div><span class="toolkit-count">6 formats</span></div>
      <div class="blueprint-grid" id="blueprintGrid">
@@ -1058,8 +1072,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
      <div id="toolkitPackResult" class="toolkit-pack-result hidden" aria-live="polite"><div class="toolkit-output-grid"><div><h4>Opening hook ideas</h4><ol id="toolkitHookList"></ol></div><div><h4>Title directions</h4><ol id="toolkitTitleList"></ol></div><div class="toolkit-copy-block"><h4>Caption starter</h4><p id="toolkitCaption"></p></div><div class="toolkit-copy-block"><h4>Hashtag suggestions</h4><p id="toolkitHashtags"></p></div></div><div class="toolkit-pack-actions"><small>Review every claim and adapt the wording to the finished video.</small><button type="button" class="secondary" id="copyToolkitPack">Copy full pack</button></div></div>
     </article>
     
+    <article class="toolkit-card toolkit-series-card" id="seriesSprintPanel">
+     <div class="toolkit-card-head"><div><span class="toolkit-step">03 / SERIES SPRINT PLANNER</span><h3>Turn one topic into a complete mini-series</h3><p>Build a 3, 5 or 7-episode plan with different angles, matching video formats, ready-to-edit production prompts and a publishing cadence. Everything runs locally.</p></div><span class="toolkit-count">Batch planning · No AI</span></div>
+     <form id="seriesSprintForm" class="series-sprint-form">
+      <div><label class="field" for="seriesSprintTopic">Main topic or niche</label><input id="seriesSprintTopic" type="text" maxlength="150" placeholder="e.g. hidden ocean mysteries" required></div>
+      <div><label class="field" for="seriesSprintAudience">Target audience (optional)</label><input id="seriesSprintAudience" type="text" maxlength="100" placeholder="e.g. curious science fans"></div>
+      <div><label class="field" for="seriesSprintCount">Episodes</label><select id="seriesSprintCount"><option value="3">3 episodes</option><option value="5" selected>5 episodes</option><option value="7">7 episodes</option></select></div>
+      <div><label class="field" for="seriesSprintStart">First publish date</label><input id="seriesSprintStart" type="date"></div>
+      <div><label class="field" for="seriesSprintCadence">Publishing cadence</label><select id="seriesSprintCadence"><option value="1">Every day</option><option value="2" selected>Every 2 days</option><option value="3">Every 3 days</option><option value="7">Every week</option></select></div>
+      <button class="primary" type="submit" id="buildSeriesSprint">✦ Build & save series</button>
+     </form>
+     <div class="notice" id="seriesSprintNotice" role="status" aria-live="polite"></div>
+     <div id="seriesSprintPreview" class="series-sprint-preview hidden" aria-live="polite"></div>
+     <p class="series-sprint-foot">Each episode is saved as a separate Idea Vault item. Review its prompt, status and target date before creating the video.</p>
+    </article>
     <article class="toolkit-card toolkit-planner-card" id="ideaVaultPanel">
-     <div class="toolkit-card-head"><div><span class="toolkit-step">03 / IDEA VAULT & CONTENT PLANNER</span><h3>Keep your next videos organized</h3><p>Save ideas, assign a format and target date, then move an idea straight into the existing video workflow. Stored in this browser only.</p></div><span class="toolkit-count">Local library</span></div>
+     <div class="toolkit-card-head"><div><span class="toolkit-step">04 / IDEA VAULT & CONTENT PLANNER</span><h3>Keep your next videos organized</h3><p>Save ideas, assign a format and target date, then move an idea straight into the existing video workflow. Stored in this browser only.</p></div><span class="toolkit-count">Local library</span></div>
      <form id="ideaVaultForm" class="idea-vault-form">
       <div><label class="field" for="ideaVaultTitle">Video idea</label><input id="ideaVaultTitle" type="text" maxlength="180" placeholder="e.g. Why do some animals glow in the dark?" required></div>
       <div><label class="field" for="ideaVaultFormat">Format</label><select id="ideaVaultFormat"><option value="mini-doc">Mini documentary</option><option value="top-list">Top list</option><option value="myth-buster">Myth buster</option><option value="anime-story">Animated story</option><option value="quick-guide">Quick guide</option><option value="motivation">Motivation</option></select></div>
@@ -1072,7 +1100,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
      <div class="idea-vault-foot"><small>Ideas are saved in this browser profile. They are not synced to your account or other devices.</small><button type="button" class="secondary" id="exportIdeaVault">Export ideas</button></div>
     </article>
     <article class="toolkit-card toolkit-scriptcheck-card" id="scriptTimingPanel">
-     <div class="toolkit-card-head"><div><span class="toolkit-step">04 / SCRIPT TIMING CHECKER</span><h3>Check pacing before spending AI credits</h3><p>Estimate narration length and flag dense sentences before generating voice-over. This is a local text check, not a factuality review.</p></div><span class="toolkit-count">No AI calls</span></div>
+     <div class="toolkit-card-head"><div><span class="toolkit-step">05 / SCRIPT TIMING CHECKER</span><h3>Check pacing before spending AI credits</h3><p>Estimate narration length and flag dense sentences before generating voice-over. This is a local text check, not a factuality review.</p></div><span class="toolkit-count">No AI calls</span></div>
      <label class="field" for="scriptTimingText">Paste your narration script</label>
      <textarea id="scriptTimingText" maxlength="24000" rows="6" placeholder="Paste the narration here. You can copy it from your saved script workspace."></textarea>
      <div class="two toolkit-form-row">
@@ -1089,7 +1117,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
      </div>
     </article>
 
-<article class="toolkit-card toolkit-checklist-card"><div class="toolkit-card-head"><div><span class="toolkit-step">03 / EXPORT QUALITY GATE</span><h3>Run the final pre-publish check</h3><p>Tick each item after reviewing the actual video. Progress is saved in this browser.</p></div><span class="toolkit-count">8 checks</span></div>
+<article class="toolkit-card toolkit-checklist-card"><div class="toolkit-card-head"><div><span class="toolkit-step">06 / EXPORT QUALITY GATE</span><h3>Run the final pre-publish check</h3><p>Tick each item after reviewing the actual video. Progress is saved in this browser.</p></div><span class="toolkit-count">8 checks</span></div>
      <div class="preflight-summary"><div><b id="preflightProgress">0 / 8 completed</b><span id="preflightState">Ready for review</span></div><div class="preflight-track"><span id="preflightBar"></span></div></div>
      <div class="preflight-grid">
       <label><input type="checkbox" data-preflight="script"><span><b>Script reviewed</b><small>Hook, flow and factual claims make sense.</small></span></label>
@@ -2481,8 +2509,9 @@ function renderIdeaVault(){
  const statusLabels={idea:"Idea",writing:"In progress",ready:"Ready to make"};
  $("ideaVaultList").innerHTML=list.map(item=>{
   const title=escapeHtml(item.title),id=escapeHtml(item.id),format=creatorBlueprints[item.format]?.summary.split(" · ")[0]||"Mini documentary",status=statusLabels[item.status]||"Idea";
+  const seriesMeta=item.seriesName?'<span>'+escapeHtml(item.seriesName)+' · Ep. '+Number(item.seriesEpisode||0)+'/'+Number(item.seriesTotal||0)+'</span><span>•</span>':"";
   const options=["idea","writing","ready"].map(value=>'<option value="'+value+'" '+(item.status===value?"selected":"")+'>'+statusLabels[value]+'</option>').join("");
-  return '<article class="idea-vault-item"><div class="idea-vault-main"><b>'+title+'</b><div class="idea-vault-meta"><span>'+escapeHtml(format)+'</span><span>•</span><span>Target: '+escapeHtml(formatIdeaDate(item.targetDate))+'</span><span class="idea-vault-badge" data-status="'+escapeHtml(item.status)+'">'+status+'</span></div></div><div class="idea-vault-actions"><select data-idea-status="'+id+'" aria-label="Update status for '+title+'">'+options+'</select><button type="button" class="mini-btn" data-idea-action="use" data-idea-id="'+id+'">Use idea →</button><button type="button" class="secondary" data-idea-action="delete" data-idea-id="'+id+'" aria-label="Delete '+title+'">Delete</button></div></article>';
+  return '<article class="idea-vault-item"><div class="idea-vault-main"><b>'+title+'</b><div class="idea-vault-meta">'+seriesMeta+'<span>'+escapeHtml(format)+'</span><span>•</span><span>Target: '+escapeHtml(formatIdeaDate(item.targetDate))+'</span><span class="idea-vault-badge" data-status="'+escapeHtml(item.status)+'">'+status+'</span></div></div><div class="idea-vault-actions"><select data-idea-status="'+id+'" aria-label="Update status for '+title+'">'+options+'</select><button type="button" class="mini-btn" data-idea-action="use" data-idea-id="'+id+'">Use idea →</button><button type="button" class="secondary" data-idea-action="delete" data-idea-id="'+id+'" aria-label="Delete '+title+'">Delete</button></div></article>';
  }).join("");
 }
 $("ideaVaultForm").addEventListener("submit",event=>{
@@ -2509,7 +2538,7 @@ $("ideaVaultList").addEventListener("click",event=>{
  }
  if(button.dataset.ideaAction==="use"){
   const blueprint=creatorBlueprints[item.format]||creatorBlueprints["mini-doc"];
-  $("topic").value=blueprint.prompt.replace(/\[YOUR TOPIC\]/g,item.title);
+  $("topic").value=typeof item.prompt==="string"&&item.prompt?item.prompt:blueprint.prompt.replace(/\[YOUR TOPIC\]/g,item.title);
   $("duration").value=String(blueprint.duration);$("style").value=blueprint.style;
   $("createNotice").style.color="var(--cyan)";$("createNotice").textContent="Idea loaded from your local vault. Review the prompt and save when ready.";
   navigateTo("create");$("topic").focus();
@@ -2521,6 +2550,57 @@ $("exportIdeaVault").addEventListener("click",()=>{
  anchor.href=url;anchor.download="facelesslab-idea-vault.json";document.body.appendChild(anchor);anchor.click();anchor.remove();URL.revokeObjectURL(url);
 });
 renderIdeaVault();
+
+/* Series Sprint Planner: batch-build episode briefs without API calls or model credits. */
+const seriesSprintTemplates=[
+ {label:"The essentials",suffix:"the basics everyone should know",format:"quick-guide",focus:"Explain the core idea in plain language, why it matters and three useful points a beginner should understand."},
+ {label:"The surprising detail",suffix:"the surprising detail most people miss",format:"mini-doc",focus:"Build a curiosity-led mini-documentary around one surprising but verifiable detail. Explain the context and why it changes the viewer's understanding."},
+ {label:"Myth versus fact",suffix:"one popular myth versus the facts",format:"myth-buster",focus:"Identify one common misconception, distinguish it from what reliable evidence supports and state any important uncertainty."},
+ {label:"Three things to know",suffix:"three facts worth knowing",format:"top-list",focus:"Present three specific, distinct and useful facts in a fast countdown. Make the final point the strongest payoff."},
+ {label:"Mistakes to avoid",suffix:"common mistakes and how to avoid them",format:"quick-guide",focus:"Cover practical mistakes people make, why they happen and clear steps to avoid them. Keep advice specific and actionable."},
+ {label:"A story that explains it",suffix:"the story that makes it easier to understand",format:"anime-story",focus:"Use one coherent character-led story or scenario to make the topic memorable. Keep the scenes connected and the character visually consistent."},
+ {label:"Put it into practice",suffix:"one practical takeaway to try today",format:"motivation",focus:"Close the series with a grounded action viewers can take. Avoid unrealistic promises and give one measurable first step."}
+];
+function makeSeriesSprintItems(topic,audience,count,startDate,cadence){
+ const subject=topic.trim().replace(/[.!?]+$/,""),seriesName=subject+" series";
+ const now=Date.now();
+ return seriesSprintTemplates.slice(0,count).map((template,index)=>{
+  const blueprint=creatorBlueprints[template.format]||creatorBlueprints["mini-doc"];
+  const title=(subject+": "+template.suffix).slice(0,180);
+  const audienceLine=audience?"Target audience: "+audience.trim()+". ":"";
+  const sequenceLine="This is episode "+(index+1)+" of a "+count+"-episode series about "+subject+". Keep it useful on its own while making the wider series feel connected. ";
+  const prompt=blueprint.prompt.replace(/\[YOUR TOPIC\]/g,subject)+"\n\nEPISODE BRIEF: "+template.focus+"\n"+sequenceLine+audienceLine+"Use concrete examples, avoid invented statistics or unsupported claims, and make the opening specific to this episode.";
+  let targetDate="";
+  if(startDate){
+   const date=new Date(startDate+"T00:00:00Z");
+   if(!Number.isNaN(date.getTime())){date.setUTCDate(date.getUTCDate()+index*cadence);targetDate=date.toISOString().slice(0,10);}
+  }
+  const id=(globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():String(now+index)+"-"+Math.random().toString(36).slice(2,8);
+  return {id,title,format:template.format,targetDate,status:"idea",createdAt:now+index,seriesName,seriesEpisode:index+1,seriesTotal:count,audience:audience.trim(),prompt};
+ });
+}
+$("seriesSprintForm").addEventListener("submit",event=>{
+ event.preventDefault();
+ const topic=$("seriesSprintTopic").value.trim(),notice=$("seriesSprintNotice");
+ if(!topic){notice.style.color="var(--red)";notice.textContent="Enter a main topic first."; $("seriesSprintTopic").focus();return;}
+ const count=Number($("seriesSprintCount").value),cadence=Number($("seriesSprintCadence").value);
+ const generated=makeSeriesSprintItems(topic,$("seriesSprintAudience").value,count,$("seriesSprintStart").value,cadence);
+ const previous=ideaVaultItems;
+ ideaVaultItems=[...ideaVaultItems,...generated];
+ if(!saveIdeaVault()){
+  ideaVaultItems=previous;
+  notice.style.color="var(--red)";notice.textContent="Could not save the series. Browser storage may be full; export or remove older ideas and try again.";return;
+ }
+ const preview=$("seriesSprintPreview");
+ preview.innerHTML=generated.map(item=>{
+  const format=creatorBlueprints[item.format]?.summary.split(" · ")[0]||"Video";
+  const episodeDate=item.targetDate?formatIdeaDate(item.targetDate):"Date not set";
+  return '<article class="series-sprint-episode"><div class="series-sprint-episode-head"><span>EPISODE '+item.seriesEpisode+' / '+item.seriesTotal+'</span><small>'+escapeHtml(episodeDate)+'</small></div><b>'+escapeHtml(item.title)+'</b><p>'+escapeHtml(format)+' · '+escapeHtml(seriesSprintTemplates[item.seriesEpisode-1].label)+'</p></article>';
+ }).join("");
+ preview.classList.remove("hidden");
+ notice.style.color="var(--cyan)";notice.textContent=count+" episodes generated and saved to your Idea Vault. Pick any episode below to load its tailored prompt into Create Video.";
+ renderIdeaVault();
+});
 
 function analyzeScriptTiming(text,pace,target){
  const words=text.trim().match(/\S+/g)||[],count=words.length;
