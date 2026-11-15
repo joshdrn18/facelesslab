@@ -1180,6 +1180,35 @@ async function handle(request, env) {
       const rows=await env.DB.prepare("SELECT id,platform,platform_user_id,display_name,status,scopes,access_token_expires_at,created_at FROM social_connections WHERE user_id=? ORDER BY platform").bind(user.id).all();
       return json({ok:true,connections:rows.results||[],configured:{youtube:Boolean(env.YOUTUBE_CLIENT_ID&&env.YOUTUBE_CLIENT_SECRET),tiktok:Boolean(env.TIKTOK_CLIENT_KEY&&env.TIKTOK_CLIENT_SECRET),encryption:Boolean(env.PUBLISH_TOKEN_ENCRYPTION_KEY)}});
     }
+    if(path==="/api/publishing/youtube/analytics"&&method==="GET"){
+      const connection=await env.DB.prepare("SELECT * FROM social_connections WHERE user_id=? AND platform='youtube' AND status='active' ORDER BY updated_at DESC LIMIT 1").bind(user.id).first();
+      if(!connection)return json({ok:false,error:"Connect your YouTube channel first."},409);
+      const granted=String(connection.scopes||"").split(/\\s+/);
+      if(!granted.includes("https://www.googleapis.com/auth/yt-analytics.readonly"))return json({ok:false,needs_reconnect:true,error:"Reconnect YouTube to grant read-only YouTube Analytics access."},409);
+      const range=String(url.searchParams.get("range")||"28d"),days=({"7d":7,"28d":28,"90d":90,"365d":365})[range]||28;
+      const end=new Date(Date.now()-86400000),start=new Date(end.getTime()-(days-1)*86400000),iso=d=>d.toISOString().slice(0,10),startDate=iso(start),endDate=iso(end);
+      try{
+        const access=await getFreshSocialAccessToken(env,connection);
+        const queryReport=async(params)=>{
+          const q=new URLSearchParams({ids:"channel==MINE",startDate,endDate,...params});
+          const response=await fetch("https://youtubeanalytics.googleapis.com/v2/reports?"+q.toString(),{headers:{authorization:"Bearer "+access},signal:AbortSignal.timeout(18000)});
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error?.message||"YouTube Analytics returned HTTP "+response.status);
+          const headers=(data.columnHeaders||[]).map(h=>h.name);
+          return (data.rows||[]).map(row=>Object.fromEntries(headers.map((name,index)=>[name,row[index]])));
+        };
+        const metrics="views,likes,comments,shares,subscribersGained";
+        const [totals,daily,top]=await Promise.all([queryReport({metrics}),queryReport({metrics,dimensions:"day",sort:"day"}),queryReport({metrics,dimensions:"video",sort:"-views",maxResults:"10"})]);
+        const topIds=top.map(v=>String(v.video||"")).filter(Boolean);let titles={};
+        if(topIds.length){
+          const videoUrl=new URL("https://www.googleapis.com/youtube/v3/videos");videoUrl.searchParams.set("part","snippet");videoUrl.searchParams.set("id",topIds.join(","));
+          const videoResponse=await fetch(videoUrl,{headers:{authorization:"Bearer "+access},signal:AbortSignal.timeout(12000)}),videoData=await videoResponse.json().catch(()=>({}));
+          if(videoResponse.ok)for(const item of videoData.items||[])titles[item.id]=item.snippet?.title||"Untitled video";
+        }
+        const sum=totals[0]||{},n=k=>Math.max(0,Number(sum[k]||0)),views=n("views"),likes=n("likes"),comments=n("comments"),shares=n("shares");
+        return json({ok:true,source:"youtube_analytics_api",range,start_date:startDate,end_date:endDate,totals:{views,likes,comments,shares,subscribers_gained:n("subscribersGained"),engagement_rate:views?Number(((likes+comments+shares)/views*100).toFixed(2)):0},daily:daily.map(d=>({date:String(d.day||""),views:Number(d.views||0),likes:Number(d.likes||0),comments:Number(d.comments||0),subscribers_gained:Number(d.subscribersGained||0)})),top_videos:top.map(v=>({video_id:String(v.video||""),title:titles[String(v.video||"")]||"YouTube video",views:Number(v.views||0),likes:Number(v.likes||0),comments:Number(v.comments||0),shares:Number(v.shares||0),subscribers_gained:Number(v.subscribersGained||0)})),checked_at:new Date().toISOString()});
+      }catch(error){return json({ok:false,error:String(error?.message||error).slice(0,500),range,start_date:startDate,end_date:endDate},502);}
+    }
     const connectMatch=path.match(new RegExp("^/api/publishing/connect/(youtube|tiktok)$"));
     if(connectMatch&&method==="POST"){
       const platform=connectMatch[1],now=Math.floor(Date.now()/1000);
@@ -1192,7 +1221,7 @@ async function handle(request, env) {
       let target;
       if(platform==="youtube"){
         const u=new URL("https://accounts.google.com/o/oauth2/v2/auth");
-        u.searchParams.set("client_id",env.YOUTUBE_CLIENT_ID);u.searchParams.set("redirect_uri",redirectUri);u.searchParams.set("response_type","code");u.searchParams.set("scope","https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly");u.searchParams.set("access_type","offline");u.searchParams.set("prompt","consent");u.searchParams.set("state",state);target=u.toString();
+        u.searchParams.set("client_id",env.YOUTUBE_CLIENT_ID);u.searchParams.set("redirect_uri",redirectUri);u.searchParams.set("response_type","code");u.searchParams.set("scope","https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly");u.searchParams.set("access_type","offline");u.searchParams.set("prompt","consent");u.searchParams.set("state",state);target=u.toString();
       }else{
         const u=new URL("https://www.tiktok.com/v2/auth/authorize/");
         u.searchParams.set("client_key",env.TIKTOK_CLIENT_KEY);u.searchParams.set("redirect_uri",redirectUri);u.searchParams.set("response_type","code");u.searchParams.set("scope","user.info.basic,video.publish,video.upload");u.searchParams.set("state",state);target=u.toString();
