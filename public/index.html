@@ -370,6 +370,69 @@ button{font-weight:700}
 #cloudBackupSummary{overflow-wrap:anywhere}
 @media(max-width:480px){.empty-actions{display:grid;width:100%;grid-template-columns:1fr}.empty-actions button,.cloud-empty>button{width:100%}}
 
+
+
+/* Admin AI usage analytics */
+.ai-usage-panel{margin:0 0 14px}
+.ai-usage-toolbar{align-items:flex-start}
+.ai-usage-actions{display:flex;gap:8px;align-items:center}
+.ai-usage-actions select{width:auto;min-width:145px;padding:10px 11px}
+.ai-usage-metrics{margin-top:14px}
+.ai-usage-workload{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0 14px}
+.ai-usage-workload span{border:1px solid var(--line-soft);border-radius:9px;background:rgba(8,13,23,.38);padding:8px 10px;color:#9eabc0;font-size:10px}
+.ai-usage-workload b{color:#e5ecf8;font-size:12px;margin-right:3px}
+.ai-usage-toolbar-secondary{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 0;border-top:1px solid var(--line-soft)}
+.ai-usage-toolbar-secondary b,.ai-usage-toolbar-secondary small{display:block}
+.ai-usage-toolbar-secondary b{font-size:13px}
+.ai-usage-toolbar-secondary small{color:var(--muted);font-size:10px;margin-top:3px}
+.ai-usage-toolbar-secondary input{max-width:290px;padding:9px 11px}
+.ai-usage-members{display:grid;gap:9px}
+.ai-member-usage{border:1px solid var(--line-soft);border-radius:13px;padding:13px 14px;background:rgba(9,15,26,.45);min-width:0}
+.ai-member-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.ai-member-identity{display:flex;align-items:center;gap:5px 8px;flex-wrap:wrap;min-width:0}
+.ai-member-identity>b{font-size:12px;color:#eef2fa}
+.ai-member-identity>small{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.ai-role-tag{border:1px solid rgba(169,149,255,.18);background:rgba(169,149,255,.07);color:#c4b6ff;padding:3px 6px;border-radius:99px;font-size:8px;font-weight:850;letter-spacing:.7px}
+.ai-role-tag.admin{border-color:rgba(112,229,220,.18);background:rgba(112,229,220,.06);color:#8fe0d8}
+.ai-member-identity .ai-last-seen{width:100%;margin-top:3px}
+.ai-member-total{flex:0 0 auto;text-align:right}
+.ai-member-total strong{display:block;font-size:22px;line-height:1.1;letter-spacing:-.6px}
+.ai-member-total small{display:block;color:var(--muted);font-size:9px;margin-top:3px}
+.ai-member-breakdown{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin-top:12px}
+.ai-member-breakdown>span{display:block;border:1px solid rgba(148,164,196,.1);border-radius:9px;background:rgba(23,32,49,.56);padding:8px 9px;min-width:0}
+.ai-member-breakdown b,.ai-member-breakdown small{display:block}
+.ai-member-breakdown b{font-size:15px;color:#e3eafa}
+.ai-member-breakdown small{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.4}
+.ai-member-foot{display:flex;gap:8px 14px;flex-wrap:wrap;border-top:1px solid rgba(148,164,196,.1);margin-top:10px;padding-top:9px;color:#9baac0;font-size:9px}
+.ai-usage-details{border-top:1px solid var(--line-soft);margin-top:12px;padding-top:10px}
+.ai-usage-details summary{display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;font-size:11px;font-weight:750;color:#dbe3f2;list-style:none}
+.ai-usage-details summary::-webkit-details-marker{display:none}
+.ai-usage-details summary span{color:var(--muted);font-size:9px;font-weight:600}
+.ai-usage-breakdown{display:grid;gap:0;margin-top:8px}
+.ai-model-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid rgba(148,164,196,.1)}
+.ai-model-row>div:first-child{min-width:0}
+.ai-model-row b,.ai-model-row small{display:block}
+.ai-model-row b{font-size:10px;color:#e1e8f5}
+.ai-model-row small{font-size:9px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.ai-model-row>div:last-child{text-align:right;flex:0 0 auto}
+.ai-model-row strong{font-size:12px}
+.ai-job-status{display:inline-flex;border-radius:99px;padding:3px 7px;font-size:8px;font-weight:800;text-transform:uppercase}
+.ai-job-status.status-complete{background:rgba(69,180,137,.13);color:#86dfbb}
+.ai-job-status.status-failed{background:rgba(255,129,141,.12);color:#ff9ca5}
+.ai-job-status.status-active{background:rgba(112,172,255,.12);color:#9fc4ff}
+.ai-accounting-note{border-top:1px solid var(--line-soft);padding-top:11px;margin-top:12px}
+@media(max-width:800px){.ai-member-breakdown{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){
+ .ai-usage-toolbar{gap:12px}
+ .ai-usage-actions{width:100%}
+ .ai-usage-actions select{flex:1;min-width:0}
+ .ai-usage-toolbar-secondary{align-items:stretch;flex-direction:column}
+ .ai-usage-toolbar-secondary input{width:100%;max-width:none}
+ .ai-member-heading{gap:8px}
+ .ai-member-breakdown{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:380px){.ai-member-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 </style>
 </head>
 <body>
@@ -479,6 +542,28 @@ button{font-weight:700}
     </div>
     <div id="cfCreditDetails" class="admin-audit-list"><div class="empty">Press Check now to retrieve billing data.</div></div>
     <div id="cfUsageServices" class="admin-audit-list"></div>
+   </div>
+   <div class="content-card ai-usage-panel">
+    <div class="admin-toolbar ai-usage-toolbar">
+     <div><span class="content-label">AI CONSUMPTION INSIGHTS</span><h3 style="margin:6px 0 0">AI Usage per Member</h3><p class="muted" style="margin:5px 0 0">See which accounts are using scripts, voice, image generation and transcription.</p></div>
+     <div class="ai-usage-actions"><select id="aiUsagePeriod" aria-label="AI usage time period"><option value="7d">Last 7 days</option><option value="30d" selected>Last 30 days</option><option value="90d">Last 90 days</option><option value="all">All recorded time</option></select><button class="secondary" id="adminAiUsageRefresh" type="button">↻ Refresh</button></div>
+    </div>
+    <div class="admin-metrics ai-usage-metrics">
+     <article class="stat"><span>Total AI jobs</span><strong id="aiUsageTotalJobs">—</strong></article>
+     <article class="stat"><span>Cloudflare AI jobs</span><strong id="aiUsageCloudflareJobs">—</strong></article>
+     <article class="stat"><span>External script jobs</span><strong id="aiUsageExternalJobs">—</strong></article>
+     <article class="stat"><span>Failed jobs</span><strong id="aiUsageFailedJobs">—</strong></article>
+    </div>
+    <div class="ai-usage-workload" id="aiUsageWorkload"><span>Voice characters: —</span><span>Image jobs: —</span><span>Audio analyzed: —</span><span>Active accounts: —</span></div>
+    <div class="ai-usage-toolbar-secondary">
+     <div><b>Member activity</b><small>Counts are generation jobs, not individual internal model retries.</small></div>
+     <input id="aiUsageSearch" type="search" placeholder="Filter member name or email" aria-label="Filter AI usage by member">
+    </div>
+    <div id="aiUsageMembers" class="ai-usage-members"><div class="empty">AI usage analytics will appear here.</div></div>
+    <details class="ai-usage-details"><summary>Model and provider breakdown <span id="aiUsageModelCount">—</span></summary><div id="aiUsageModels" class="ai-usage-breakdown"></div></details>
+    <details class="ai-usage-details"><summary>Recent AI activity <span>Latest 15 jobs</span></summary><div id="aiUsageRecent" class="ai-usage-breakdown"></div></details>
+    <p class="production-note ai-accounting-note">Usage counters are tracked per FacelessLab account. Exact Workers AI Neurons and USD charges remain account-level Cloudflare billing figures; they are not falsely divided between members. Script generation is shown separately because it uses the configured external AI API.</p>
+    <div class="notice" id="aiUsageNotice" role="status" aria-live="polite"></div>
    </div>
    <div class="content-card admin-members-card">
     <div class="admin-toolbar"><div><span class="content-label">MEMBER MANAGEMENT</span><h3 style="margin:6px 0 0">Members</h3></div><div class="admin-search"><input id="adminSearch" type="search" placeholder="Search name or email"><button class="secondary" id="adminRefreshBtn" type="button">↻ Refresh</button></div></div>
@@ -616,6 +701,47 @@ async function refreshCloudflareBilling(){
   $("cfCreditDetails").textContent=error.message||"Could not load Cloudflare billing.";
  }finally{if(button){button.disabled=false;button.textContent="↻ Check now";}}
 }
+let aiUsageSearchTimer=null;
+const aiStageLabels={script:"External script",voice:"AI voice-over",visuals:"Scene image",character_reference:"Character image",subtitles:"Transcription"};
+async function refreshAdminAiUsage(){
+ if(currentUser?.role!=="admin")return;
+ const button=$("adminAiUsageRefresh"),notice=$("aiUsageNotice");
+ if(button){button.disabled=true;button.textContent="Loading…";}
+ if(notice)notice.textContent="Loading AI usage records…";
+ try{
+  const period=$("aiUsagePeriod")?.value||"30d",q=$("aiUsageSearch")?.value.trim()||"";
+  const params=new URLSearchParams({period,q});
+  const data=await api("/api/admin/ai-usage?"+params.toString()),t=data.totals||{};
+  const number=value=>Number(value||0).toLocaleString();
+  $("aiUsageTotalJobs").textContent=number(t.total_jobs);
+  $("aiUsageCloudflareJobs").textContent=number(t.cloudflare_ai_jobs);
+  $("aiUsageExternalJobs").textContent=number(t.external_script_jobs);
+  $("aiUsageFailedJobs").textContent=number(t.failed_jobs);
+  const audioMb=(Number(t.subtitle_audio_bytes||0)/1048576).toFixed(2);
+  $("aiUsageWorkload").innerHTML='<span><b>'+number(t.tts_characters)+'</b> voice characters</span><span><b>'+number(Number(t.scene_image_jobs||0)+Number(t.character_image_jobs||0))+'</b> image jobs</span><span><b>'+audioMb+' MB</b> audio analyzed</span><span><b>'+number(t.active_users)+'</b> active accounts</span>';
+  const members=data.members||[];
+  $("aiUsageMembers").innerHTML=members.length?members.map(member=>{
+   const label=member.display_name||String(member.email||"").split("@")[0]||"Member";
+   const role=member.role==="admin"?"ADMIN":"MEMBER";
+   const last=member.last_activity?new Date(Number(member.last_activity)*1000).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"No recent activity";
+   return '<article class="ai-member-usage"><div class="ai-member-heading"><div class="ai-member-identity"><b>'+escapeHtml(label)+'</b><small>'+escapeHtml(member.email||"")+'</small><span class="ai-role-tag '+(member.role==="admin"?"admin":"")+'">'+role+' · '+escapeHtml(member.status||"")+'</span><small class="ai-last-seen">Last AI activity · '+escapeHtml(last)+'</small></div><div class="ai-member-total"><strong>'+number(member.total_jobs)+'</strong><small>total jobs</small></div></div><div class="ai-member-breakdown"><span><b>'+number(member.script_jobs)+'</b><small>Scripts</small></span><span><b>'+number(member.voice_jobs)+'</b><small>Voice-overs</small></span><span><b>'+number(member.scene_image_jobs)+'</b><small>Scene images</small></span><span><b>'+number(member.character_image_jobs)+'</b><small>Character refs</small></span><span><b>'+number(member.subtitle_jobs)+'</b><small>Transcriptions</small></span><span><b>'+number(member.failed_jobs)+'</b><small>Failed</small></span></div><div class="ai-member-foot"><span>'+number(member.cloudflare_ai_jobs)+' Cloudflare AI jobs</span><span>'+number(member.tts_characters)+' TTS characters</span><span>'+(Number(member.subtitle_audio_bytes||0)/1048576).toFixed(2)+' MB audio analyzed</span></div></article>';
+  }).join(""):'<div class="empty">No AI generation jobs found for this period or search.</div>';
+  const models=data.models||[];
+  $("aiUsageModelCount").textContent=models.length+" groups";
+  $("aiUsageModels").innerHTML=models.length?models.map(item=>'<div class="ai-model-row"><div><b>'+escapeHtml(aiStageLabels[item.stage]||item.stage)+'</b><small>'+escapeHtml(item.model||"Model not recorded")+'</small></div><div><strong>'+number(item.jobs)+'</strong><small>'+number(item.completed)+' completed · '+number(item.failed)+' failed</small></div></div>').join(""):'<div class="empty">No model activity for this period.</div>';
+  const recent=data.recent||[];
+  $("aiUsageRecent").innerHTML=recent.length?recent.map(item=>{
+   const label=item.display_name||String(item.email||"").split("@")[0]||"Member";
+   const date=item.created_at?new Date(Number(item.created_at)*1000).toLocaleString([],{dateStyle:"medium",timeStyle:"short"}):"";
+   const state=String(item.status||"unknown").toLowerCase();
+   return '<div class="ai-model-row"><div><b>'+escapeHtml(aiStageLabels[item.stage]||item.stage)+' · '+escapeHtml(label)+'</b><small>'+escapeHtml(item.project_title||"Project")+' · '+escapeHtml(item.model||"Model not recorded")+'</small></div><div><span class="ai-job-status status-'+(state==="completed"?"complete":state==="failed"?"failed":"active")+'">'+escapeHtml(state)+'</span><small>'+escapeHtml(date)+'</small></div></div>';
+  }).join(""):'<div class="empty">No recent AI activity.</div>';
+  if(notice)notice.textContent="Updated · "+number(members.length)+" accounts shown. "+(data.accounting_note||"");
+ }catch(error){
+  if(notice)notice.textContent=error.message||"Could not load AI usage analytics.";
+  $("aiUsageMembers").innerHTML='<div class="empty">'+escapeHtml(error.message||"AI usage data unavailable.")+'</div>';
+ }finally{if(button){button.disabled=false;button.textContent="↻ Refresh";}}
+}
 async function refreshAdminPanel(){
  if(currentUser?.role!=="admin")return;
  $("adminNotice").textContent="Loading admin workspace…";
@@ -632,6 +758,7 @@ async function refreshAdminPanel(){
   renderAdminAudit(data.audit||[]);
   await loadAdminMembers(false);
   await refreshCloudflareBilling();
+  await refreshAdminAiUsage();
   $("adminNotice").textContent="";
  }catch(error){$("adminNotice").textContent=error.message||"Could not load admin dashboard.";}
 }
@@ -667,6 +794,9 @@ async function loadAdminMembers(append=false){
 }
 $("adminRefreshBtn").addEventListener("click",()=>refreshAdminPanel());
 $("adminCloudflareRefresh").addEventListener("click",()=>refreshCloudflareBilling());
+$("adminAiUsageRefresh").addEventListener("click",()=>refreshAdminAiUsage());
+$("aiUsagePeriod").addEventListener("change",()=>refreshAdminAiUsage());
+$("aiUsageSearch").addEventListener("input",()=>{clearTimeout(aiUsageSearchTimer);aiUsageSearchTimer=setTimeout(()=>refreshAdminAiUsage(),250);});
 $("adminSearch").addEventListener("input",()=>{
  clearTimeout(adminSearchTimer);
  adminSearchTimer=setTimeout(()=>loadAdminMembers(false).catch(error=>$("adminNotice").textContent=error.message),250);
