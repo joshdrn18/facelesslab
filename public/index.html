@@ -246,6 +246,17 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #a1
     <article class="stat"><span>AI generations</span><strong id="adminGenerationsTotal">—</strong></article>
     <article class="stat"><span>Publishing jobs</span><strong id="adminPublishTotal">—</strong></article>
    </div>
+   <div class="content-card" style="margin:0 0 14px">
+    <div class="admin-toolbar"><div><span class="content-label">CLOUDFLARE ACCOUNT</span><h3 style="margin:6px 0 0">Credits & usage</h3><p class="muted" style="margin:5px 0 0">Live billing data from your Cloudflare account.</p></div><button class="secondary" id="adminCloudflareRefresh" type="button">↻ Check now</button></div>
+    <div class="admin-metrics" style="margin-bottom:8px">
+     <article class="stat"><span>Credit status</span><strong id="cfCreditStatus" style="font-size:16px">Not checked</strong></article>
+     <article class="stat"><span>Current billed cost</span><strong id="cfBilledCost">—</strong></article>
+     <article class="stat"><span>Usage records</span><strong id="cfUsageRecords">—</strong></article>
+     <article class="stat"><span>Last checked</span><strong id="cfCheckedAt" style="font-size:13px">—</strong></article>
+    </div>
+    <div id="cfCreditDetails" class="admin-audit-list"><div class="empty">Press Check now to retrieve billing data.</div></div>
+    <div id="cfUsageServices" class="admin-audit-list"></div>
+   </div>
    <div class="content-card admin-members-card">
     <div class="admin-toolbar"><div><span class="content-label">MEMBER MANAGEMENT</span><h3 style="margin:6px 0 0">Members</h3></div><div class="admin-search"><input id="adminSearch" type="search" placeholder="Search name or email"><button class="secondary" id="adminRefreshBtn" type="button">↻ Refresh</button></div></div>
     <div class="admin-table-head"><span>Member</span><span>Usage</span><span>Points</span><span>Access</span><span>Actions</span></div>
@@ -334,6 +345,27 @@ $("systemHealth").addEventListener("click",async()=>{
 });
 
 let adminOffset=0,adminTotal=0,adminSearchTimer=null;
+async function refreshCloudflareBilling(){
+ if(currentUser?.role!=="admin")return;
+ const button=$("adminCloudflareRefresh"),status=$("cfCreditStatus");
+ if(button){button.disabled=true;button.textContent="Checking…";}
+ if(status)status.textContent="Checking";
+ try{
+  const data=await api("/api/admin/cloudflare-billing");
+  const credits=data.credits||{},usage=data.billable_usage||{};
+  if(status)status.textContent=credits.success?"Connected":("HTTP "+(credits.http_status||"error"));
+  $("cfBilledCost").textContent=usage.success?(Number(usage.total_billed_cost||0).toFixed(4)+" "+(usage.currency||"USD")):"Unavailable";
+  $("cfUsageRecords").textContent=usage.success?Number(usage.record_count||0).toLocaleString():"—";
+  $("cfCheckedAt").textContent=data.checked_at?new Date(data.checked_at).toLocaleTimeString():"—";
+  const creditText=credits.success?JSON.stringify(credits.result,null,2):((credits.errors||[]).map(e=>e.message).join("; ")||"Credit endpoint unavailable");
+  $("cfCreditDetails").innerHTML='<div class="admin-audit-item"><div><b>Credit balance response</b><small>'+escapeHtml(creditText)+'</small></div></div>';
+  const services=usage.services||[];
+  $("cfUsageServices").innerHTML=services.length?'<div class="content-label">BILLABLE SERVICES</div>'+services.map(item=>'<div class="admin-audit-item"><div><b>'+escapeHtml(item.name)+'</b><small>'+Number(item.records||0)+' usage records</small></div><time>'+Number(item.cost||0).toFixed(4)+' '+escapeHtml(usage.currency||"USD")+'</time></div>').join(""):(usage.success?'<div class="empty">No billable usage records returned for this period.</div>':'<div class="empty">'+escapeHtml((usage.errors||[]).map(e=>e.message).join("; ")||"Usage endpoint unavailable")+'</div>');
+ }catch(error){
+  if(status)status.textContent="Error";
+  $("cfCreditDetails").textContent=error.message||"Could not load Cloudflare billing.";
+ }finally{if(button){button.disabled=false;button.textContent="↻ Check now";}}
+}
 async function refreshAdminPanel(){
  if(currentUser?.role!=="admin")return;
  $("adminNotice").textContent="Loading admin workspace…";
@@ -349,6 +381,7 @@ async function refreshAdminPanel(){
   $("adminPublishTotal").textContent=Number(s.publish_jobs||0).toLocaleString();
   renderAdminAudit(data.audit||[]);
   await loadAdminMembers(false);
+  await refreshCloudflareBilling();
   $("adminNotice").textContent="";
  }catch(error){$("adminNotice").textContent=error.message||"Could not load admin dashboard.";}
 }
@@ -383,6 +416,7 @@ async function loadAdminMembers(append=false){
  $("adminLoadMore").style.display=adminOffset<adminTotal?"inline-flex":"none";
 }
 $("adminRefreshBtn").addEventListener("click",()=>refreshAdminPanel());
+$("adminCloudflareRefresh").addEventListener("click",()=>refreshCloudflareBilling());
 $("adminSearch").addEventListener("input",()=>{
  clearTimeout(adminSearchTimer);
  adminSearchTimer=setTimeout(()=>loadAdminMembers(false).catch(error=>$("adminNotice").textContent=error.message),250);
