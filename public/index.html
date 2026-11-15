@@ -271,6 +271,32 @@ button{font-weight:700}
  .stat strong{font-size:19px}
  .admin-metrics .stat strong{font-size:17px}
 }
+
+
+/* Navigation context and account identity */
+.top-heading{min-width:0}
+.top-kicker{display:flex;align-items:center;gap:9px;margin-bottom:5px}
+.top-kicker .eyebrow{font-size:9px}
+.top-separator{color:#53617a;font-size:10px}
+.top-context{font-size:9px;font-weight:800;letter-spacing:1.35px;color:#91a0b8}
+.top h1{margin:4px 0 6px;line-height:1.13}
+.top .sub{max-width:690px;font-size:12px;line-height:1.6}
+.user-meta{min-width:0}
+.user-identity{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.user-identity>b{font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-email{font-size:10px!important;overflow-wrap:anywhere;margin-top:2px}
+.role-pill{display:inline-flex;align-items:center;border:1px solid rgba(169,149,255,.22);background:rgba(169,149,255,.09);border-radius:99px;padding:3px 7px;color:#c6b8ff;font-size:8px;font-weight:850;letter-spacing:.9px}
+.role-pill.admin{border-color:rgba(112,229,220,.24);background:rgba(112,229,220,.08);color:#8de5da}
+@media(max-width:600px){
+ .top{gap:12px}
+ .top-heading{width:100%}
+ .top h1{font-size:24px}
+ .userbox{display:flex;align-items:center;gap:9px}
+ .user-meta{flex:1}
+ .user-identity>b{max-width:140px}
+ .userbox>.secondary{padding:9px 10px;font-size:11px}
+}
+
 </style>
 </head>
 <body>
@@ -291,7 +317,7 @@ button{font-weight:700}
 <div id="appScreen" class="app hidden">
  <aside class="side"><div class="brand"><div class="logo"><img src="/logo.svg" alt="FacelessLab logo"></div>FacelessLab</div><div class="navlabel">WORKSPACE</div><nav class="nav"><a class="active" href="#overview" data-view="overview"><span class="ico">▦</span>Overview</a><a href="#create" data-view="create"><span class="ico">✦</span>Create video</a><a href="#projects" data-view="projects"><span class="ico">▤</span>My projects</a><a href="#library" data-view="library"><span class="ico">▣</span>Rendered videos</a><a href="#publishing" data-view="publishing"><span class="ico">↗</span>Publishing</a><a href="#admin" data-view="admin" id="adminNav" style="display:none"><span class="ico">⚙</span>Admin panel</a></nav><div class="navlabel">ACCOUNT</div><nav class="nav"><a href="#profile" data-view="profile"><span class="ico">◉</span>Profile settings</a><a href="#billing" data-view="billing"><span class="ico">◈</span>Points & billing</a></nav><div class="sidebottom">FacelessLab · CREATOR WORKSPACE</div></aside>
  <main class="main">
-  <header class="top"><div><div class="eyebrow">YOUR AI VIDEO WORKSPACE</div><h1>FacelessLab AI Video Generator &amp; Studio</h1><p class="sub">Turn a simple idea into scroll-stopping videos.</p></div><div class="userbox"><div><b id="userName">Creator</b><div class="muted" id="userEmail" style="font-size:11px"></div><button id="systemHealth" class="health-pill health-pill-button" type="button" title="Click to check service status" aria-live="polite"><span></span>Checking core systems…</button></div><button class="avatar avatar-button" id="avatar" type="button" title="Open profile settings" aria-label="Open profile settings">FL</button><button class="secondary" id="logoutBtn">Log out</button></div></header>
+  <header class="top"><div class="top-heading"><div class="top-kicker"><span class="eyebrow" id="pageEyebrow">FACELessLAB STUDIO</span><span class="top-separator">/</span><span class="top-context" id="pageContext">OVERVIEW</span></div><h1 id="pageTitle">Overview</h1><p class="sub" id="pageSubtitle">Your creative workspace at a glance.</p></div><div class="userbox"><div class="user-meta"><div class="user-identity"><b id="userName">Creator</b><span class="role-pill" id="userRolePill">MEMBER</span></div><div class="muted user-email" id="userEmail"></div><button id="systemHealth" class="health-pill health-pill-button" type="button" title="Click to check service status" aria-live="polite"><span></span>Checking core systems…</button></div><button class="avatar avatar-button" id="avatar" type="button" title="Open profile settings" aria-label="Open profile settings">FL</button><button class="secondary" id="logoutBtn">Log out</button></div></header>
   <section class="hero" id="overviewHero"><div><div class="eyebrow">CREATE WITHOUT A CAMERA</div><h2>Your next video starts with an idea.</h2><p>Generate scripts, voiceovers, visuals and subtitles in one workflow.</p></div><button class="primary" onclick="document.querySelector('#topic').focus()">＋ Create a video</button></section>
   <section class="stats"><div class="stat"><span>Total projects</span><strong id="projectCount">0</strong></div><div class="stat"><span>Videos generated</span><strong id="videoCount">0</strong></div><div class="stat" id="points"><span>Available points</span><strong id="pointsBalance">0</strong></div></section>
   <div class="workspace" id="mainWorkspace">
@@ -305,7 +331,7 @@ button{font-weight:700}
    <section class="panel" id="workflowPanel"><h3>How it works</h3><p>One idea, a complete short-form video.</p><div class="steps"><div class="step"><div class="num">1</div><div><b>AI script</b><small>Hook, narration and scene plan</small></div><span class="tag">Ready</span></div><div class="step"><div class="num">2</div><div><b>Voiceover</b><small>Natural AI narration</small></div><span class="tag">Available</span></div><div class="step"><div class="num">3</div><div><b>Visuals & subtitles</b><small>Scenes matched to your script</small></div><span class="tag">Ready</span></div><div class="step"><div class="num">4</div><div><b>Video rendering</b><small>Vertical 9:16 export</small></div><span class="tag">Ready</span></div></div></section>
   </div>
   <section id="projects"><div class="sectionhead"><div><h3>My projects</h3><span class="muted" style="font-size:12px">Saved to your account</span></div><button class="secondary" type="button" onclick="navigateTo('create')">＋ New project</button></div><div class="project-toolbar"><input id="projectSearch" type="search" placeholder="Search projects…" aria-label="Search projects"><select id="projectSort" aria-label="Sort projects"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select><button class="secondary" type="button" id="refreshProjectsBtn">↻ Refresh</button></div><div id="projectList" class="project-list"><div class="empty">Loading projects…</div></div></section>
-  <section id="videoLibrary" class="panel"><div class="sectionhead"><div><h3>Rendered videos</h3><p class="muted">Saved on this browser only. MP4 files are not uploaded to Cloudflare.</p></div><button class="secondary" type="button" onclick="refreshVideoLibrary()">↻ Refresh</button></div><div class="library-storage" id="libraryStorage">Checking local storage…</div><div class="cloud-backup-panel"><div class="cloud-backup-head"><div><b>Cloud backup · Cloudflare R2</b><small>Keep a second copy outside this browser · up to 90 MB per MP4</small></div><button class="secondary" type="button" id="refreshCloudBackups">↻ Refresh cloud</button></div><div id="cloudBackupSummary" class="library-storage">Checking cloud storage…</div><input id="cloudBackupFile" type="file" accept="video/mp4,.mp4"><button class="secondary" type="button" id="uploadCloudBackup">Upload selected MP4 to cloud</button><div id="cloudBackupList" class="project-list"><div class="empty">Sign in to view cloud backups.</div></div></div><div class="actions" style="margin:12px 0"><label class="secondary mini-btn" for="libraryImport">＋ Import MP4 backup</label><input id="libraryImport" type="file" accept="video/mp4,.mp4" multiple hidden></div><div class="project-toolbar"><input id="librarySearch" type="search" placeholder="Search saved videos…" aria-label="Search saved videos"><select id="librarySort" aria-label="Sort saved videos"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="largest">Largest first</option><option value="title">Title A–Z</option></select><button class="secondary" type="button" id="clearLibrarySearch">Clear</button></div><div id="libraryList" class="project-list"><div class="empty">Loading local videos…</div></div><p class="production-note">Local videos stay in this browser. Use Cloud backup to keep a second copy in R2.</p></section>
+  <section id="videoLibrary" class="panel"><div class="sectionhead"><div><h3>Rendered videos</h3><p class="muted">Local exports with optional Cloudflare R2 cloud backup.</p></div><button class="secondary" type="button" onclick="refreshVideoLibrary()">↻ Refresh</button></div><div class="library-storage" id="libraryStorage">Checking local storage…</div><div class="cloud-backup-panel"><div class="cloud-backup-head"><div><b>Cloud backup · Cloudflare R2</b><small>Keep a second copy outside this browser · up to 90 MB per MP4</small></div><button class="secondary" type="button" id="refreshCloudBackups">↻ Refresh cloud</button></div><div id="cloudBackupSummary" class="library-storage">Checking cloud storage…</div><input id="cloudBackupFile" type="file" accept="video/mp4,.mp4"><button class="secondary" type="button" id="uploadCloudBackup">Upload selected MP4 to cloud</button><div id="cloudBackupList" class="project-list"><div class="empty">Sign in to view cloud backups.</div></div></div><div class="actions" style="margin:12px 0"><label class="secondary mini-btn" for="libraryImport">＋ Import MP4 backup</label><input id="libraryImport" type="file" accept="video/mp4,.mp4" multiple hidden></div><div class="project-toolbar"><input id="librarySearch" type="search" placeholder="Search saved videos…" aria-label="Search saved videos"><select id="librarySort" aria-label="Sort saved videos"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="largest">Largest first</option><option value="title">Title A–Z</option></select><button class="secondary" type="button" id="clearLibrarySearch">Clear</button></div><div id="libraryList" class="project-list"><div class="empty">Loading local videos…</div></div><p class="production-note">Local videos stay in this browser. Use Cloud backup to keep a second copy in R2.</p></section>
   <section id="publishingPanel" class="panel" style="display:none">
    <div class="sectionhead"><div><h3>Social publishing</h3><p class="muted">Connect your channels and prepare videos for publishing.</p></div><span class="status">YouTube · TikTok</span></div>
    <div class="grid-two" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
@@ -452,6 +478,20 @@ function escapeHtml(value) {
 
 function navigateTo(view,updateHash=true){
  const allowed=["overview","create","projects","library","publishing","billing","profile","admin"];if(!allowed.includes(view)||(view==="admin"&&currentUser?.role!=="admin"))view="overview";
+ const pageMeta={
+  overview:{title:"Overview",subtitle:"Your creative workspace at a glance.",context:"WORKSPACE"},
+  create:{title:"Create a video",subtitle:"Turn one idea into a script, visuals, voice-over and subtitles.",context:"PRODUCTION"},
+  projects:{title:"My projects",subtitle:"Pick up where you left off and manage every production.",context:"WORKSPACE"},
+  library:{title:"Rendered videos",subtitle:"Browse local exports and manage your Cloudflare backups.",context:"YOUR LIBRARY"},
+  publishing:{title:"Publishing",subtitle:"Connect channels and prepare your next post.",context:"DISTRIBUTION"},
+  admin:{title:"Admin control center",subtitle:"Manage members and monitor platform activity and usage.",context:"ADMINISTRATION"},
+  profile:{title:"Profile & settings",subtitle:"Manage your personal details and account security.",context:"ACCOUNT"},
+  billing:{title:"Points & billing",subtitle:"Review your account access and current usage.",context:"ACCOUNT"}
+ };
+ const meta=pageMeta[view]||pageMeta.overview;
+ if($("pageTitle"))$("pageTitle").textContent=meta.title;
+ if($("pageSubtitle"))$("pageSubtitle").textContent=meta.subtitle;
+ if($("pageContext"))$("pageContext").textContent=meta.context;
  const main=document.querySelector(".main");if(main)main.dataset.view=view;
  document.querySelectorAll(".nav a[data-view]").forEach(a=>a.classList.toggle("active",a.dataset.view===view));
  if(view==="publishing")refreshPublishing().catch(()=>{});
@@ -615,6 +655,7 @@ function showApp(user, points) {
  const name = user.display_name || user.email.split("@")[0];
  $("userName").textContent = name;
  $("userEmail").textContent = user.email;
+ if($("userRolePill")){$("userRolePill").textContent=user.role==="admin"?"ADMINISTRATOR":"MEMBER";$("userRolePill").classList.toggle("admin",user.role==="admin");}
  $("avatar").textContent = name.slice(0,2).toUpperCase();
  if($("profileDisplayName"))$("profileDisplayName").value=name;
  if($("profileEmail"))$("profileEmail").value=user.email||"";
