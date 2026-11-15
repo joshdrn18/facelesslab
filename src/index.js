@@ -75,58 +75,120 @@ function estimateAIOutputBytes(result) {
   }
   return 0;
 }
-async function runTrackedAI(env, context, model, input) {
-  const settings = await readAIUsageSettings(env);
-  const now = Math.floor(Date.now() / 1000);
-  const utcDayStart = Math.floor(now / 86400) * 86400;
-  const eventId = crypto.randomUUID();
-  const stage = String(context.stage || "unknown").slice(0, 40);
-  const inputCharacters = Math.max(0, Number(context.input_characters || 0));
-  const inputBytes = Math.max(0, Number(context.input_bytes || 0));
-  // Reserve atomically before inference. Legacy generations count once so
-  // today's activity is not reset when this tracking feature is deployed.
-  const reservation = await env.DB.prepare(
-    "INSERT INTO ai_inference_events (id,user_id,project_id,generation_id,stage,model,status,input_characters,input_bytes) " +
-    "SELECT ?,?,?,?,?,?,'processing',?,? WHERE ?=0 OR (" +
-    "(SELECT COUNT(*) FROM ai_inference_events WHERE created_at>=?) + " +
-    "(SELECT COUNT(*) FROM generations g WHERE g.created_at>=? " +
-    "AND g.stage IN ('voice','visuals','character_reference','subtitles') " +
-    "AND NOT EXISTS (SELECT 1 FROM ai_inference_events e WHERE e.generation_id=g.id)) < ?)"
-  ).bind(
-    eventId, context.user_id, context.project_id || null, context.generation_id || null,
-    stage, model, inputCharacters, inputBytes,
-    settings.daily_request_limit, utcDayStart, utcDayStart, settings.daily_request_limit
-  ).run();
-  if (Number(reservation.meta?.changes || 0) !== 1) {
-    const error = new Error("FacelessLab daily Workers AI safety cap reached (" + settings.daily_request_limit + " model requests). New Workers AI calls are paused until 00:00 UTC or an administrator changes the cap.");
-    error.code = "AI_DAILY_LIMIT_REACHED";
-    throw error;
-  }
-  const startedAt = Date.now();
+async function fetchCloudflareAiAnalytics(env, startDate, endDate) {
+  if (!env.CF_API_TOKEN) return { success:false, error:"CF_API_TOKEN is not configured." };
+  const query =
+    "query { viewer { accounts(filter:{accountTag:\"7fba808c5a694f2755dc45ab94cee505\"}) { " +
+    "aiInferenceAdaptiveGroups(limit:1000,filter:{date_geq:\"" + startDate + "\",date_leq:\"" + endDate + "\"},orderBy:[datetime_ASC]) { " +
+    "count sum { totalNeurons totalAudioSeconds totalInferenceSteps totalInferenceTimeMs totalInputTokens totalOutputTokens totalProcessedPixels totalRequestBytesIn totalRequestBytesOut } " +
+    "dimensions { date datetime modelId neurons requestSource requestBytesIn requestBytesOut inferenceTimeMs costMetricName1 costMetricValue1 costMetricName2 costMetricValue2 } " +
+    "} } } }";
   try {
-    const result = await env.AI.run(model, input);
-    const usage = result?.usage || result?.response?.usage || {};
-    const promptTokens = Number(usage.prompt_tokens ?? usage.input_tokens);
-    const completionTokens = Number(usage.completion_tokens ?? usage.output_tokens);
-    const neuronsValue = Number(usage.neurons ?? result?.neurons ?? result?.response?.neurons);
+    const response = await fetch("https://api.cloudflare.com/client/v4/graphql", {
+      method:"POST",
+      headers:{authorization:"Bearer "+env.CF_API_TOKEN,"content-type":"application/json",accept:"application/json"},
+      body:JSON.stringify({query}),
+      signal:AbortSignal.timeout(12000)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || (payload.errors || []).length) {
+      const detail=(payload.errors || []).map(item=>String(item.message||"GraphQL error")).join("; ");
+      return {success:false,http_status:response.status,error:(detail||"Cloudflare Analytics GraphQL request failed").slice(0,260)};
+    }
+    const account=payload.data?.viewer?.accounts?.[0];
+    if (!account) return {success:false,http_status:response.status,error:"Cloudflare Analytics returned no account. Check Account Analytics:Read permission."};
+    const groups=Array.isArray(account.aiInferenceAdaptiveGroups)?account.aiInferenceAdaptiveGroups:[];
+    const byDay={},byModel={};
+    let totalNeurons=0,totalRequests=0;
+    for (const group of groups) {
+      const d=group.dimensions||{},sum=group.sum||{};
+      const date=String(d.date||"unknown"),model=String(d.modelId||"unknown");
+      const requests=Math.max(0,Number(group.count)||0),neurons=Math.max(0,Number(sum.totalNeurons)||0);
+      totalRequests+=requests;totalNeurons+=neurons;
+      if(!byDay[date])byDay[date]={date,requests:0,neurons:0};
+      byDay[date].requests+=requests;byDay[date].neurons+=neurons;
+      if(!byModel[model])byModel[model]={model,requests:0,neurons:0,inference_ms:0,audio_seconds:0,input_tokens:0,output_tokens:0,processed_pixels:0,input_bytes:0,output_bytes:0};
+      const item=byModel[model];
+      item.requests+=requests;item.neurons+=neurons;
+      item.inference_ms+=Number(sum.totalInferenceTimeMs)||0;
+      item.audio_seconds+=Number(sum.totalAudioSeconds)||0;
+      item.input_tokens+=Number(sum.totalInputTokens)||0;
+      item.output_tokens+=Number(sum.totalOutputTokens)||0;
+      item.processed_pixels+=Number(sum.totalProcessedPixels)||0;
+      item.input_bytes+=Number(sum.totalRequestBytesIn)||0;
+      item.output_bytes+=Number(sum.totalRequestBytesOut)||0;
+    }
+    const today=new Date().toISOString().slice(0,10),todayData=byDay[today]||{date:today,requests:0,neurons:0};
+    const round=(value,digits=3)=>Number(Number(value||0).toFixed(digits));
+    return {
+      success:true,http_status:response.status,source:"cloudflare_graphql_ai_inference",
+      checked_at:new Date().toISOString(),period_from:startDate,period_to:endDate,groups:groups.length,
+      today:{...todayData,neurons:round(todayData.neurons),remaining_neurons:round(Math.max(0,10000-todayData.neurons)),allowance_neurons:10000,percent_used:round(todayData.neurons/100,2)},
+      total:{requests:totalRequests,neurons:round(totalNeurons)},
+      by_day:Object.values(byDay).sort((a,b)=>a.date.localeCompare(b.date)).map(x=>({...x,neurons:round(x.neurons)})),
+      by_model:Object.values(byModel).sort((a,b)=>b.neurons-a.neurons).map(x=>({...x,neurons:round(x.neurons),avg_neurons_per_request:x.requests?round(x.neurons/x.requests,3):0}))
+    };
+  } catch(error) {
+    return {success:false,http_status:0,error:String(error?.message||error).slice(0,260)};
+  }
+}
+
+async function runTrackedAI(env, context, model, input) {
+  const settings=await readAIUsageSettings(env);
+  const now=Math.floor(Date.now()/1000),utcDayStart=Math.floor(now/86400)*86400;
+  const utcDate=new Date(now*1000).toISOString().slice(0,10);
+  const eventId=crypto.randomUUID(),stage=String(context.stage||"unknown").slice(0,40);
+  const inputCharacters=Math.max(0,Number(context.input_characters||0));
+  const inputBytes=Math.max(0,Number(context.input_bytes||0));
+  const analytics=await fetchCloudflareAiAnalytics(env,utcDate,utcDate);
+  let baselineRequests=0,baselineNeurons=0;
+  if(analytics.success){
+    baselineRequests=Number(analytics.today.requests||0);
+    baselineNeurons=Number(analytics.today.neurons||0);
+  }else{
+    const [tracked,legacy]=await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) AS count FROM ai_inference_events WHERE created_at>=?").bind(utcDayStart).first(),
+      env.DB.prepare("SELECT COUNT(*) AS count FROM generations g WHERE g.created_at>=? AND g.stage IN ('voice','visuals','character_reference','subtitles') AND NOT EXISTS (SELECT 1 FROM ai_inference_events e WHERE e.generation_id=g.id)").bind(utcDayStart).first()
+    ]);
+    baselineRequests=Number(tracked?.count||0)+Number(legacy?.count||0);
+  }
+  await env.DB.prepare("INSERT OR IGNORE INTO ai_usage_daily_counters (utc_date,analytics_requests,pending_requests,analytics_neurons) VALUES (?,?,0,?)")
+    .bind(utcDate,baselineRequests,baselineNeurons).run();
+  if(analytics.success){
     await env.DB.prepare(
-      "UPDATE ai_inference_events SET status='completed',duration_ms=?,output_bytes=?," +
-      "prompt_tokens=?,completion_tokens=?,neurons=?,updated_at=unixepoch() WHERE id=?"
-    ).bind(
-      Math.max(0, Date.now() - startedAt), estimateAIOutputBytes(result),
-      Number.isFinite(promptTokens) ? promptTokens : null,
-      Number.isFinite(completionTokens) ? completionTokens : null,
-      Number.isFinite(neuronsValue) && neuronsValue > 0 ? neuronsValue : null,
-      eventId
-    ).run();
+      "UPDATE ai_usage_daily_counters SET pending_requests=MAX(0,pending_requests-MAX(0,?-analytics_requests)),"+
+      "analytics_requests=MAX(analytics_requests,?),analytics_neurons=MAX(analytics_neurons,?),updated_at=unixepoch() WHERE utc_date=?"
+    ).bind(baselineRequests,baselineRequests,baselineNeurons,utcDate).run();
+  }
+  const reservation=await env.DB.prepare(
+    "UPDATE ai_usage_daily_counters SET pending_requests=pending_requests+1,updated_at=unixepoch() "+
+    "WHERE utc_date=? AND (?=0 OR analytics_requests+pending_requests<?)"
+  ).bind(utcDate,settings.daily_request_limit,settings.daily_request_limit).run();
+  if(Number(reservation.meta?.changes||0)!==1){
+    const error=new Error("FacelessLab daily Workers AI safety cap reached ("+settings.daily_request_limit+" model requests). Cloudflare has reported "+baselineRequests+" requests today. New AI calls are paused until 00:00 UTC or an administrator changes the cap.");
+    error.code="AI_DAILY_LIMIT_REACHED";throw error;
+  }
+  try{
+    await env.DB.prepare("INSERT INTO ai_inference_events (id,user_id,project_id,generation_id,stage,model,status,input_characters,input_bytes) VALUES (?,?,?,?,?,?,'processing',?,?)")
+      .bind(eventId,context.user_id,context.project_id||null,context.generation_id||null,stage,model,inputCharacters,inputBytes).run();
+  }catch(insertError){
+    await env.DB.prepare("UPDATE ai_usage_daily_counters SET pending_requests=MAX(0,pending_requests-1),updated_at=unixepoch() WHERE utc_date=?").bind(utcDate).run().catch(()=>{});
+    throw insertError;
+  }
+  const startedAt=Date.now();
+  try{
+    const result=await env.AI.run(model,input),usage=result?.usage||result?.response?.usage||{};
+    const promptTokens=Number(usage.prompt_tokens??usage.input_tokens),completionTokens=Number(usage.completion_tokens??usage.output_tokens);
+    const neuronsValue=Number(usage.neurons??result?.neurons??result?.response?.neurons);
+    await env.DB.prepare("UPDATE ai_inference_events SET status='completed',duration_ms=?,output_bytes=?,prompt_tokens=?,completion_tokens=?,neurons=?,updated_at=unixepoch() WHERE id=?")
+      .bind(Math.max(0,Date.now()-startedAt),estimateAIOutputBytes(result),
+        Number.isFinite(promptTokens)?promptTokens:null,Number.isFinite(completionTokens)?completionTokens:null,
+        Number.isFinite(neuronsValue)&&neuronsValue>0?neuronsValue:null,eventId).run();
     return result;
-  } catch (error) {
-    await env.DB.prepare(
-      "UPDATE ai_inference_events SET status='failed',duration_ms=?,error_message=?,updated_at=unixepoch() WHERE id=?"
-    ).bind(
-      Math.max(0, Date.now() - startedAt),
-      String(error?.message || error).slice(0, 300), eventId
-    ).run().catch(trackError => console.error(JSON.stringify({event:"ai_usage_tracking_update_failed",message:String(trackError?.message||trackError).slice(0,180)})));
+  }catch(error){
+    await env.DB.prepare("UPDATE ai_inference_events SET status='failed',duration_ms=?,error_message=?,updated_at=unixepoch() WHERE id=?")
+      .bind(Math.max(0,Date.now()-startedAt),String(error?.message||error).slice(0,300),eventId).run()
+      .catch(trackError=>console.error(JSON.stringify({event:"ai_usage_tracking_update_failed",message:String(trackError?.message||trackError).slice(0,180)})));
     throw error;
   }
 }
