@@ -973,6 +973,22 @@ textarea{line-height:1.65}
 @media(max-width:900px){.publishing-draft-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:560px){.publishing-draft-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.publishing-stat{padding:11px}.publishing-stat>strong{font-size:22px}}
 
+/* YouTube performance analytics */
+.youtube-analytics{margin:16px 0;padding:18px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,rgba(25,31,48,.78),rgba(15,19,31,.88))}
+.youtube-analytics-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.youtube-analytics-head h3{margin:4px 0}.youtube-analytics-head p{margin:0;color:var(--muted);font-size:12px}
+.youtube-analytics-controls{display:flex;align-items:center;gap:8px}.youtube-analytics-controls select{min-width:112px}
+.youtube-analytics-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin:12px 0}
+.youtube-analytics-stat{min-width:0;padding:13px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.025)}
+.youtube-analytics-stat span{display:block;color:var(--muted);font-size:11px}.youtube-analytics-stat strong{display:block;margin-top:7px;font-size:clamp(18px,2.2vw,25px);letter-spacing:-.04em;overflow-wrap:anywhere}
+.youtube-analytics-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(240px,.8fr);gap:12px}
+.youtube-analytics-card{min-width:0;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.02)}
+.youtube-analytics-card h4{margin:0 0 12px;font-size:13px}.youtube-analytics-chart{width:100%;height:190px;display:block;overflow:visible}
+.youtube-analytics-top{display:grid;gap:9px}.youtube-analytics-video{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12px}.youtube-analytics-video:last-child{border:0}
+.youtube-analytics-video b{display:block;max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.youtube-analytics-video small{color:var(--muted)}
+.youtube-analytics-note{margin:10px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
+@media(max-width:900px){.youtube-analytics-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.youtube-analytics-grid{grid-template-columns:1fr}}
+@media(max-width:560px){.youtube-analytics{padding:13px}.youtube-analytics-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.youtube-analytics-head{align-items:flex-start}.youtube-analytics-controls{width:100%}.youtube-analytics-controls select{flex:1}}
 /* Publishing drafts — dedicated outbox layout */
 #publishingDraftsSection{margin-top:26px;padding:22px;border:1px solid rgba(145,160,190,.16);border-radius:17px;background:linear-gradient(145deg,rgba(17,25,39,.94),rgba(11,17,28,.96));box-shadow:0 12px 32px rgba(0,0,0,.12)}
 .publishing-drafts-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
@@ -1042,7 +1058,26 @@ textarea{line-height:1.65}
     <article class="content-card"><span class="content-label">YOUTUBE SHORTS</span><h3 style="margin:8px 0">YouTube</h3><div id="youtubeConnection" class="library-storage">Checking connection…</div><button class="primary" id="connectYoutube" type="button" style="margin-top:12px;width:100%">Connect YouTube</button></article>
     <article class="content-card"><span class="content-label">TIKTOK</span><h3 style="margin:8px 0">TikTok</h3><div id="tiktokConnection" class="library-storage">Checking connection…</div><button class="primary" id="connectTiktok" type="button" style="margin-top:12px;width:100%">Connect TikTok</button></article>
    </div>
-   <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. Save a draft, review the details, then press Publish now to upload it to your connected channel.</p>
+   <section class="youtube-analytics" aria-labelledby="youtubeAnalyticsTitle">
+     <div class="youtube-analytics-head">
+      <div><span class="content-label">CHANNEL PERFORMANCE</span><h3 id="youtubeAnalyticsTitle">YouTube analytics</h3><p>Real channel data from YouTube Analytics API.</p></div>
+      <div class="youtube-analytics-controls"><select id="youtubeAnalyticsRange" aria-label="Analytics date range"><option value="7d">Last 7 days</option><option value="28d" selected>Last 28 days</option><option value="90d">Last 90 days</option><option value="365d">Last 365 days</option></select><button class="secondary" id="refreshYoutubeAnalytics" type="button">↻ Refresh stats</button></div>
+     </div>
+     <div id="youtubeAnalyticsNotice" class="notice" role="status">Connect or reconnect YouTube to load channel performance.</div>
+     <div class="youtube-analytics-stats">
+      <article class="youtube-analytics-stat"><span>Views</span><strong id="ytAnalyticsViews">—</strong></article>
+      <article class="youtube-analytics-stat"><span>Likes</span><strong id="ytAnalyticsLikes">—</strong></article>
+      <article class="youtube-analytics-stat"><span>Comments</span><strong id="ytAnalyticsComments">—</strong></article>
+      <article class="youtube-analytics-stat"><span>Subscribers gained</span><strong id="ytAnalyticsSubs">—</strong></article>
+      <article class="youtube-analytics-stat"><span>Engagement rate</span><strong id="ytAnalyticsEngagement">—</strong></article>
+     </div>
+     <div class="youtube-analytics-grid">
+      <article class="youtube-analytics-card"><h4>Views over time</h4><div id="youtubeAnalyticsChart" class="muted">Your daily views chart will appear here.</div></article>
+      <article class="youtube-analytics-card"><h4>Top videos</h4><div id="youtubeAnalyticsTop" class="youtube-analytics-top"><div class="muted">Top videos will appear here.</div></div></article>
+     </div>
+     <p class="youtube-analytics-note" id="youtubeAnalyticsUpdated">Analytics data can be delayed by YouTube. This panel uses real API data and never fills missing metrics with estimates.</p>
+    </section>
+    <div class="content-card" style="margin-top:14px"><span class="content-label">PREPARE A VIDEO</span><h3 style="margin:8px 0">Create publishing draft</h3><p>Choose an MP4 already saved in Cloud backups. Save a draft, review the details, then press Publish now to upload it to your connected channel.</p>
     <form id="publishDraftForm"><label class="field" for="publishBackup">Cloud video</label><select id="publishBackup" required><option value="">Load cloud backups…</option></select><div class="two"><div><label class="field" for="publishPlatform">Platform</label><select id="publishPlatform"><option value="youtube">YouTube Shorts</option><option value="tiktok">TikTok</option></select></div><div><label class="field" for="publishPrivacy">Visibility</label><select id="publishPrivacy"><option value="private">Private</option><option value="unlisted">Unlisted (YouTube)</option><option value="public">Public</option></select></div></div><label class="field" for="publishTitle">Title / caption</label><input id="publishTitle" maxlength="100" required placeholder="Enter video title or caption"><label class="field" for="publishDescription">Description</label><textarea id="publishDescription" maxlength="5000" rows="3" placeholder="Video description"></textarea><label class="field" for="publishHashtags">Hashtags</label><input id="publishHashtags" maxlength="1000" placeholder="#shorts #anime #story"><div id="publishTagsField" style="margin-top:12px"><label class="field" for="publishTags">YouTube tags · search keywords</label><textarea id="publishTags" maxlength="1200" rows="2" placeholder="anime story, animated short, mystery explained"></textarea><div class="muted" style="font-size:11px;line-height:1.55;margin-top:5px">Separate tags with commas or new lines. Up to 30 tags and 500 characters total. These are separate from hashtags.</div><div id="publishTagsCount" class="muted" aria-live="polite" style="font-size:11px;text-align:right;margin-top:4px">0/30 tags · 0/500 characters</div></div><div class="actions"><button class="primary" id="savePublishDraft" type="submit">Save publishing draft</button><button class="secondary" type="button" id="refreshPublishing">Refresh</button></div><div class="notice" id="publishDraftNotice" role="status"></div>
     </form>
    </div>
@@ -2090,6 +2125,42 @@ async function refreshVideoLibrary(){
 $("librarySearch")?.addEventListener("input",refreshVideoLibrary);
 $("librarySort")?.addEventListener("change",refreshVideoLibrary);
 $("clearLibrarySearch")?.addEventListener("click",()=>{if($("librarySearch"))$("librarySearch").value="";refreshVideoLibrary();});
+function formatAnalyticsNumber(value){return Number(value||0).toLocaleString(undefined,{maximumFractionDigits:0});}
+function renderYouTubeAnalytics(data){
+ const totals=data.totals||{},fields={ytAnalyticsViews:totals.views,ytAnalyticsLikes:totals.likes,ytAnalyticsComments:totals.comments,ytAnalyticsSubs:totals.subscribers_gained};
+ for(const [id,value] of Object.entries(fields)){const el=$(id);if(el)el.textContent=formatAnalyticsNumber(value);}
+ const engagement=$("ytAnalyticsEngagement");if(engagement)engagement.textContent=Number(totals.engagement_rate||0).toFixed(2)+"%";
+ const days=Array.isArray(data.daily)?data.daily:[],chart=$("youtubeAnalyticsChart");
+ if(chart){
+  if(!days.length)chart.innerHTML='<div class="muted">No daily view data returned for this period yet.</div>';
+  else{
+   const values=days.map(d=>Math.max(0,Number(d.views)||0)),max=Math.max(1,...values),w=640,h=190,left=8,right=8,top=12,bottom=26,innerW=w-left-right,innerH=h-top-bottom;
+   const pts=values.map((v,i)=>({x:left+(values.length===1?innerW/2:i/(values.length-1)*innerW),y:top+innerH-(v/max)*innerH}));
+   const line=pts.map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+   const area="M "+pts.map(p=>p.x.toFixed(1)+" "+p.y.toFixed(1)).join(" L ")+" L "+(left+innerW)+" "+(top+innerH)+" L "+left+" "+(top+innerH)+" Z";
+   const first=days[0].date||"",last=days[days.length-1].date||"";
+   chart.innerHTML='<svg class="youtube-analytics-chart" viewBox="0 0 '+w+' '+h+'" role="img" aria-label="Daily YouTube views chart"><defs><linearGradient id="ytViewsFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#8b7cff" stop-opacity=".38"/><stop offset="100%" stop-color="#8b7cff" stop-opacity="0"/></linearGradient></defs><path d="'+area+'" fill="url(#ytViewsFill)"/><polyline points="'+line+'" fill="none" stroke="#9b8cff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'+pts.filter((p,i)=>i===0||i===pts.length-1||i===Math.floor(pts.length/2)).map(p=>'<circle cx="'+p.x+'" cy="'+p.y+'" r="3.5" fill="#b8adff"/>').join("")+'<text x="'+left+'" y="'+(h-5)+'" fill="currentColor" opacity=".65" font-size="11">'+escapeHtml(first)+'</text><text x="'+(w-right)+'" y="'+(h-5)+'" text-anchor="end" fill="currentColor" opacity=".65" font-size="11">'+escapeHtml(last)+'</text><text x="'+left+'" y="10" fill="currentColor" opacity=".65" font-size="10">'+formatAnalyticsNumber(max)+' views</text></svg>';
+  }
+ }
+ const topEl=$("youtubeAnalyticsTop"),videos=Array.isArray(data.top_videos)?data.top_videos:[];
+ if(topEl)topEl.innerHTML=videos.length?videos.map(v=>'<div class="youtube-analytics-video"><div style="min-width:0"><b title="'+escapeHtml(v.title)+'">'+escapeHtml(v.title)+'</b><small>'+formatAnalyticsNumber(v.likes)+' likes · '+formatAnalyticsNumber(v.comments)+' comments</small></div><strong>'+formatAnalyticsNumber(v.views)+'</strong></div>').join(""):'<div class="muted">No video performance data for this period yet.</div>';
+ const updated=$("youtubeAnalyticsUpdated");if(updated)updated.textContent="Period: "+data.start_date+" – "+data.end_date+" · Updated "+(data.checked_at?new Date(data.checked_at).toLocaleString():"just now")+". YouTube reporting may be delayed.";
+}
+async function refreshYouTubeAnalytics(){
+ const button=$("refreshYoutubeAnalytics"),notice=$("youtubeAnalyticsNotice"),range=$("youtubeAnalyticsRange")?.value||"28d";
+ if(button){button.disabled=true;button.textContent="Loading…";}
+ if(notice){notice.style.color="";notice.textContent="Fetching channel analytics from YouTube…";}
+ try{
+  const data=await api("/api/publishing/youtube/analytics?range="+encodeURIComponent(range));renderYouTubeAnalytics(data);
+  if(notice){notice.style.color="#8fe0c4";notice.textContent="Live YouTube channel analytics loaded.";}
+ }catch(error){
+  for(const id of ["ytAnalyticsViews","ytAnalyticsLikes","ytAnalyticsComments","ytAnalyticsSubs","ytAnalyticsEngagement"]){const el=$(id);if(el)el.textContent="—";}
+  const chart=$("youtubeAnalyticsChart"),top=$("youtubeAnalyticsTop");if(chart)chart.textContent="Analytics unavailable.";if(top)top.textContent="Analytics unavailable.";
+  if(notice){notice.style.color="var(--red)";notice.textContent=error.message||"Could not load YouTube analytics.";}
+ }finally{if(button){button.disabled=false;button.textContent="↻ Refresh stats";}}
+}
+$("refreshYoutubeAnalytics")?.addEventListener("click",refreshYouTubeAnalytics);
+$("youtubeAnalyticsRange")?.addEventListener("change",refreshYouTubeAnalytics);
 async function refreshPublishing(){
  const oauthParams=new URLSearchParams(location.search),connectedPlatform=oauthParams.get("connected"),oauthError=oauthParams.get("oauth_error"),oauthNotice=$("publishDraftNotice");
  if(oauthNotice&&(connectedPlatform||oauthError)){oauthNotice.style.color=oauthError?"var(--red)":"#8fe0c4";oauthNotice.textContent=oauthError||("Successfully connected "+(connectedPlatform==="youtube"?"YouTube":"TikTok")+".");history.replaceState(null,"",location.pathname+"#publishing");}
