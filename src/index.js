@@ -839,7 +839,7 @@ async function handle(request, env) {
         const usageSettings = await readAIUsageSettings(env);
         const nowUtc = Math.floor(Date.now() / 1000);
         const utcDayStart = Math.floor(nowUtc / 86400) * 86400;
-        const [todayTotals, todayStages, dailyHistory, recentInferences] = await Promise.all([
+        const [todayTotals, todayStages, dailyHistory, recentInferences, dailyCounter] = await Promise.all([
           env.DB.prepare(
             "SELECT COUNT(*) AS requests," +
             "SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed," +
@@ -899,7 +899,9 @@ async function handle(request, env) {
             "FROM ai_inference_events e JOIN users u ON u.id=e.user_id " +
             "LEFT JOIN projects p ON p.id=e.project_id WHERE e.created_at>=? " +
             "ORDER BY e.created_at DESC LIMIT 25"
-          ).bind(utcDayStart).all()
+          ).bind(utcDayStart).all(),
+          env.DB.prepare("SELECT analytics_requests,pending_requests,analytics_neurons FROM ai_usage_daily_counters WHERE utc_date=?")
+            .bind(new Date().toISOString().slice(0,10)).first()
         ]);
         const n = value => Number(value || 0);
         return json({
@@ -919,6 +921,8 @@ async function handle(request, env) {
           today: {
             utc_day_start: utcDayStart,
             requests: n(todayTotals?.requests),
+            guard_requests: Math.max(n(todayTotals?.requests),n(dailyCounter?.analytics_requests)+n(dailyCounter?.pending_requests)),
+            guard_neurons: n(dailyCounter?.analytics_neurons),
             completed: n(todayTotals?.completed),
             failed: n(todayTotals?.failed),
             processing: n(todayTotals?.processing),
