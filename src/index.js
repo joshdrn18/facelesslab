@@ -500,14 +500,31 @@ async function processPublishQueueMessage(message,env) {
  try{
   const access=await getFreshSocialAccessToken(env,connection),size=Number(object.size||0);if(!size)throw new Error("MP4 file is empty.");
   if(job.platform==="youtube"){
+   if(typeof FixedLengthStream!=="function")throw new Error("Cloudflare fixed-length upload streaming is unavailable in this Worker runtime.");
+   if(!object.body)throw new Error("Cloud backup has no readable MP4 stream.");
    const tags=(String(job.hashtags||"").match(/#[\p{L}\p{N}_]+/gu)||[]).map(x=>x.slice(1)).slice(0,30);
-   const metadata={snippet:{title:String(job.title||"FacelessLab video").slice(0,100),description:String(job.description||"")+(job.hashtags?"\\n\\n"+job.hashtags:""),tags,categoryId:"24"},status:{privacyStatus:["public","unlisted","private"].includes(job.privacy)?job.privacy:"private",selfDeclaredMadeForKids:false}};
+   const description=String(job.description||"")+(job.hashtags?"\n\n"+String(job.hashtags):"");
+   const snippet={title:String(job.title||"FacelessLab video").slice(0,100),description,categoryId:"24"};
+   if(tags.length)snippet.tags=tags;
+   const metadata={snippet,status:{privacyStatus:["public","unlisted","private"].includes(job.privacy)?job.privacy:"private"}};
    const init=await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json; charset=UTF-8","x-upload-content-type":"video/mp4","x-upload-content-length":String(size)},body:JSON.stringify(metadata)});
-   if(!init.ok)throw new Error("YouTube upload setup failed: "+(await init.text()).slice(0,300));
+   if(!init.ok)throw new Error("YouTube upload setup failed: "+(await init.text()).slice(0,500));
    const location=init.headers.get("location");if(!location)throw new Error("YouTube did not return an upload URL.");
-   const uploaded=await fetch(location,{method:"PUT",headers:{"content-type":"video/mp4","content-length":String(size)},body:object.body});
-   const result=await uploaded.json().catch(()=>({}));if(!uploaded.ok||!result.id)throw new Error("YouTube upload failed: "+JSON.stringify(result.error||result).slice(0,300));
-   await env.DB.prepare("UPDATE publish_jobs SET status='published',provider_post_id=?,provider_url=?,updated_at=unixepoch() WHERE id=?").bind(result.id,"https://www.youtube.com/shorts/"+result.id,id).run();
+   const fixedBody=new FixedLengthStream(size);
+   const streamPump=object.body.pipeTo(fixedBody.writable);
+   let uploaded;
+   try{
+    uploaded=await fetch(location,{method:"PUT",headers:{"content-type":"video/mp4"},body:fixedBody.readable});
+    await streamPump;
+   }catch(uploadError){
+    await streamPump.catch(()=>{});
+    throw uploadError;
+   }
+   const result=await uploaded.json().catch(()=>({}));
+   if(!uploaded.ok||!result.id)throw new Error("YouTube upload failed (HTTP "+uploaded.status+"): "+JSON.stringify(result.error||result).slice(0,500));
+   const videoUrl="https://www.youtube.com/shorts/"+result.id;
+   await env.DB.prepare("UPDATE publish_jobs SET status='processing',provider_post_id=?,provider_url=?,error_message=NULL,updated_at=unixepoch() WHERE id=?").bind(result.id,videoUrl,id).run();
+   await env.JOBS.send({type:"check_youtube_status",job_id:id,attempt:1},{delaySeconds:30});
   }else{
    if(size<5*1024*1024)throw new Error("TikTok direct upload requires an MP4 of at least 5 MB.");
    const info=await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json"},body:"{}"});
@@ -523,6 +540,63 @@ async function processPublishQueueMessage(message,env) {
    const status=await check.json().catch(()=>({}));if(status.data?.status==="PUBLISH_COMPLETE")await env.DB.prepare("UPDATE publish_jobs SET status='published',provider_url=?,updated_at=unixepoch() WHERE id=?").bind(status.data?.share_url||null,id).run();else if(status.data?.status==="FAILED")throw new Error(status.data.fail_reason||"TikTok rejected the video.");else await env.JOBS.send({type:"check_tiktok_status",job_id:id,attempt:1},{delaySeconds:30});
   }
  }catch(error){await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(String(error?.message||error).slice(0,700),id).run();throw error;}
+}
+
+
+async function processYouTubeStatusMessage(message,env) {
+ const id=message.body?.job_id,attempt=Math.max(1,Number(message.body?.attempt||1));
+ if(!id)return;
+ const job=await env.DB.prepare("SELECT * FROM publish_jobs WHERE id=? AND platform='youtube' AND status='processing'").bind(id).first();
+ if(!job||!job.provider_post_id)return;
+ const connection=await env.DB.prepare("SELECT * FROM social_connections WHERE id=? AND user_id=? AND status='active'").bind(job.connection_id,job.user_id).first();
+ if(!connection){
+  await env.DB.prepare("UPDATE publish_jobs SET error_message='Reconnect the YouTube channel, then refresh this upload status.',updated_at=unixepoch() WHERE id=?").bind(id).run();
+  return;
+ }
+ let response,data;
+ try{
+  const access=await getFreshSocialAccessToken(env,connection);
+  const endpoint="https://www.googleapis.com/youtube/v3/videos?part=status,processingDetails&id="+encodeURIComponent(job.provider_post_id);
+  response=await fetch(endpoint,{headers:{authorization:"Bearer "+access}});
+  data=await response.json().catch(()=>({}));
+ }catch(error){
+  if(attempt<20){await env.JOBS.send({type:"check_youtube_status",job_id:id,attempt:attempt+1},{delaySeconds:Math.min(120,attempt*15)});return;}
+  await env.DB.prepare("UPDATE publish_jobs SET error_message=?,updated_at=unixepoch() WHERE id=?")
+   .bind("YouTube processing status could not be confirmed: "+String(error?.message||error).slice(0,400),id).run();
+  return;
+ }
+ if(!response.ok){
+  const detail=String(data.error?.message||"YouTube status request failed").slice(0,400);
+  if((response.status===429||response.status>=500)&&attempt<20){
+   await env.JOBS.send({type:"check_youtube_status",job_id:id,attempt:attempt+1},{delaySeconds:Math.min(120,attempt*15)});return;
+  }
+  await env.DB.prepare("UPDATE publish_jobs SET error_message=?,updated_at=unixepoch() WHERE id=?")
+   .bind("YouTube status check (HTTP "+response.status+"): "+detail,id).run();
+  return;
+ }
+ const video=data.items?.[0];
+ if(!video){
+  if(attempt<20){await env.JOBS.send({type:"check_youtube_status",job_id:id,attempt:attempt+1},{delaySeconds:30});return;}
+  await env.DB.prepare("UPDATE publish_jobs SET error_message='Upload received by YouTube, but its processing record is not available yet. Open the video in YouTube Studio and refresh this status later.',updated_at=unixepoch() WHERE id=?").bind(id).run();
+  return;
+ }
+ const uploadStatus=String(video.status?.uploadStatus||"").toLowerCase();
+ const processingStatus=String(video.processingDetails?.processingStatus||"").toLowerCase();
+ if(uploadStatus==="processed"||processingStatus==="succeeded"){
+  await env.DB.prepare("UPDATE publish_jobs SET status='published',error_message=NULL,updated_at=unixepoch() WHERE id=?").bind(id).run();
+  return;
+ }
+ if(["failed","rejected","deleted"].includes(uploadStatus)||["failed","rejected","terminated"].includes(processingStatus)){
+  const reason=video.status?.rejectionReason||video.status?.failureReason||video.processingDetails?.processingFailureReason||uploadStatus||processingStatus||"unknown";
+  await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?")
+   .bind("YouTube could not process this upload: "+String(reason).slice(0,400),id).run();
+  return;
+ }
+ if(attempt<20){
+  await env.JOBS.send({type:"check_youtube_status",job_id:id,attempt:attempt+1},{delaySeconds:30});
+ }else{
+  await env.DB.prepare("UPDATE publish_jobs SET error_message='YouTube is still processing this video. The upload was received; open the video in YouTube Studio and use Refresh status here later. Do not upload it again unless YouTube confirms the upload failed.',updated_at=unixepoch() WHERE id=?").bind(id).run();
+ }
 }
 
 async function processTikTokStatusMessage(message,env) {
@@ -1102,7 +1176,7 @@ async function handle(request, env) {
       let target;
       if(platform==="youtube"){
         const u=new URL("https://accounts.google.com/o/oauth2/v2/auth");
-        u.searchParams.set("client_id",env.YOUTUBE_CLIENT_ID);u.searchParams.set("redirect_uri",redirectUri);u.searchParams.set("response_type","code");u.searchParams.set("scope","https://www.googleapis.com/auth/youtube.upload");u.searchParams.set("access_type","offline");u.searchParams.set("prompt","consent");u.searchParams.set("state",state);target=u.toString();
+        u.searchParams.set("client_id",env.YOUTUBE_CLIENT_ID);u.searchParams.set("redirect_uri",redirectUri);u.searchParams.set("response_type","code");u.searchParams.set("scope","https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly");u.searchParams.set("access_type","offline");u.searchParams.set("prompt","consent");u.searchParams.set("state",state);target=u.toString();
       }else{
         const u=new URL("https://www.tiktok.com/v2/auth/authorize/");
         u.searchParams.set("client_key",env.TIKTOK_CLIENT_KEY);u.searchParams.set("redirect_uri",redirectUri);u.searchParams.set("response_type","code");u.searchParams.set("scope","user.info.basic,video.publish,video.upload");u.searchParams.set("state",state);target=u.toString();
@@ -1130,6 +1204,16 @@ async function handle(request, env) {
       const id=crypto.randomUUID();
       await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,privacy,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,String(body?.privacy||"private")).run();
       return json({ok:true,job:{id,backup_id:backupId,platform,title,status:"draft"}},201);
+    }
+    const youtubeStatusMatch=path.match(new RegExp("^/api/publishing/jobs/([a-f0-9-]+)/refresh-status$","i"));
+    if(youtubeStatusMatch&&method==="POST"){
+      const id=youtubeStatusMatch[1],job=await env.DB.prepare("SELECT id,status,platform,provider_post_id FROM publish_jobs WHERE id=? AND user_id=?").bind(id,user.id).first();
+      if(!job)return json({ok:false,error:"Publishing job not found."},404);
+      if(job.platform!=="youtube"||job.status!=="processing"||!job.provider_post_id)return json({ok:false,error:"Only an uploaded YouTube video can be checked again."},409);
+      if(!env.JOBS||typeof env.JOBS.send!=="function")return json({ok:false,error:"Publishing queue is unavailable."},503);
+      await env.JOBS.send({type:"check_youtube_status",job_id:id,attempt:1});
+      await env.DB.prepare("UPDATE publish_jobs SET error_message=NULL,updated_at=unixepoch() WHERE id=?").bind(id).run();
+      return json({ok:true,status:"processing",message:"YouTube processing status check queued."},202);
     }
     const publishNowMatch=path.match(new RegExp("^/api/publishing/jobs/([a-f0-9-]+)/publish$","i"));
     if(publishNowMatch&&method==="POST"){
@@ -1802,7 +1886,7 @@ async function runScheduledMaintenance(env, scheduledTime) {
 
 export default {
   async queue(batch, env) {
-    for (const message of batch.messages) { if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else if(message.body?.type === "publish_video") await processPublishQueueMessage(message,env); else if(message.body?.type === "check_tiktok_status") await processTikTokStatusMessage(message,env); else await processScriptQueueMessage(message, env); }
+    for (const message of batch.messages) { if (message.body?.type === "generate_voice") await processVoiceQueueMessage(message, env); else if(message.body?.type === "publish_video") await processPublishQueueMessage(message,env); else if(message.body?.type === "check_tiktok_status") await processTikTokStatusMessage(message,env); else if(message.body?.type === "check_youtube_status") await processYouTubeStatusMessage(message,env); else await processScriptQueueMessage(message, env); }
   },
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runScheduledMaintenance(env, controller.scheduledTime).catch(error => {
