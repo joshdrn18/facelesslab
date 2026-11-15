@@ -490,6 +490,15 @@ async function getFreshSocialAccessToken(env,connection) {
    .bind(await encryptSocialToken(env,data.access_token),data.refresh_token?await encryptSocialToken(env,data.refresh_token):connection.refresh_token_enc,now+Number(data.expires_in||3600),data.refresh_expires_in?now+Number(data.refresh_expires_in):connection.refresh_token_expires_at,connection.id).run();
   return data.access_token;
 }
+async function updateProductionScheduleForPublishJob(env,jobId,status,errorMessage=null){
+  try{
+    await env.DB.prepare("UPDATE production_schedules SET status=?,error_message=?,updated_at=unixepoch() WHERE publish_job_id=?")
+      .bind(status,errorMessage?String(errorMessage).slice(0,500):null,jobId).run();
+  }catch(error){
+    console.error(JSON.stringify({event:"production_schedule_status_sync_failed",job_id:jobId,error:String(error?.message||error).slice(0,240)}));
+  }
+}
+
 async function processPublishQueueMessage(message,env) {
  const id=message.body?.job_id;if(!id)return;
  const job=await env.DB.prepare("SELECT * FROM publish_jobs WHERE id=? AND status='queued'").bind(id).first();if(!job)return;
@@ -553,9 +562,9 @@ async function processPublishQueueMessage(message,env) {
    for(let i=0;i<chunks;i++){const start=i*chunkSize,end=Math.min(size,start+chunkSize),part=bytes.slice(start,end);const sent=await fetch(started.data.upload_url,{method:"PUT",headers:{"content-type":"video/mp4","content-length":String(part.byteLength),"content-range":"bytes "+start+"-"+(end-1)+"/"+size},body:part});if(!sent.ok)throw new Error("TikTok upload failed on chunk "+(i+1)+".");}
    await env.DB.prepare("UPDATE publish_jobs SET status='processing',provider_post_id=?,updated_at=unixepoch() WHERE id=?").bind(started.data.publish_id,id).run();
    const check=await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json"},body:JSON.stringify({publish_id:started.data.publish_id})});
-   const status=await check.json().catch(()=>({}));if(status.data?.status==="PUBLISH_COMPLETE")await env.DB.prepare("UPDATE publish_jobs SET status='published',provider_url=?,updated_at=unixepoch() WHERE id=?").bind(status.data?.share_url||null,id).run();else if(status.data?.status==="FAILED")throw new Error(status.data.fail_reason||"TikTok rejected the video.");else await env.JOBS.send({type:"check_tiktok_status",job_id:id,attempt:1},{delaySeconds:30});
+   const status=await check.json().catch(()=>({}));if(status.data?.status==="PUBLISH_COMPLETE"){await env.DB.prepare("UPDATE publish_jobs SET status='published',provider_url=?,updated_at=unixepoch() WHERE id=?").bind(status.data?.share_url||null,id).run();await updateProductionScheduleForPublishJob(env,id,"published");}else if(status.data?.status==="FAILED")throw new Error(status.data.fail_reason||"TikTok rejected the video.");else await env.JOBS.send({type:"check_tiktok_status",job_id:id,attempt:1},{delaySeconds:30});
   }
- }catch(error){await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(String(error?.message||error).slice(0,700),id).run();throw error;}
+ }catch(error){const detail=String(error?.message||error).slice(0,700);await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,id).run();await updateProductionScheduleForPublishJob(env,id,"failed",detail);throw error;}
 }
 
 
@@ -600,12 +609,14 @@ async function processYouTubeStatusMessage(message,env) {
  const processingStatus=String(video.processingDetails?.processingStatus||"").toLowerCase();
  if(uploadStatus==="processed"||processingStatus==="succeeded"){
   await env.DB.prepare("UPDATE publish_jobs SET status='published',error_message=NULL,updated_at=unixepoch() WHERE id=?").bind(id).run();
+  await updateProductionScheduleForPublishJob(env,id,"published");
   return;
  }
  if(["failed","rejected","deleted"].includes(uploadStatus)||processingStatus==="failed"||processingStatus==="rejected"){
   const reason=video.status?.rejectionReason||video.status?.failureReason||video.processingDetails?.processingFailureReason||uploadStatus||processingStatus||"unknown";
   await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?")
    .bind("YouTube could not process this upload: "+String(reason).slice(0,400),id).run();
+  await updateProductionScheduleForPublishJob(env,id,"failed","YouTube could not process this upload: "+String(reason).slice(0,400));
   return;
  }
  if(attempt<20){
@@ -625,8 +636,10 @@ async function processTikTokStatusMessage(message,env) {
  const state=data.data?.status||"";
  if(state==="PUBLISH_COMPLETE"){
   await env.DB.prepare("UPDATE publish_jobs SET status='published',provider_url=?,updated_at=unixepoch() WHERE id=?").bind(data.data?.share_url||null,id).run();
+  await updateProductionScheduleForPublishJob(env,id,"published");
  }else if(state==="FAILED"){
   await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(String(data.data?.fail_reason||"TikTok could not publish this video.").slice(0,700),id).run();
+  await updateProductionScheduleForPublishJob(env,id,"failed",String(data.data?.fail_reason||"TikTok could not publish this video.").slice(0,700));
  }else if(attempt<20){
   await env.JOBS.send({type:"check_tiktok_status",job_id:id,attempt:attempt+1},{delaySeconds:30});
  }else{
