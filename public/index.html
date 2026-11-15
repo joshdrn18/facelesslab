@@ -341,6 +341,23 @@ button{font-weight:700}
  .project-meta{font-size:9px}
 }
 
+
+
+/* Social channel connection cards */
+.integration-state{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:72px}
+.integration-icon{width:34px;height:34px;display:grid;place-items:center;border:1px solid rgba(112,229,220,.2);border-radius:11px;background:rgba(112,229,220,.09);color:#8be6dc;font-size:15px;font-weight:900}
+.integration-icon.muted-icon{border-color:var(--line-soft);background:rgba(146,164,198,.07);color:#aebbd0}
+.integration-state>div{min-width:0}
+.integration-state b,.integration-state small{display:block}
+.integration-state b{font-size:12px;color:#e7edf8}
+.integration-state small{font-size:10px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere;margin-top:3px}
+.integration-badge{align-self:start;border:1px solid rgba(112,229,220,.2);border-radius:99px;background:rgba(112,229,220,.08);padding:4px 7px;color:#8de5da;font-size:8px;letter-spacing:.8px;font-weight:850;white-space:nowrap}
+.integration-badge.pending{border-color:var(--line-soft);background:rgba(146,164,198,.07);color:#aab7cc}
+#publishingPanel .content-card>button{min-height:39px}
+#publishingPanel .content-card{min-width:0}
+#publishDraftForm .actions{flex-wrap:wrap}
+@media(max-width:500px){.integration-state{grid-template-columns:32px minmax(0,1fr)}.integration-badge{grid-column:2;justify-self:start}.integration-icon{width:32px;height:32px}}
+
 </style>
 </head>
 <body>
@@ -1105,9 +1122,12 @@ async function refreshPublishing(){
   const connections=connectionsData.connections||[],configured=connectionsData.configured||{};
   for(const platform of ["youtube","tiktok"]){
    const el=$(platform+"Connection"),button=$("connect"+(platform==="youtube"?"Youtube":"Tiktok"));
-   const row=connections.find(c=>c.platform===platform);
-   if(el)el.innerHTML=row?'<b>Connected: '+escapeHtml(row.display_name||row.platform_user_id)+'</b><small>'+escapeHtml(row.status)+' · token stored securely</small>':'<b>Not connected</b><small>'+((configured[platform]&&configured.encryption)?"Ready to connect":"Waiting for API credentials and encryption key")+'</small>';
-   if(button){button.disabled=!(configured[platform]&&configured.encryption);button.textContent=row?"Reconnect "+(platform==="youtube"?"YouTube":"TikTok"):"Connect "+(platform==="youtube"?"YouTube":"TikTok");}
+   const row=connections.find(c=>c.platform===platform),ready=!!(configured[platform]&&configured.encryption);
+   const label=platform==="youtube"?"YouTube":"TikTok";
+   if(el)el.innerHTML=row
+    ?'<div class="integration-state connected"><span class="integration-icon">✓</span><div><b>Channel connected</b><small>'+escapeHtml(row.display_name||row.platform_user_id)+'</small><small>Connection status: '+escapeHtml(row.status)+' · credentials stored securely</small></div><span class="integration-badge">CONNECTED</span></div>'
+    :'<div class="integration-state"><span class="integration-icon muted-icon">↗</span><div><b>Not connected yet</b><small>'+(ready?'Your '+label+' connection is ready to set up.':'Waiting for API credentials and encryption key.')+'</small></div><span class="integration-badge pending">'+(ready?'READY':'SETUP NEEDED')+'</span></div>';
+   if(button){button.disabled=!ready;button.textContent=row?"Reconnect "+label:"Connect "+label;button.setAttribute("aria-label",(row?"Reconnect ":"Connect ")+label);}
   }
   const select=$("publishBackup"),selected=select?.value;
   if(select){select.innerHTML='<option value="">Choose a cloud video…</option>'+(backupData.backups||[]).map(b=>'<option value="'+escapeHtml(b.id)+'">'+escapeHtml(b.title)+' · '+(Number(b.size||0)/1048576).toFixed(1)+' MB</option>').join("");if(selected&&[...select.options].some(o=>o.value===selected))select.value=selected;}
