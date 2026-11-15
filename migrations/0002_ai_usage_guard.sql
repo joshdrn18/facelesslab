@@ -1,12 +1,12 @@
 CREATE TABLE IF NOT EXISTS ai_usage_settings (
   id TEXT PRIMARY KEY CHECK (id = 'global'),
-  daily_request_limit INTEGER NOT NULL DEFAULT 20,
+  daily_request_limit INTEGER NOT NULL DEFAULT 40,
   warning_percent INTEGER NOT NULL DEFAULT 80,
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 INSERT OR IGNORE INTO ai_usage_settings (id, daily_request_limit, warning_percent)
-VALUES ('global', 20, 80);
+VALUES ('global', 40, 80);
 
 CREATE TABLE IF NOT EXISTS ai_inference_events (
   id TEXT PRIMARY KEY,
