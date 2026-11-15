@@ -52,7 +52,7 @@ async function getUser(request, env) {
 }
 
 
-const DEFAULT_AI_DAILY_REQUEST_LIMIT = 20;
+const DEFAULT_AI_DAILY_REQUEST_LIMIT = 40;
 async function readAIUsageSettings(env) {
   await env.DB.prepare("INSERT OR IGNORE INTO ai_usage_settings (id,daily_request_limit,warning_percent) VALUES ('global',?,80)")
     .bind(DEFAULT_AI_DAILY_REQUEST_LIMIT).run();
