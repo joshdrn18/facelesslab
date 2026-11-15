@@ -723,6 +723,56 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
  .user-identity>b{max-width:135px}
 }
 
+
+/* Video production suite — editor, caption preview and rendering feedback */
+.editor-output-spec{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:2px 0 13px}
+.editor-output-spec>div{min-width:0;padding:9px 10px;border:1px solid var(--panel-edge);border-radius:9px;background:rgba(7,13,23,.42)}
+.editor-output-spec span,.editor-output-spec b{display:block}
+.editor-output-spec span{font-size:8px;font-weight:850;letter-spacing:1px;color:#7888a2}
+.editor-output-spec b{font-size:10px;color:#dfe7f5;margin-top:3px;overflow-wrap:anywhere}
+.editor-controls{gap:12px;margin:13px 0}
+.editor-controls label{display:block;font-size:10px;font-weight:750;letter-spacing:.2px;color:#b7c4d9}
+.editor-controls select{width:100%;min-height:42px;border-color:rgba(145,160,190,.22);background:#0b1220;margin-top:7px}
+.editor-card>.primary{width:100%;min-height:44px;letter-spacing:.1px}
+.editor-progress-wrap{margin-top:14px;padding:11px 12px;border:1px solid var(--panel-edge);border-radius:10px;background:rgba(7,13,23,.48)}
+.editor-progress-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.editor-progress-head span{font-size:8px;font-weight:850;letter-spacing:1.1px;color:#8d9bb2}
+.editor-progress-head b{font-size:11px;color:#dcd5ff;font-variant-numeric:tabular-nums}
+.editor-progress{height:8px;border-radius:99px;background:#242e42;overflow:hidden;margin:0}
+.editor-progress>span{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#9b83ff,#70e5dc);box-shadow:0 0 16px rgba(161,138,255,.26);transition:width .25s ease}
+.editor-status{min-height:28px;margin:11px 0 5px;padding:9px 10px;border:1px solid rgba(145,160,190,.12);border-radius:9px;background:rgba(8,13,22,.38);font-size:10px;line-height:1.6;color:#aab8ce;overflow-wrap:anywhere}
+.editor-note,.editor-brand-note{font-size:9px;line-height:1.65}
+.editor-result-card{margin-top:14px;padding:12px;border:1px solid rgba(112,229,220,.2);border-radius:12px;background:linear-gradient(145deg,rgba(14,30,38,.7),rgba(9,15,25,.9))}
+.editor-result-head,.editor-result-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.editor-result-head b,.editor-result-head small{display:block}
+.editor-result-head b{font-size:11px}
+.editor-result-head small{font-size:9px;color:#8f9db4;margin-top:2px}
+.editor-result-foot{padding-top:10px;border-top:1px solid var(--panel-edge);font-size:9px;color:#94a4bb;flex-wrap:wrap}
+.editor-result-foot .mini-btn{display:inline-flex;align-items:center;text-decoration:none}
+.editor-preview{display:block;width:min(100%,340px);max-width:100%;aspect-ratio:9/16;object-fit:contain;margin:12px auto;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:#05080f;box-shadow:0 18px 42px rgba(0,0,0,.28)}
+.caption-preview-card{display:grid;grid-template-columns:94px minmax(0,1fr);align-items:center;gap:12px;margin:12px 0;padding:10px;border:1px solid rgba(161,138,255,.2);border-radius:12px;background:linear-gradient(120deg,rgba(30,28,52,.58),rgba(9,17,28,.8))}
+.caption-preview-frame{position:relative;display:flex;align-items:flex-end;justify-content:center;aspect-ratio:9/16;overflow:hidden;padding:9px 5px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:radial-gradient(ellipse at 50% 25%,rgba(101,92,151,.55),transparent 45%),linear-gradient(145deg,#27364b,#0b111d 60%,#293247)}
+.caption-preview-frame:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,rgba(0,0,0,.55))}
+.caption-preview-frame span{position:relative;z-index:1;display:block;width:100%;padding:6px 4px;border-radius:5px;background:rgba(4,7,14,.8);color:white;text-align:center;text-transform:uppercase;font-size:9px;line-height:1.25;font-weight:900;overflow-wrap:anywhere;text-shadow:0 2px 4px #000}
+.caption-preview-meta b,.caption-preview-meta small{display:block}
+.caption-preview-meta b{font-size:9px;color:#c9baff;letter-spacing:.9px}
+.caption-preview-meta small{font-size:9px;color:#9caac0;margin-top:5px;font-variant-numeric:tabular-nums}
+[id^="subtitle-result-"] .scene-card{background:rgba(10,16,27,.7)!important}
+[id^="subtitle-result-"] .mini-btn{min-height:34px}
+@media(max-width:700px){
+ .editor-output-spec{gap:6px}
+ .editor-output-spec>div{padding:8px 7px}
+ .editor-output-spec b{font-size:9px}
+ .caption-preview-card{grid-template-columns:82px minmax(0,1fr)}
+ .editor-result-foot{align-items:flex-start;flex-direction:column}
+ .editor-result-foot .mini-btn{width:100%;justify-content:center}
+}
+@media(max-width:380px){
+ .editor-output-spec{grid-template-columns:1fr 1fr}
+ .editor-output-spec>div:last-child{grid-column:1/-1}
+ .caption-preview-card{grid-template-columns:74px minmax(0,1fr);gap:9px}
+}
+
 </style>
 </head>
 <body>
@@ -1279,7 +1329,7 @@ function renderScript(script, projectId) {
 const scenes = (script.scenes || []).map(scene => '<article class="scene-card"><div class="scene-head"><b>Scene ' + escapeHtml(scene.scene) + '</b><span>' + escapeHtml(scene.duration_seconds) + ' sec</span></div><p><b>Voiceover</b>' + escapeHtml(scene.voiceover) + '</p><p><b>Visual direction</b>' + escapeHtml(scene.visual_prompt) + '</p><p><b>Screen text</b>' + escapeHtml(scene.on_screen_text || '—') + '</p><button class="mini-btn" id="visual-btn-' + projectId + '-' + (Number(scene.scene)||0) + '" onclick="generateSceneVisual(\'' + projectId + '\',' + (Number(scene.scene)||0) + ',this)">✦ Generate visual</button><div id="visual-result-' + projectId + '-' + (Number(scene.scene)||0) + '"></div></article>').join("");
  const workspaceOpen=localStorage.getItem('facelesslab_workspace_'+projectId)==='1';
  const youtubePack='<section class="content-card" style="grid-column:1/-1"><div class="content-label">YOUTUBE PUBLISHING PACK · READY TO COPY</div><p><b>Title options</b></p>'+ytTitles.map((t,i)=>'<p id="yt-title-'+projectId+'-'+i+'">'+escapeHtml(t)+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-title-'+projectId+'-'+i+'\',this)">Copy title '+(i+1)+'</button>').join(' ')+'<p><b>Description</b></p><p id="yt-desc-'+projectId+'">'+escapeHtml(ytDescription||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-desc-'+projectId+'\',this)">Copy description</button><p><b>Tags</b></p><p id="yt-tags-'+projectId+'">'+escapeHtml(ytTags||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-tags-'+projectId+'\',this)">Copy tags</button><p><b>Hashtags</b></p><p id="yt-hashtags-'+projectId+'">'+escapeHtml(ytHashtags||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-hashtags-'+projectId+'\',this)">Copy hashtags</button><p><b>Thumbnail text</b></p><p id="yt-thumb-'+projectId+'">'+escapeHtml(script.thumbnail_text||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-thumb-'+projectId+'\',this)">Copy thumbnail text</button><p><b>Pinned comment</b></p><p id="yt-comment-'+projectId+'">'+escapeHtml(script.pinned_comment||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-comment-'+projectId+'\',this)">Copy pinned comment</button></section>';
- return '<details class="script-workspace" id="script-workspace-' + projectId + '"' + (workspaceOpen?' open':'') + '><summary class="script-heading script-toggle"><div><span class="eyebrow">AI SCRIPT · CLICK TO COLLAPSE</span><h3>' + escapeHtml(script.title || "Generated script") + '</h3><p>Script, voice-over and subtitles · <span class="status status-ready">Ready</span></p></div><span class="collapse-mark">⌄</span></summary><div class="script-body"><div class="script-grid"><article class="content-card hook-card"><span class="content-label">OPENING HOOK</span><p>' + escapeHtml(script.hook || "—") + '</p></article><article class="content-card narration-card"><span class="content-label">FULL NARRATION</span><p>' + escapeHtml(script.narration || "—") + '</p><div class="script-meta">' + (script.narration || "").trim().split(/\s+/).filter(Boolean).length + ' words · ' + escapeHtml(script.estimated_duration_seconds || "—") + ' sec estimated</div></article></div' + youtubePack + youtubeReadiness(script,projectId) + characterManager + '<details class="scene-details"><summary>Scene breakdown <span>' + (script.scenes || []).length + ' scenes</span></summary><div class="scene-tools"><button class="secondary mini-btn" id="visual-all-btn-' + projectId + '" onclick="generateAllSceneVisuals(\'' + projectId + '\',this)">✦ Generate all visuals</button><span id="visual-all-status-' + projectId + '" class="muted"></span></div><div class="scene-list">' + scenes + '</div></details><div class="production-grid"><section class="production-card editor-card"><div class="production-title"><span class="production-icon">🎬</span><div><h4>Auto Video Editor</h4><p>Render your scenes into a vertical MP4.</p></div></div><div class="editor-controls"><label>Export quality<select id="editor-quality-' + projectId + '"><option value="480">480p · Faster</option><option value="720" selected>720p · Recommended</option></select></label><label>Subtitle style<select id="editor-captions-' + projectId + '"><option value="burn" selected>Burn into video</option><option value="soft">Separate subtitle track</option><option value="off">No subtitles</option></select></label></div><button class="primary" id="editor-btn-' + projectId + '" onclick="renderProjectVideo(\'' + projectId + '\',this)">▶ Render MP4</button><div id="editor-progress-' + projectId + '" class="editor-progress hidden"><span></span></div><div id="editor-status-' + projectId + '" class="editor-status">Requires saved voice-over, subtitles and all scene visuals.</div><div id="editor-result-' + projectId + '"></div><p class="editor-note">Rendering runs in your browser using FFmpeg.wasm. First use downloads the FFmpeg engine (~30 MB). Keep this tab open.</p><p class="editor-brand-note">✦ Member exports include a subtle FacelessLab watermark. Administrator exports are watermark-free.</p></section><section class="production-card"><div class="production-title"><span class="production-icon">🎙️</span><div><h4>AI Voice-over</h4><p>Generate natural English narration with AI and save it directly to your project.</p></div></div><button class="primary" id="voice-btn-' + projectId + '" onclick="generateVoice(\'' + projectId + '\', this)">Generate voice-over →</button><div id="voice-result-' + projectId + '"></div></section><section class="production-card"><div class="production-title"><span class="production-icon">💬</span><div><h4>Auto subtitles</h4><p>Analyze your saved voice-over and time captions to the spoken words.</p></div></div><button class="secondary" id="subtitle-btn-' + projectId + '" onclick="generateSubtitles(\'' + projectId + '\', this)">Generate subtitles →</button><div id="subtitle-result-' + projectId + '"></div><p class="production-note">Captions are timed from the actual generated voice-over audio using speech recognition.</p></section></div></div></details>';
+ return '<details class="script-workspace" id="script-workspace-' + projectId + '"' + (workspaceOpen?' open':'') + '><summary class="script-heading script-toggle"><div><span class="eyebrow">AI SCRIPT · CLICK TO COLLAPSE</span><h3>' + escapeHtml(script.title || "Generated script") + '</h3><p>Script, voice-over and subtitles · <span class="status status-ready">Ready</span></p></div><span class="collapse-mark">⌄</span></summary><div class="script-body"><div class="script-grid"><article class="content-card hook-card"><span class="content-label">OPENING HOOK</span><p>' + escapeHtml(script.hook || "—") + '</p></article><article class="content-card narration-card"><span class="content-label">FULL NARRATION</span><p>' + escapeHtml(script.narration || "—") + '</p><div class="script-meta">' + (script.narration || "").trim().split(/\s+/).filter(Boolean).length + ' words · ' + escapeHtml(script.estimated_duration_seconds || "—") + ' sec estimated</div></article></div' + youtubePack + youtubeReadiness(script,projectId) + characterManager + '<details class="scene-details"><summary>Scene breakdown <span>' + (script.scenes || []).length + ' scenes</span></summary><div class="scene-tools"><button class="secondary mini-btn" id="visual-all-btn-' + projectId + '" onclick="generateAllSceneVisuals(\'' + projectId + '\',this)">✦ Generate all visuals</button><span id="visual-all-status-' + projectId + '" class="muted"></span></div><div class="scene-list">' + scenes + '</div></details><div class="production-grid"><section class="production-card editor-card"><div class="production-title"><span class="production-icon">🎬</span><div><h4>Auto Video Editor</h4><p>Render your scenes into a vertical MP4.</p></div></div><div class="editor-controls"><label>Export quality<select id="editor-quality-' + projectId + '"><option value="480">480p · Faster</option><option value="720" selected>720p · Recommended</option></select></label><label>Subtitle style<select id="editor-captions-' + projectId + '"><option value="burn" selected>Burn into video</option><option value="soft">Separate subtitle track</option><option value="off">No subtitles</option></select></label></div><div class="editor-output-spec"><div><span>FRAME</span><b>9:16 Portrait</b></div><div><span>FORMAT</span><b>MP4 · H.264</b></div><div><span>FRAME RATE</span><b>30 FPS</b></div></div><button class="primary" id="editor-btn-' + projectId + '" onclick="renderProjectVideo(\'' + projectId + '\',this)">▶ Render MP4</button><div id="editor-progress-wrap-' + projectId + '" class="editor-progress-wrap hidden"><div class="editor-progress-head"><span>RENDER PROGRESS</span><b id="editor-progress-value-' + projectId + '">0%</b></div><div id="editor-progress-' + projectId + '" class="editor-progress" role="progressbar" aria-label="Video rendering progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div></div><div id="editor-status-' + projectId + '" class="editor-status">Requires saved voice-over, subtitles and all scene visuals.</div><div id="editor-result-' + projectId + '"></div><p class="editor-note">Rendering runs in your browser using FFmpeg.wasm. First use downloads the FFmpeg engine (~30 MB). Keep this tab open.</p><p class="editor-brand-note">✦ Member exports include a subtle FacelessLab watermark. Administrator exports are watermark-free.</p></section><section class="production-card"><div class="production-title"><span class="production-icon">🎙️</span><div><h4>AI Voice-over</h4><p>Generate natural English narration with AI and save it directly to your project.</p></div></div><button class="primary" id="voice-btn-' + projectId + '" onclick="generateVoice(\'' + projectId + '\', this)">Generate voice-over →</button><div id="voice-result-' + projectId + '"></div></section><section class="production-card"><div class="production-title"><span class="production-icon">💬</span><div><h4>Auto subtitles</h4><p>Analyze your saved voice-over and time captions to the spoken words.</p></div></div><button class="secondary" id="subtitle-btn-' + projectId + '" onclick="generateSubtitles(\'' + projectId + '\', this)">Generate subtitles →</button><div id="subtitle-result-' + projectId + '"></div><p class="production-note">Captions are timed from the actual generated voice-over audio using speech recognition.</p></section></div></div></details>';
 }
 
 async function loadSavedVoice(projectId) {
@@ -1363,9 +1413,11 @@ function renderSubtitleResult(projectId, subtitleData) {
  const result=$("subtitle-result-"+projectId);
  if(!result || !subtitleData)return;
  const cues=subtitleData.cues||[];
+ const first=cues[0];
+ const captionStage=first?'<div class="caption-preview-card"><div class="caption-preview-frame"><span>'+highlightSubtitlePreview(first.text)+'</span></div><div class="caption-preview-meta"><b>LIVE CAPTION PREVIEW</b><small>'+formatSubtitleTime(first.start,",")+' → '+formatSubtitleTime(first.end,",")+'</small></div></div>':"";
  const preview=cues.slice(0,5).map(c=>'<div class="scene-card" style="padding:13px 12px;background:linear-gradient(145deg,#101827,#080d17);border:1px solid rgba(255,255,255,.09);border-radius:12px;margin-top:8px"><small style="color:#7dd3fc;font-variant-numeric:tabular-nums">'+formatSubtitleTime(c.start,",")+' → '+formatSubtitleTime(c.end,",")+'</small><div style="margin-top:9px;min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 10px;background:rgba(0,0,0,.28);border-radius:8px"><p style="margin:0;color:#fff;font-size:clamp(16px,3vw,21px);font-weight:900;line-height:1.2;letter-spacing:.015em;text-shadow:0 2px 5px rgba(0,0,0,.9);text-transform:uppercase">'+highlightSubtitlePreview(c.text)+'</p></div></div>').join("");
  const timingLabel=subtitleData.timing==="audio-aligned"?"Voice-synced · "+(subtitleData.word_count||0)+" words":"Estimated timing";
- result.innerHTML='<div class="muted" style="font-size:11px;margin-top:10px">✓ '+cues.length+' caption lines · '+Number(subtitleData.duration_seconds||0).toFixed(1)+'s audio · '+timingLabel+'</div>'+preview+(cues.length>5?'<p class="muted" style="font-size:11px">+ '+(cues.length-5)+' more caption lines</p>':"")+'<button class="mini-btn" style="margin-top:9px" onclick="downloadSubtitles(\''+projectId+'\')">↓ Download .SRT</button>';
+ result.innerHTML='<div class="muted" style="font-size:11px;margin-top:10px">✓ '+cues.length+' caption lines · '+Number(subtitleData.duration_seconds||0).toFixed(1)+'s audio · '+timingLabel+'</div>'+captionStage+preview+(cues.length>5?'<p class="muted" style="font-size:11px">+ '+(cues.length-5)+' more caption lines</p>':"")+'<button class="mini-btn" style="margin-top:9px" onclick="downloadSubtitles(\''+projectId+'\')">↓ Download .SRT</button>';
  window.facelessSubtitles=window.facelessSubtitles||{};
  window.facelessSubtitles[projectId]=subtitleData;
 }
@@ -1688,13 +1740,20 @@ async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=
  const blob=await new Promise((resolve,reject)=>canvas.toBlob(v=>v?resolve(v):reject(new Error("Could not create caption frame.")),"image/jpeg",0.92));
  return new Uint8Array(await blob.arrayBuffer());
 }
+function setEditorProgress(projectId,value){
+ const percent=Math.max(0,Math.min(100,Math.round(Number(value)||0)));
+ const bar=$("editor-progress-"+projectId),label=$("editor-progress-value-"+projectId);
+ if(bar){bar.setAttribute("aria-valuenow",String(percent));const fill=bar.querySelector("span");if(fill)fill.style.width=percent+"%";}
+ if(label)label.textContent=percent+"%";
+}
+
 async function renderProjectVideo(projectId,button) {
- const status=$("editor-status-"+projectId),progress=$("editor-progress-"+projectId),bar=progress?.querySelector("span"),result=$("editor-result-"+projectId);
+ const status=$("editor-status-"+projectId),progress=$("editor-progress-wrap-"+projectId),result=$("editor-result-"+projectId);
  const script=window.facelessScripts?.[projectId];
  if(!script){status.textContent="Open or generate the script first.";return;}
  const scenes=(script.scenes||[]).slice().sort((a,b)=>Number(a.scene)-Number(b.scene));
  if(!scenes.length){status.textContent="No scenes found.";return;}
- button.disabled=true;button.textContent="Preparing…";progress?.classList.remove("hidden");if(bar)bar.style.width="2%";result.innerHTML="";
+ button.disabled=true;button.textContent="Preparing…";progress?.classList.remove("hidden");setEditorProgress(projectId,2);result.innerHTML="";
  let ffmpegInstance=null;const temporaryFiles=new Set();
  try{
   status.textContent="Checking saved voice-over, visuals and subtitles…";
@@ -1774,7 +1833,7 @@ async function renderProjectVideo(projectId,button) {
     concat.push("file '"+filename+"'","duration "+duration.toFixed(3));
    }
    totalDuration=sceneEnd;sceneRanges.push({start:sceneStart,end:sceneEnd});
-   if(bar)bar.style.width=(12+Math.round((i+1)/scenes.length*28))+"%";
+   setEditorProgress(projectId,12+Math.round((i+1)/scenes.length*28));
    status.textContent="Preparing scene "+(i+1)+" of "+scenes.length+"…";
   }
   if(!concat.length)throw new Error("No video segments were prepared.");
@@ -1785,7 +1844,7 @@ async function renderProjectVideo(projectId,button) {
    const srt=cues.map((cue,i)=>(i+1)+"\n"+formatSubtitleTime(cue.start,",")+" --> "+formatSubtitleTime(cue.end,",")+"\n"+cue.text).join("\n\n");
    temporaryFiles.add("captions.srt");await ffmpeg.writeFile("captions.srt",new TextEncoder().encode(srt));
   }
-  if(bar)bar.style.width="48%";status.textContent=captionMode==="burn"?"Rendering video with permanently burned-in captions…":"Rendering MP4 in your browser. Keep this tab open…";
+  setEditorProgress(projectId,48);status.textContent=captionMode==="burn"?"Rendering video with permanently burned-in captions…":"Rendering MP4 in your browser. Keep this tab open…";
   const args=["-y","-f","concat","-safe","0","-i","scenes.txt","-i",voiceFile];
   if(captionMode==="soft")args.push("-i","captions.srt");
   // Avoid chained per-scene fades that can create timestamp/filter issues
@@ -1796,7 +1855,7 @@ async function renderProjectVideo(projectId,button) {
   temporaryFiles.add("output.mp4");args.push("-movflags","+faststart","output.mp4");
   const exitCode=await ffmpeg.exec(args,30*60*1000);
   if(exitCode!==0)throw new Error("FFmpeg exited with code "+exitCode+".");
-  if(bar)bar.style.width="92%";
+  setEditorProgress(projectId,92);
   const output=await ffmpeg.readFile("output.mp4");
   if(!output||!output.length)throw new Error("FFmpeg produced an empty video.");
   const blob=new Blob([output],{type:"video/mp4"}),url=URL.createObjectURL(blob);
@@ -1805,7 +1864,7 @@ async function renderProjectVideo(projectId,button) {
   window.facelessRenderedUrls=window.facelessRenderedUrls||{};
   if(window.facelessRenderedUrls[projectId])URL.revokeObjectURL(window.facelessRenderedUrls[projectId]);
   window.facelessRenderedUrls[projectId]=url;
-  result.innerHTML='<video class="editor-preview" controls playsinline src="'+url+'"></video><br><a class="mini-btn editor-download" href="'+url+'" download="facelesslab-'+projectId.slice(0,8)+'.mp4">↓ Download MP4 · '+(blob.size/1024/1024).toFixed(1)+' MB</a>';
+  result.innerHTML='<div class="editor-result-card"><div class="editor-result-head"><div><b>Render preview</b><small>Portrait 9:16 · MP4</small></div><span class="status status-ready">Ready</span></div><video class="editor-preview" controls playsinline preload="metadata" src="'+url+'"></video><div class="editor-result-foot"><span>'+(blob.size/1024/1024).toFixed(1)+' MB · '+Math.round(renderedDuration||totalDuration)+' sec</span><a class="mini-btn editor-download" href="'+url+'" download="facelesslab-'+projectId.slice(0,8)+'.mp4">↓ Download MP4</a></div></div>';
   status.textContent="Saving a local library copy…";
   try{await saveLocalVideo(projectId,blob,renderedDuration||totalDuration,quality);}catch(saveError){console.warn("Local video library save failed:",saveError);}
   let cloudNote=" · cloud backup pending";
@@ -1823,7 +1882,7 @@ async function renderProjectVideo(projectId,button) {
   }else{
    cloudNote=" · file exceeds 90 MB cloud-backup limit (local MP4 is available)";
   }
-  if(bar)bar.style.width="100%";
+  setEditorProgress(projectId,100);
   const durationNote=renderedDuration>0&&audioDuration>0&&Math.abs(renderedDuration-audioDuration)>0.75?" · ⚠ duration differs from voice by "+Math.abs(renderedDuration-audioDuration).toFixed(2)+" sec":(audioDuration>0?" · audio duration checked":"");
   status.textContent="✓ Rendered with "+(captionMode==="burn"?"burned-in subtitles":captionMode==="soft"?"optional subtitle track":"no subtitles")+" · "+Math.round(renderedDuration||totalDuration)+" sec · "+quality+"p"+durationNote+cloudNote;
   button.textContent="↻ Render again";
