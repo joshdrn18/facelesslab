@@ -779,6 +779,22 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
 [id^="subtitle-result-"] .caption-preview-card{box-shadow:0 8px 22px rgba(0,0,0,.12)}
 .editor-status[aria-live="polite"]{overflow-wrap:anywhere}
 
+
+.subtitle-editor-panel{margin-top:12px;padding:12px;border:1px solid rgba(145,160,190,.18);border-radius:12px;background:rgba(7,13,23,.46)}
+.subtitle-editor-panel>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;list-style:none;font-size:11px;font-weight:800;color:#dce5f5}
+.subtitle-editor-panel>summary::-webkit-details-marker{display:none}
+.subtitle-editor-panel>summary span{font-size:9px;color:#aeb8cb;background:#252d40;padding:4px 8px;border-radius:20px}
+.subtitle-cue-editor{display:grid;gap:9px;margin-top:12px}
+.subtitle-cue-row{display:grid;grid-template-columns:78px minmax(0,1fr) 190px;gap:10px;align-items:start;padding:10px;border:1px solid rgba(145,160,190,.13);border-radius:10px;background:#0d1421}
+.subtitle-cue-number{font-size:8px;font-weight:850;letter-spacing:1px;color:#8e9bb2;padding-top:8px}
+.subtitle-cue-copy,.subtitle-time-grid label{display:grid;gap:5px;font-size:9px;font-weight:750;color:#aebbd0}
+.subtitle-cue-copy textarea{min-height:54px;resize:vertical;padding:9px;font-size:11px;line-height:1.45}
+.subtitle-time-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.subtitle-time-grid input{min-width:0;padding:9px 7px;font-size:10px;font-variant-numeric:tabular-nums}
+.subtitle-edit-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.subtitle-edit-status{font-size:10px;color:#8fe0c4;overflow-wrap:anywhere}
+@media(max-width:700px){.subtitle-cue-row{grid-template-columns:1fr}.subtitle-cue-number{padding:0}.subtitle-time-grid{max-width:100%}.subtitle-edit-actions>*{flex:1}.subtitle-edit-status{flex-basis:100%}}
+
 </style>
 </head>
 <body>
@@ -1335,7 +1351,7 @@ function renderScript(script, projectId) {
 const scenes = (script.scenes || []).map(scene => '<article class="scene-card"><div class="scene-head"><b>Scene ' + escapeHtml(scene.scene) + '</b><span>' + escapeHtml(scene.duration_seconds) + ' sec</span></div><p><b>Voiceover</b>' + escapeHtml(scene.voiceover) + '</p><p><b>Visual direction</b>' + escapeHtml(scene.visual_prompt) + '</p><p><b>Screen text</b>' + escapeHtml(scene.on_screen_text || '—') + '</p><button class="mini-btn" id="visual-btn-' + projectId + '-' + (Number(scene.scene)||0) + '" onclick="generateSceneVisual(\'' + projectId + '\',' + (Number(scene.scene)||0) + ',this)">✦ Generate visual</button><div id="visual-result-' + projectId + '-' + (Number(scene.scene)||0) + '"></div></article>').join("");
  const workspaceOpen=localStorage.getItem('facelesslab_workspace_'+projectId)==='1';
  const youtubePack='<section class="content-card" style="grid-column:1/-1"><div class="content-label">YOUTUBE PUBLISHING PACK · READY TO COPY</div><p><b>Title options</b></p>'+ytTitles.map((t,i)=>'<p id="yt-title-'+projectId+'-'+i+'">'+escapeHtml(t)+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-title-'+projectId+'-'+i+'\',this)">Copy title '+(i+1)+'</button>').join(' ')+'<p><b>Description</b></p><p id="yt-desc-'+projectId+'">'+escapeHtml(ytDescription||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-desc-'+projectId+'\',this)">Copy description</button><p><b>Tags</b></p><p id="yt-tags-'+projectId+'">'+escapeHtml(ytTags||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-tags-'+projectId+'\',this)">Copy tags</button><p><b>Hashtags</b></p><p id="yt-hashtags-'+projectId+'">'+escapeHtml(ytHashtags||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-hashtags-'+projectId+'\',this)">Copy hashtags</button><p><b>Thumbnail text</b></p><p id="yt-thumb-'+projectId+'">'+escapeHtml(script.thumbnail_text||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-thumb-'+projectId+'\',this)">Copy thumbnail text</button><p><b>Pinned comment</b></p><p id="yt-comment-'+projectId+'">'+escapeHtml(script.pinned_comment||"—")+'</p><button class="mini-btn" onclick="copyTextFrom(\'yt-comment-'+projectId+'\',this)">Copy pinned comment</button></section>';
- return '<details class="script-workspace" id="script-workspace-' + projectId + '"' + (workspaceOpen?' open':'') + '><summary class="script-heading script-toggle"><div><span class="eyebrow">AI SCRIPT · CLICK TO COLLAPSE</span><h3>' + escapeHtml(script.title || "Generated script") + '</h3><p>Script, voice-over and subtitles · <span class="status status-ready">Ready</span></p></div><span class="collapse-mark">⌄</span></summary><div class="script-body"><div class="script-grid"><article class="content-card hook-card"><span class="content-label">OPENING HOOK</span><p>' + escapeHtml(script.hook || "—") + '</p></article><article class="content-card narration-card"><span class="content-label">FULL NARRATION</span><p>' + escapeHtml(script.narration || "—") + '</p><div class="script-meta">' + (script.narration || "").trim().split(/\s+/).filter(Boolean).length + ' words · ' + escapeHtml(script.estimated_duration_seconds || "—") + ' sec estimated</div></article></div' + youtubePack + youtubeReadiness(script,projectId) + characterManager + '<details class="scene-details"><summary>Scene breakdown <span>' + (script.scenes || []).length + ' scenes</span></summary><div class="scene-tools"><button class="secondary mini-btn" id="visual-all-btn-' + projectId + '" onclick="generateAllSceneVisuals(\'' + projectId + '\',this)">✦ Generate all visuals</button><span id="visual-all-status-' + projectId + '" class="muted"></span></div><div class="scene-list">' + scenes + '</div></details><div class="production-grid"><section class="production-card editor-card"><div class="production-title"><span class="production-icon">🎬</span><div><h4>Auto Video Editor</h4><p>Render your scenes into a vertical MP4.</p></div></div><div class="editor-controls"><label>Export quality<select id="editor-quality-' + projectId + '"><option value="480">480p · Faster</option><option value="720" selected>720p · Recommended</option></select></label><label>Subtitle style<select id="editor-captions-' + projectId + '"><option value="burn" selected>Burn into video</option><option value="soft">Separate subtitle track</option><option value="off">No subtitles</option></select></label></div><div class="editor-output-spec"><div><span>FRAME</span><b>9:16 Portrait</b></div><div><span>FORMAT</span><b>MP4 · H.264</b></div><div><span>FRAME RATE</span><b>30 FPS</b></div></div><button class="primary" id="editor-btn-' + projectId + '" onclick="renderProjectVideo(\'' + projectId + '\',this)">▶ Render MP4</button><div id="editor-progress-wrap-' + projectId + '" class="editor-progress-wrap hidden"><div class="editor-progress-head"><span>RENDER PROGRESS</span><b id="editor-progress-value-' + projectId + '">0%</b></div><div id="editor-progress-' + projectId + '" class="editor-progress" role="progressbar" aria-label="Video rendering progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div></div><div id="editor-status-' + projectId + '" class="editor-status">Requires saved voice-over, subtitles and all scene visuals.</div><div id="editor-result-' + projectId + '"></div><p class="editor-note">Rendering runs in your browser using FFmpeg.wasm. First use downloads the FFmpeg engine (~30 MB). Keep this tab open.</p><p class="editor-brand-note">✦ Member exports include a subtle FacelessLab watermark. Administrator exports are watermark-free.</p></section><section class="production-card"><div class="production-title"><span class="production-icon">🎙️</span><div><h4>AI Voice-over</h4><p>Generate natural English narration with AI and save it directly to your project.</p></div></div><button class="primary" id="voice-btn-' + projectId + '" onclick="generateVoice(\'' + projectId + '\', this)">Generate voice-over →</button><div id="voice-result-' + projectId + '"></div></section><section class="production-card"><div class="production-title"><span class="production-icon">💬</span><div><h4>Auto subtitles</h4><p>Analyze your saved voice-over and time captions to the spoken words.</p></div></div><button class="secondary" id="subtitle-btn-' + projectId + '" onclick="generateSubtitles(\'' + projectId + '\', this)">Generate subtitles →</button><div id="subtitle-result-' + projectId + '"></div><p class="production-note">Captions are timed from the actual generated voice-over audio using speech recognition.</p></section></div></div></details>';
+ return '<details class="script-workspace" id="script-workspace-' + projectId + '"' + (workspaceOpen?' open':'') + '><summary class="script-heading script-toggle"><div><span class="eyebrow">AI SCRIPT · CLICK TO COLLAPSE</span><h3>' + escapeHtml(script.title || "Generated script") + '</h3><p>Script, voice-over and subtitles · <span class="status status-ready">Ready</span></p></div><span class="collapse-mark">⌄</span></summary><div class="script-body"><div class="script-grid"><article class="content-card hook-card"><span class="content-label">OPENING HOOK</span><p>' + escapeHtml(script.hook || "—") + '</p></article><article class="content-card narration-card"><span class="content-label">FULL NARRATION</span><p>' + escapeHtml(script.narration || "—") + '</p><div class="script-meta">' + (script.narration || "").trim().split(/\s+/).filter(Boolean).length + ' words · ' + escapeHtml(script.estimated_duration_seconds || "—") + ' sec estimated</div></article></div>' + youtubePack + youtubeReadiness(script,projectId) + characterManager + '<details class="scene-details"><summary>Scene breakdown <span>' + (script.scenes || []).length + ' scenes</span></summary><div class="scene-tools"><button class="secondary mini-btn" id="visual-all-btn-' + projectId + '" onclick="generateAllSceneVisuals(\'' + projectId + '\',this)">✦ Generate all visuals</button><span id="visual-all-status-' + projectId + '" class="muted"></span></div><div class="scene-list">' + scenes + '</div></details><div class="production-grid"><section class="production-card editor-card"><div class="production-title"><span class="production-icon">🎬</span><div><h4>Auto Video Editor</h4><p>Render your scenes into a vertical MP4.</p></div></div><div class="editor-controls"><label>Export quality<select id="editor-quality-' + projectId + '"><option value="480">480p · Faster</option><option value="720" selected>720p · Recommended</option></select></label><label>Subtitle output<select id="editor-captions-' + projectId + '"><option value="burn" selected>Burn into video</option><option value="soft">Separate subtitle track</option><option value="off">No subtitles</option></select></label><label>Caption design<select id="editor-caption-design-' + projectId + '"><option value="creator" selected>Creator highlight</option><option value="classic">Classic bar</option><option value="minimal">Minimal text</option><option value="neon">Neon accent</option></select></label><label>Caption position<select id="editor-caption-position-' + projectId + '"><option value="bottom" selected>Lower safe zone</option><option value="center">Center</option><option value="top">Upper safe zone</option></select></label><label>Caption size<select id="editor-caption-size-' + projectId + '"><option value="small">Compact</option><option value="medium" selected>Default</option><option value="large">Large</option></select></label></div><div class="editor-output-spec"><div><span>FRAME</span><b>9:16 Portrait</b></div><div><span>FORMAT</span><b>MP4 · H.264</b></div><div><span>FRAME RATE</span><b>30 FPS</b></div></div><button class="primary" id="editor-btn-' + projectId + '" onclick="renderProjectVideo(\'' + projectId + '\',this)">▶ Render MP4</button><div id="editor-progress-wrap-' + projectId + '" class="editor-progress-wrap hidden"><div class="editor-progress-head"><span>RENDER PROGRESS</span><b id="editor-progress-value-' + projectId + '">0%</b></div><div id="editor-progress-' + projectId + '" class="editor-progress" role="progressbar" aria-label="Video rendering progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div></div><div id="editor-status-' + projectId + '" class="editor-status">Requires saved voice-over, subtitles and all scene visuals.</div><div id="editor-result-' + projectId + '"></div><p class="editor-note">Rendering runs in your browser using FFmpeg.wasm. First use downloads the FFmpeg engine (~30 MB). Keep this tab open.</p><p class="editor-brand-note">✦ Member exports include a subtle FacelessLab watermark. Administrator exports are watermark-free.</p></section><section class="production-card"><div class="production-title"><span class="production-icon">🎙️</span><div><h4>AI Voice-over</h4><p>Generate natural English narration with AI and save it directly to your project.</p></div></div><button class="primary" id="voice-btn-' + projectId + '" onclick="generateVoice(\'' + projectId + '\', this)">Generate voice-over →</button><div id="voice-result-' + projectId + '"></div></section><section class="production-card"><div class="production-title"><span class="production-icon">💬</span><div><h4>Auto subtitles</h4><p>Analyze your saved voice-over and time captions to the spoken words.</p></div></div><button class="secondary" id="subtitle-btn-' + projectId + '" onclick="generateSubtitles(\'' + projectId + '\', this)">Generate subtitles →</button><div id="subtitle-result-' + projectId + '"></div><p class="production-note">Captions are timed from the actual generated voice-over audio using speech recognition.</p></section></div></div></details>';
 }
 
 async function loadSavedVoice(projectId) {
@@ -1418,14 +1434,53 @@ function highlightSubtitlePreview(value) {
 function renderSubtitleResult(projectId, subtitleData) {
  const result=$("subtitle-result-"+projectId);
  if(!result || !subtitleData)return;
- const cues=subtitleData.cues||[];
+ const cues=Array.isArray(subtitleData.cues)?subtitleData.cues:[];
  const first=cues[0];
- const captionStage=first?'<div class="caption-preview-card"><div class="caption-preview-frame"><span>'+highlightSubtitlePreview(first.text)+'</span></div><div class="caption-preview-meta"><b>LIVE CAPTION PREVIEW</b><small>'+formatSubtitleTime(first.start,",")+' → '+formatSubtitleTime(first.end,",")+'</small></div></div>':"";
+ const captionStage=first?'<div class="caption-preview-card"><div class="caption-preview-frame"><span>'+highlightSubtitlePreview(first.text)+'</span></div><div class="caption-preview-meta"><b>CAPTION PREVIEW</b><small>'+formatSubtitleTime(first.start,",")+' → '+formatSubtitleTime(first.end,",")+'</small></div></div>':"";
  const preview=cues.slice(0,5).map(c=>'<div class="scene-card" style="padding:13px 12px;background:linear-gradient(145deg,#101827,#080d17);border:1px solid rgba(255,255,255,.09);border-radius:12px;margin-top:8px"><small style="color:#7dd3fc;font-variant-numeric:tabular-nums">'+formatSubtitleTime(c.start,",")+' → '+formatSubtitleTime(c.end,",")+'</small><div style="margin-top:9px;min-height:48px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px 10px;background:rgba(0,0,0,.28);border-radius:8px"><p style="margin:0;color:#fff;font-size:clamp(16px,3vw,21px);font-weight:900;line-height:1.2;letter-spacing:.015em;text-shadow:0 2px 5px rgba(0,0,0,.9);text-transform:uppercase">'+highlightSubtitlePreview(c.text)+'</p></div></div>').join("");
  const timingLabel=subtitleData.timing==="audio-aligned"?"Voice-synced · "+(subtitleData.word_count||0)+" words":"Estimated timing";
- result.innerHTML='<div class="muted" style="font-size:11px;margin-top:10px">✓ '+cues.length+' caption lines · '+Number(subtitleData.duration_seconds||0).toFixed(1)+'s audio · '+timingLabel+'</div>'+captionStage+preview+(cues.length>5?'<p class="muted" style="font-size:11px">+ '+(cues.length-5)+' more caption lines</p>':"")+'<button class="mini-btn" style="margin-top:9px" onclick="downloadSubtitles(\''+projectId+'\')">↓ Download .SRT</button>';
+ const editor=cues.map((cue,index)=>'<article class="subtitle-cue-row"><div class="subtitle-cue-number">CAPTION '+(index+1)+'</div><label class="subtitle-cue-copy">Caption text<textarea maxlength="180" rows="2" oninput="updateSubtitleCue(\''+projectId+'\','+index+',\'text\',this.value)">'+escapeHtml(cue.text||"")+'</textarea></label><div class="subtitle-time-grid"><label>Start (seconds)<input type="number" min="0" step="0.05" value="'+Number(cue.start).toFixed(2)+'" oninput="updateSubtitleCue(\''+projectId+'\','+index+',\'start\',this.value)"></label><label>End (seconds)<input type="number" min="0" step="0.05" value="'+Number(cue.end).toFixed(2)+'" oninput="updateSubtitleCue(\''+projectId+'\','+index+',\'end\',this.value)"></label></div></article>').join("");
  window.facelessSubtitles=window.facelessSubtitles||{};
- window.facelessSubtitles[projectId]=subtitleData;
+ window.facelessSubtitleOriginals=window.facelessSubtitleOriginals||{};
+ window.facelessSubtitles[projectId]=JSON.parse(JSON.stringify(subtitleData));
+ window.facelessSubtitleOriginals[projectId]=JSON.parse(JSON.stringify(subtitleData));
+ result.innerHTML='<div class="muted" style="font-size:11px;margin-top:10px">✓ '+cues.length+' caption lines · '+Number(subtitleData.duration_seconds||0).toFixed(1)+'s audio · '+timingLabel+'</div>'+captionStage+preview+(cues.length>5?'<p class="muted" style="font-size:11px">+ '+(cues.length-5)+' more caption lines</p>':"")+'<details class="subtitle-editor-panel"><summary>Edit captions & timing <span>'+cues.length+' lines</span></summary><p class="production-note">Correct the wording or adjust start/end seconds before exporting. Changes are saved to this project.</p><div class="subtitle-cue-editor">'+editor+'</div><div class="subtitle-edit-actions"><button class="secondary mini-btn" type="button" onclick="resetSubtitleEdits(\''+projectId+'\')">Reset unsaved edits</button><button class="primary mini-btn" id="subtitle-save-'+projectId+'" type="button" onclick="saveSubtitleEdits(\''+projectId+'\',this)">Save caption edits</button><span id="subtitle-edit-status-'+projectId+'" class="subtitle-edit-status" aria-live="polite"></span></div></details><button class="mini-btn" style="margin-top:9px" onclick="downloadSubtitles(\''+projectId+'\')">↓ Download .SRT</button>';
+}
+function updateSubtitleCue(projectId,index,field,value) {
+ const cue=window.facelessSubtitles?.[projectId]?.cues?.[index];
+ if(!cue || !["text","start","end"].includes(field))return;
+ cue[field]=field==="text"?String(value||"").slice(0,180):(value===""?null:Number(value));
+ const status=$("subtitle-edit-status-"+projectId);
+ if(status)status.textContent="Unsaved changes";
+ if(index===0&&field==="text"){
+  const preview=$("subtitle-result-"+projectId)?.querySelector(".caption-preview-frame span");
+  if(preview)preview.innerHTML=highlightSubtitlePreview(cue.text);
+ }
+}
+function resetSubtitleEdits(projectId) {
+ const original=window.facelessSubtitleOriginals?.[projectId];
+ if(!original)return;
+ renderSubtitleResult(projectId,JSON.parse(JSON.stringify(original)));
+ const status=$("subtitle-edit-status-"+projectId);
+ if(status)status.textContent="Unsaved changes discarded.";
+}
+async function saveSubtitleEdits(projectId,button) {
+ const subtitleData=window.facelessSubtitles?.[projectId];
+ const status=$("subtitle-edit-status-"+projectId);
+ if(!subtitleData || !Array.isArray(subtitleData.cues))return;
+ button.disabled=true;
+ if(status)status.textContent="Saving…";
+ try{
+  const saved=await api("/api/projects/"+projectId+"/subtitles",{method:"PUT",body:JSON.stringify({cues:subtitleData.cues})});
+  renderSubtitleResult(projectId,saved.subtitles);
+  const note=$("subtitle-edit-status-"+projectId);
+  if(note)note.textContent="Saved to this project ✓";
+ }catch(error){
+  const note=$("subtitle-edit-status-"+projectId);
+  if(note)note.textContent="Save failed: "+(error.message||error);
+ }finally{
+  if(button.isConnected)button.disabled=false;
+ }
 }
 function downloadSubtitles(projectId) {
  const data=window.facelessSubtitles?.[projectId];
@@ -1717,7 +1772,7 @@ async function deleteLocalVideo(id){if(!confirm("Delete this video from this bro
 async function importLocalVideo(file){const d=await videoDB(),row={id:crypto.randomUUID(),owner:String(currentUser?.email||"guest").toLowerCase(),title:file.name.replace(/\.mp4$/i,""),blob:file,size:file.size,duration:0,quality:0,createdAt:Date.now()};await new Promise((ok,no)=>{const tx=d.transaction("videos","readwrite");tx.objectStore("videos").add(row);tx.oncomplete=ok;tx.onerror=()=>no(tx.error);});d.close();refreshVideoLibrary();}
 document.addEventListener("change",e=>{if(e.target?.id==="libraryImport"){Array.from(e.target.files||[]).forEach(f=>importLocalVideo(f).catch(err=>alert(err.message)));e.target.value="";}});
 
-async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=false){
+async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=false,captionOptions={}){
  const bitmap=await createImageBitmap(imageBlob);
  const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
  const ctx=canvas.getContext("2d",{alpha:false});
@@ -1725,8 +1780,12 @@ async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=
  ctx.fillStyle="#080b12";ctx.fillRect(0,0,width,height);
  ctx.drawImage(bitmap,(width-w)/2,(height-h)/2,w,h);bitmap.close();
  const text=String(caption||"").replace(/\s+/g," ").trim();
+ const design=["creator","classic","minimal","neon"].includes(captionOptions.design)?captionOptions.design:"creator";
+ const position=["bottom","center","top"].includes(captionOptions.position)?captionOptions.position:"bottom";
+ const size=["small","medium","large"].includes(captionOptions.size)?captionOptions.size:"medium";
  if(text){
-  let fontSize=Math.max(20,Math.round(width*0.047)),maxWidth=width*0.88,lineHeight;
+  const fontScale={small:0.04,medium:0.047,large:0.055}[size];
+  let fontSize=Math.max(20,Math.round(width*fontScale)),maxWidth=width*0.88,lineHeight;
   const stopWords=new Set(["the","and","for","that","with","this","from","have","your","you","are","was","were","they","them","then","than","into","onto","about","just","like","what","when","where","which","while","will","would","could","should","there","their","here","over","under","also","only","very","more","some","been","being","it's","that's"]);
   const impactWords=new Set(["secret","never","always","danger","warning","mistake","truth","powerful","hidden","shocking","incredible","impossible","survive","survived","destroy","destroyed","instantly","suddenly","finally","strongest","fastest","biggest","worst","best","real","proof","million","billion","free","wrong","right","fear","death","life","win","lost","found"]);
   const tokens=text.split(/\s+/).filter(Boolean);
@@ -1741,12 +1800,15 @@ async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=
   };
   let lines=wrap();
   while(lines.length>3&&fontSize>Math.max(15,Math.round(width*0.026))){fontSize-=1;lines=wrap();}
-  const shown=lines,measureLine=items=>items.reduce((sum,w,i)=>{const emphasized=chosen&&w===chosen.word;ctx.font=(emphasized?"900 ":"800 ")+(emphasized?fontSize*1.08:fontSize)+"px Arial, sans-serif";return sum+ctx.measureText(w).width+(i?fontSize*0.28:0);},0);
+  const shown=lines,measureLine=items=>items.reduce((sum,w,i)=>{const emphasized=design!=="classic"&&chosen&&w===chosen.word;ctx.font=(emphasized?"900 ":"800 ")+(emphasized?fontSize*1.08:fontSize)+"px Arial, sans-serif";return sum+ctx.measureText(w).width+(i?fontSize*0.28:0);},0);
   const boxHeight=shown.length*lineHeight+Math.round(fontSize*0.72),boxWidth=Math.min(width*0.94,Math.max(...shown.map(measureLine))+fontSize*0.9);
-  const x=(width-boxWidth)/2,y=Math.max(Math.round(height*0.07),height-Math.round(height*0.13)-boxHeight);
-  ctx.fillStyle="rgba(4,7,14,0.84)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,Math.round(fontSize*0.24));ctx.fill();
+  const x=(width-boxWidth)/2,y=position==="top"?Math.max(Math.round(height*0.07),Math.round(height*0.1)):position==="center"?Math.round((height-boxHeight)/2):Math.max(Math.round(height*0.07),height-Math.round(height*0.13)-boxHeight);
+  if(design!=="minimal"){
+   ctx.fillStyle=design==="classic"?"rgba(0,0,0,.8)":"rgba(4,7,14,0.84)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,design==="classic"?Math.round(fontSize*.08):Math.round(fontSize*0.24));ctx.fill();
+   if(design==="neon"){ctx.strokeStyle="rgba(112,229,220,.9)";ctx.lineWidth=Math.max(1,width*.002);ctx.stroke();}
+  }
   ctx.textAlign="left";ctx.textBaseline="middle";ctx.lineJoin="round";ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.98)";
-  shown.forEach((items,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;let cursor=(width-measureLine(items))/2;items.forEach(word=>{const isHighlight=chosen&&word===chosen.word;const size=isHighlight?fontSize*1.08:fontSize;ctx.font=(isHighlight?"900 ":"800 ")+size+"px Arial, sans-serif";const wordWidth=ctx.measureText(word).width;ctx.fillStyle=isHighlight?"#facc15":"#ffffff";ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=3;ctx.strokeText(word,cursor,ty);ctx.fillText(word,cursor,ty);ctx.shadowBlur=0;cursor+=wordWidth+fontSize*0.28;});});
+  shown.forEach((items,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;let cursor=(width-measureLine(items))/2;items.forEach(word=>{const isHighlight=design!=="classic"&&chosen&&word===chosen.word;const size=isHighlight?fontSize*1.08:fontSize;ctx.font=(isHighlight?"900 ":"800 ")+size+"px Arial, sans-serif";const wordWidth=ctx.measureText(word).width;ctx.fillStyle=isHighlight?(design==="neon"?"#70e5dc":"#facc15"):"#ffffff";ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=3;ctx.strokeText(word,cursor,ty);ctx.fillText(word,cursor,ty);ctx.shadowBlur=0;cursor+=wordWidth+fontSize*0.28;});});
  }
  if(watermarkEnabled){
   const label="FacelessLab",fontSize=Math.max(12,Math.round(width*0.022)),pad=Math.round(width*0.034);
@@ -1841,6 +1903,7 @@ async function renderProjectVideo(projectId,button) {
    :plannedDurations.map(duration=>duration*timelineScale);
   temporaryFiles.add(voiceFile);await ffmpeg.writeFile(voiceFile,new Uint8Array(await voiceBlob.arrayBuffer()));
   const quality=Number($("editor-quality-"+projectId)?.value)||720,frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
+  const captionOptions={design:$("editor-caption-design-"+projectId)?.value||"creator",position:$("editor-caption-position-"+projectId)?.value||"bottom",size:$("editor-caption-size-"+projectId)?.value||"medium"};
   const addBrandWatermark=currentUser?.role!=="admin";
   const rawCues=(subtitleData?.cues||[]).map(c=>({start:Number(c.start),end:Number(c.end),text:String(c.text||"").replace(/\s+/g," ").trim()}))
    .filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start&&c.text)
@@ -1867,11 +1930,11 @@ async function renderProjectVideo(projectId,button) {
      const from=unique[j],to=unique[j+1],mid=(from+to)/2,active=cues.filter(c=>c.start<=mid&&c.end>mid).map(c=>c.text).join(" ");
      const segmentFile="caption_segment_"+String(segmentNumber++).padStart(4,"0")+".jpg";
      status.textContent="Burning captions · scene "+(i+1)+" of "+scenes.length+"…";
-     temporaryFiles.add(segmentFile);await ffmpeg.writeFile(segmentFile,await makeCaptionFrame(imageBlob,active,frameWidth,frameHeight,addBrandWatermark));
+     temporaryFiles.add(segmentFile);await ffmpeg.writeFile(segmentFile,await makeCaptionFrame(imageBlob,active,frameWidth,frameHeight,addBrandWatermark,captionOptions));
      concat.push("file '"+segmentFile+"'","duration "+(to-from).toFixed(3));
     }
    }else{
-    temporaryFiles.add(filename);await ffmpeg.writeFile(filename,await makeCaptionFrame(imageBlob,"",frameWidth,frameHeight,addBrandWatermark));
+    temporaryFiles.add(filename);await ffmpeg.writeFile(filename,await makeCaptionFrame(imageBlob,"",frameWidth,frameHeight,addBrandWatermark,captionOptions));
     concat.push("file '"+filename+"'","duration "+duration.toFixed(3));
    }
    totalDuration=sceneEnd;sceneRanges.push({start:sceneStart,end:sceneEnd});
