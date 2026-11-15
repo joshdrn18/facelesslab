@@ -502,9 +502,18 @@ async function processPublishQueueMessage(message,env) {
   if(job.platform==="youtube"){
    if(typeof FixedLengthStream!=="function")throw new Error("Cloudflare fixed-length upload streaming is unavailable in this Worker runtime.");
    if(!object.body)throw new Error("Cloud backup has no readable MP4 stream.");
-   const tagCandidates=[...new Set((String(job.hashtags||"").match(/#[\p{L}\p{N}_]+/gu)||[]).map(x=>x.slice(1)))];
-   const tags=[];let tagBytes=0;
-   for(const tag of tagCandidates){const cost=encoder.encode(tag).byteLength+(tags.length?1:0);if(tags.length>=30||tagBytes+cost>500)break;tags.push(tag);tagBytes+=cost;}
+   let tagCandidates=[];
+   try{const savedTags=JSON.parse(String(job.tags_json||"[]"));if(Array.isArray(savedTags))tagCandidates=savedTags;}catch{}
+   if(!tagCandidates.length)tagCandidates=[...new Set((String(job.hashtags||"").match(/#[\p{L}\p{N}_]+/gu)||[]).map(x=>x.slice(1)))];
+   const tags=[],seenTags=new Set();let tagBytes=0;
+   for(const value of tagCandidates){
+    const tag=String(value||"").trim().replace(/^#+/,"").replace(/\s+/g," ");
+    if(!tag)continue;
+    const key=tag.toLocaleLowerCase();if(seenTags.has(key))continue;
+    const cost=encoder.encode(tag).byteLength+(tags.length?1:0);
+    if(tags.length>=30||tagBytes+cost>500)break;
+    seenTags.add(key);tags.push(tag);tagBytes+=cost;
+   }
    let description=String(job.description||"")+(job.hashtags?"\n\n"+String(job.hashtags):"");
    if(encoder.encode(description).byteLength>5000){
     let clipped="",used=0;
@@ -1197,19 +1206,31 @@ async function handle(request, env) {
       return json({ok:true});
     }
     if(path==="/api/publishing/jobs"&&method==="GET"){
-      const rows=await env.DB.prepare("SELECT j.id,j.backup_id,j.platform,j.title,j.description,j.hashtags,j.privacy,j.scheduled_at,j.status,j.provider_post_id,j.provider_url,j.error_message,j.created_at,c.display_name AS account_name FROM publish_jobs j LEFT JOIN social_connections c ON c.id=j.connection_id WHERE j.user_id=? ORDER BY j.created_at DESC LIMIT 100").bind(user.id).all();
+      const rows=await env.DB.prepare("SELECT j.id,j.backup_id,j.platform,j.title,j.description,j.hashtags,j.tags_json,j.privacy,j.scheduled_at,j.status,j.provider_post_id,j.provider_url,j.error_message,j.created_at,c.display_name AS account_name FROM publish_jobs j LEFT JOIN social_connections c ON c.id=j.connection_id WHERE j.user_id=? ORDER BY j.created_at DESC LIMIT 100").bind(user.id).all();
       return json({ok:true,jobs:rows.results||[]});
     }
     if(path==="/api/publishing/jobs"&&method==="POST"){
       const body=await request.json().catch(()=>null),backupId=String(body?.backup_id||""),platform=String(body?.platform||"");
       const title=String(body?.title||"").trim().slice(0,100),description=String(body?.description||"").trim().slice(0,5000),hashtags=String(body?.hashtags||"").trim().slice(0,1000);
+      const rawTags=platform==="youtube"?(Array.isArray(body?.tags)?body.tags:(typeof body?.tags==="string"?body.tags.split(/[,;\n]+/):[])):[];
+      const tags=[],seenTags=new Set();let tagBytes=0;
+      for(const value of rawTags){
+        if(typeof value!=="string")return json({ok:false,error:"Each YouTube tag must be text."},400);
+        const tag=value.trim().replace(/^#+/,"").replace(/\s+/g," ");
+        if(!tag)continue;
+        const key=tag.toLocaleLowerCase();if(seenTags.has(key))continue;
+        const cost=encoder.encode(tag).byteLength+(tags.length?1:0);
+        if(tags.length>=30)return json({ok:false,error:"YouTube allows up to 30 tags per video."},400);
+        if(tagBytes+cost>500)return json({ok:false,error:"Combined YouTube tags must be 500 characters or fewer."},400);
+        seenTags.add(key);tags.push(tag);tagBytes+=cost;
+      }
       if(!/^[a-f0-9-]{36}$/i.test(backupId)||!["youtube","tiktok"].includes(platform)||!title)return json({ok:false,error:"Choose a cloud video, platform, and title."},400);
       const connection=await env.DB.prepare("SELECT id FROM social_connections WHERE user_id=? AND platform=? AND status='active' ORDER BY updated_at DESC LIMIT 1").bind(user.id,platform).first();
       if(!connection)return json({ok:false,error:"Connect your "+platform+" account before preparing a post."},409);
       const key="users/"+user.id+"/rendered-backups/"+backupId+".mp4",object=await env.MEDIA.head(key);
       if(!object)return json({ok:false,error:"Cloud video not found. Upload or render a video backup first."},404);
       const id=crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,privacy,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,String(body?.privacy||"private")).run();
+      await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,tags_json,privacy,status) VALUES (?,?,?,?,?,?,?,?,?,?,'draft')").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,JSON.stringify(tags),String(body?.privacy||"private")).run();
       return json({ok:true,job:{id,backup_id:backupId,platform,title,status:"draft"}},201);
     }
     const youtubeStatusMatch=path.match(new RegExp("^/api/publishing/jobs/([a-f0-9-]+)/refresh-status$","i"));
