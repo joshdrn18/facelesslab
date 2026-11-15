@@ -1,6 +1,12 @@
 name: Deploy FacelessLab API
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'wrangler.toml'
+      - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
 permissions:
