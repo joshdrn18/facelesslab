@@ -555,6 +555,174 @@ select{padding-right:34px}
  button,a,input,select,textarea,.stat,.project,.library-card,.cloud-backup-row,.ai-member-usage{transition:none!important}
 }
 
+
+
+/* FacelessLab — page-by-page finishing pass */
+:root{
+ --panel-edge:rgba(151,166,197,.16);
+ --panel-edge-strong:rgba(161,138,255,.3);
+ --surface-raised:rgba(22,30,46,.88);
+ --surface-inset:rgba(8,13,22,.56);
+}
+.top-kicker{display:flex;align-items:center;gap:9px;min-height:17px}
+.top-separator{color:#526078;font-size:11px}
+.top-context{color:#8f9db5;font-size:9px;font-weight:850;letter-spacing:1.35px}
+.top-heading{min-width:0}
+.top-heading .sub{max-width:680px}
+.user-identity{display:flex;align-items:center;gap:8px;min-width:0}
+.user-identity>b{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.role-pill{border:1px solid rgba(112,229,220,.2);border-radius:99px;padding:3px 7px;background:rgba(112,229,220,.07);color:#8fe0d8;font-size:8px;font-weight:850;letter-spacing:.8px}
+.user-email{font-size:10px;overflow-wrap:anywhere;margin-top:2px}
+.userbox{min-width:0}
+.panel,.content-card,.production-card,.cloud-backup-panel,.library-card,.project{backdrop-filter:blur(8px)}
+.panel{position:relative}
+.panel .sectionhead{margin-top:0}
+.panel .sectionhead h3{font-size:17px}
+.field{font-size:11px;font-weight:750;letter-spacing:.15px;color:#c6d0e2}
+input::placeholder,textarea::placeholder{color:#68768e;opacity:1}
+input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
+
+/* Create — clearer brief and production setup */
+#createPanel{overflow:hidden;border-color:rgba(161,138,255,.24);background:linear-gradient(145deg,rgba(27,31,51,.98),rgba(14,20,32,.98))}
+#createPanel:before{content:"";position:absolute;left:0;top:0;width:100%;height:2px;background:linear-gradient(90deg,#a18aff,#70e5dc,transparent 86%)}
+#createPanel>h3{font-size:19px;letter-spacing:-.45px;margin:2px 0 5px}
+#createPanel>p{max-width:550px;margin-bottom:18px}
+#createForm textarea{min-height:145px;padding:14px 15px;background:rgba(7,12,22,.68);border-color:#3a4560}
+#createForm select{min-height:43px}
+#createForm .two{gap:14px}
+#createForm .actions{align-items:center;flex-wrap:wrap;margin-top:20px}
+#createForm .actions .primary{min-width:160px}
+#createForm .actions .secondary{min-width:88px}
+#createNotice{margin-top:10px}
+#workflowPanel{background:linear-gradient(145deg,rgba(18,29,43,.98),rgba(14,19,30,.98))}
+#workflowPanel .steps{gap:0;margin-top:16px}
+#workflowPanel .step{padding:13px 2px;border-bottom:1px solid var(--panel-edge)}
+#workflowPanel .step:last-child{padding-bottom:2px}
+#workflowPanel .num{flex:0 0 31px;border:1px solid rgba(161,138,255,.18);background:rgba(161,138,255,.1)}
+#workflowPanel .step>div:nth-child(2){min-width:0;flex:1}
+#workflowPanel .step small{display:block;line-height:1.5;margin-top:2px}
+#workflowPanel .tag{white-space:nowrap}
+
+/* Projects — scan-friendly list and controls */
+#projects{min-width:0}
+#projects>.sectionhead{padding:6px 1px 0}
+#projects>.sectionhead h3{font-size:18px}
+#projects>.sectionhead .muted{display:inline-block;margin-top:3px}
+#projects .project-toolbar{padding:10px;border:1px solid var(--panel-edge);border-radius:13px;background:rgba(13,19,31,.62)}
+#projects .project-toolbar input,#projects .project-toolbar select{min-height:40px}
+#projectList{gap:10px}
+#projectList .empty{padding:32px 18px;background:rgba(14,20,32,.4)}
+#projectList .project{box-shadow:0 8px 22px rgba(0,0,0,.08)}
+#projectList .project-actions .mini-btn{min-height:34px}
+
+/* Rendered video library and cloud backup */
+#videoLibrary{padding:21px;border-color:var(--panel-edge)}
+#videoLibrary>.sectionhead{padding-bottom:14px;border-bottom:1px solid var(--panel-edge)}
+#videoLibrary>.sectionhead p{margin:5px 0 0;font-size:11px}
+#libraryStorage,#cloudBackupSummary{border-color:var(--panel-edge);background:rgba(8,14,24,.58);line-height:1.6}
+.cloud-backup-panel{padding:17px;border-color:rgba(112,229,220,.2);background:linear-gradient(145deg,rgba(15,35,39,.46),rgba(12,20,31,.78))}
+.cloud-backup-head b{font-size:13px}
+.cloud-backup-head small{line-height:1.5;margin-top:3px}
+#cloudBackupFile{max-width:100%;margin:10px 0}
+#uploadCloudBackup{min-height:39px}
+#libraryList .empty,#cloudBackupList .empty{padding:26px 16px}
+#libraryList .library-card{background:linear-gradient(110deg,rgba(20,29,44,.95),rgba(13,20,32,.95))}
+#libraryList .library-actions button{min-height:34px}
+.library-preview{border:1px solid var(--panel-edge);box-shadow:0 15px 40px rgba(0,0,0,.22)}
+
+/* Publishing — channel cards and draft editor */
+#publishingPanel{padding:22px;border-color:var(--panel-edge)}
+#publishingPanel>.sectionhead{padding-bottom:14px;border-bottom:1px solid var(--panel-edge)}
+#publishingPanel>.sectionhead p{margin-top:5px;font-size:11px}
+#publishingPanel .grid-two{margin:15px 0!important}
+#publishingPanel .grid-two .content-card{position:relative;overflow:hidden;padding:17px;border-color:var(--panel-edge);background:linear-gradient(145deg,rgba(23,30,47,.96),rgba(13,19,31,.96))}
+#publishingPanel .grid-two .content-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:linear-gradient(#a18aff,#70e5dc)}
+#publishingPanel .grid-two .content-card h3{font-size:17px;letter-spacing:-.3px}
+#youtubeConnection,#tiktokConnection{min-height:58px;line-height:1.55}
+#publishingPanel .grid-two .content-card button{min-height:42px}
+#publishingPanel> .content-card{padding:19px;border-color:var(--panel-edge);background:linear-gradient(145deg,rgba(20,28,43,.97),rgba(13,19,30,.97))}
+#publishDraftForm{max-width:900px}
+#publishDraftForm input,#publishDraftForm select,#publishDraftForm textarea{background:rgba(7,12,22,.62)}
+#publishDraftForm textarea{min-height:90px}
+#publishDraftForm .actions{display:flex;gap:9px;flex-wrap:wrap}
+#publishDraftForm .actions .primary{min-width:190px}
+#publishingJobs{gap:10px;margin-top:10px}
+#publishingJobs .empty{padding:27px 16px;background:rgba(12,19,30,.42)}
+#publishingPanel>.production-note{border-top:1px solid var(--panel-edge);padding-top:13px;margin-top:16px}
+
+/* Profile and password security */
+#profilePanel{padding:22px;border-color:var(--panel-edge)}
+#profilePanel>.sectionhead{padding-bottom:14px;border-bottom:1px solid var(--panel-edge)}
+.profile-layout{grid-template-columns:minmax(0,1.05fr) minmax(260px,.75fr);gap:13px}
+.profile-layout>.content-card{padding:18px;border-color:var(--panel-edge);background:linear-gradient(145deg,rgba(21,29,45,.96),rgba(13,19,30,.96))}
+.profile-avatar-card{padding:15px;background:linear-gradient(120deg,rgba(42,34,73,.8),rgba(17,29,42,.8))}
+#profileForm{max-width:560px}
+#profileForm input,#passwordForm input{min-height:42px}
+#passwordForm{max-width:560px}
+#passwordForm .actions{margin-top:17px}
+#profileNotice,#passwordNotice{padding-top:3px}
+.profile-info-row b{font-size:11px}
+.profile-note{line-height:1.65}
+
+/* Points and account usage */
+#billingPanel{padding:22px;border-color:var(--panel-edge)}
+#billingPanel>.sectionhead{padding-bottom:14px;border-bottom:1px solid var(--panel-edge)}
+#billingPanel .billing-grid{margin:16px 0}
+#billingPanel .billing-grid .stat{min-height:94px}
+#billingPanel .billing-grid .stat span{font-size:11px}
+#billingPanel .content-card{padding:20px;border-color:rgba(161,138,255,.22);background:linear-gradient(115deg,rgba(35,29,60,.76),rgba(16,27,40,.88))}
+#billingPanel .content-card h3{font-size:20px;letter-spacing:-.4px}
+#billingPanel .content-card p{max-width:760px}
+#billingPanel>.production-note{padding:12px 14px;border:1px solid var(--panel-edge);border-radius:11px;background:rgba(10,16,27,.46)}
+
+/* Admin — better hierarchy without touching controls or permissions */
+#adminPanel{padding:22px;border-color:var(--panel-edge)}
+#adminPanel>.sectionhead{padding-bottom:14px;border-bottom:1px solid var(--panel-edge)}
+#adminPanel>.sectionhead h3{font-size:18px}
+#adminPanel>.admin-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+#adminPanel>.admin-metrics .stat{padding:14px;min-width:0}
+#adminPanel>.admin-metrics .stat span{font-size:10px}
+#adminPanel>.admin-metrics .stat strong{font-size:21px;overflow-wrap:anywhere}
+#adminPanel>.content-card{padding:18px;border-color:var(--panel-edge);background:linear-gradient(145deg,rgba(20,28,43,.96),rgba(13,19,30,.96))}
+#adminPanel .admin-toolbar{align-items:center}
+#adminPanel .admin-toolbar h3{font-size:16px}
+#adminPanel .admin-table-head{border-bottom:1px solid var(--panel-edge)}
+#adminPanel .admin-member-row{border-bottom:1px solid rgba(145,160,190,.1);padding:13px 5px}
+#adminPanel .admin-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px}
+#adminPanel .admin-audit-item{padding:12px 0;border-bottom:1px solid rgba(145,160,190,.1)}
+#adminPanel .ai-usage-panel{border-color:rgba(161,138,255,.25)}
+#adminPanel .production-note{line-height:1.65}
+
+/* Shared polish for every viewport */
+.empty{background:rgba(11,17,28,.26)}
+.content-card{border-color:var(--panel-edge)}
+.notice[role="status"]{font-size:11px}
+@media(max-width:980px){
+ #adminPanel>.admin-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .profile-layout{grid-template-columns:minmax(0,1fr) minmax(230px,.8fr)}
+}
+@media(max-width:700px){
+ #createPanel,#workflowPanel{padding:16px}
+ #createForm textarea{min-height:128px}
+ #videoLibrary,#publishingPanel,#profilePanel,#billingPanel,#adminPanel{padding:15px}
+ #publishingPanel .grid-two{grid-template-columns:minmax(0,1fr)!important}
+ #publishDraftForm .actions>*{flex:1 1 100%}
+ #publishDraftForm .actions .primary{min-width:0}
+ #adminPanel>.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #adminPanel>.content-card{padding:14px}
+ .profile-layout{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:420px){
+ #createForm .actions>*{width:100%}
+ #workflowPanel .step{gap:9px}
+ #workflowPanel .tag{font-size:8px;padding:4px 6px}
+ #billingPanel .billing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #adminPanel>.admin-metrics .stat strong{font-size:18px}
+ #videoLibrary .sectionhead{align-items:flex-start}
+ #videoLibrary .sectionhead>.secondary{width:100%}
+ .user-identity>b{max-width:135px}
+}
+
 </style>
 </head>
 <body>
@@ -601,7 +769,7 @@ select{padding-right:34px}
     </form>
    </div>
    <div class="sectionhead"><div><h3>Publishing drafts</h3><span class="muted" style="font-size:12px">Review your prepared posts</span></div></div><div id="publishingJobs" class="project-list"><div class="empty">Loading publishing drafts…</div></div>
-   <p class="production-note">Important: OAuth connections and draft storage are being prepared. Direct automatic upload is not active until YouTube/TikTok credentials are configured and the upload workers are deployed. TikTok public posting also requires approval of the Content Posting API app.</p>
+   <p class="production-note">Check each channel card above for its current connection status. Saving a draft does not publish it; automatic posting remains disabled until the provider upload process is enabled. TikTok public posting also requires approval of the Content Posting API app.</p>
   </section>
   <section id="profilePanel" class="panel billing-panel" style="display:none">
    <div class="sectionhead"><div><h3>Profile & account settings</h3><p class="muted">Manage the basic details shown in your workspace.</p></div><span class="status">Account</span></div>
