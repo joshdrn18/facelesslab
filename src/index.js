@@ -1245,7 +1245,7 @@ async function handle(request, env) {
       const project = await env.DB.prepare("SELECT id, duration_seconds FROM projects WHERE id = ? AND user_id = ?").bind(projectId, user.id).first();
       if (!project) return json({ ok: false, error: "Project not found." }, 404);
       if (method === "GET") {
-        const saved = await env.DB.prepare("SELECT id, output_json, created_at FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
+        const saved = await env.DB.prepare("SELECT id, output_json, created_at FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed' AND json_array_length(json_extract(output_json, '$.cues')) > 0 ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
         return json({ ok: true, subtitles: saved ? JSON.parse(saved.output_json) : null, generation_id: saved?.id || null });
       }
       if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "Speech recognition is unavailable. Check the Workers AI binding." }, 503);
@@ -1338,7 +1338,7 @@ async function handle(request, env) {
           // narration sentence at once. Preserve punctuation on the final phrase.
           const phrases = [];
           for (const sentence of sentences) {
-            const tokens = sentence.match(/\\S+/g) || [];
+            const tokens = sentence.trim().split(/\s+/).filter(Boolean);
             let group = [];
             for (const token of tokens) {
               const candidate = group.concat(token);
@@ -1364,7 +1364,9 @@ async function handle(request, env) {
           subtitleSource = "script-fallback-low-whisper-confidence";
           timingMode = "estimated-from-script-and-audio-duration";
         }
+        if (!cues.length) throw new Error("Whisper returned a transcript, but no usable subtitle phrases could be built from the saved script. Check the project narration and regenerate the script if it is empty.");
         const duration = Number(Math.max(...cues.map(cue => cue.end)).toFixed(3));
+        if (!Number.isFinite(duration) || duration <= 0) throw new Error("Subtitle timing is invalid. Regenerate the voice-over and try again.");
         const subtitleData = { format: "webvtt", timing: timingMode, source: subtitleSource, model: "@cf/openai/whisper", duration_seconds: duration, word_count: words.length || Number(transcription.word_count) || 0, transcript: whisperTranscript.slice(0, 12000), script_match_score: Number(matchScore.toFixed(3)), quality_check: matchScore < 0.72 ? "low-whisper-match-script-fallback-used" : "whisper-transcript-accepted", cues };
         await env.DB.prepare("UPDATE generations SET status='completed', input_json=?, output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({ source: "saved voice-over audio", timing: timingMode, model: "@cf/openai/whisper", audio_bytes: audioBytes.byteLength, script_match_score: Number(matchScore.toFixed(3)), subtitle_source: subtitleSource }), JSON.stringify(subtitleData), generationId, user.id).run();
         return json({ ok: true, subtitles: subtitleData, generation_id: generationId }, 201);
