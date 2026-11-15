@@ -625,6 +625,12 @@ async function handle(request, env) {
             description: String(row.ChargeDescription || "").slice(0, 180),
             quantity: Number.isFinite(Number(row.ConsumedQuantity)) ? Number(row.ConsumedQuantity) : null,
             unit: String(row.ConsumedUnit || row.PricingUnit || "").slice(0, 40),
+            pricing_quantity: Number.isFinite(Number(row.PricingQuantity)) ? Number(row.PricingQuantity) : null,
+            pricing_unit: String(row.PricingUnit || "").slice(0, 40),
+            metric_id: String(row.x_BillableMetricId || row.BillableMetricId || "").slice(0, 120),
+            metric_name: String(row.x_BillableMetricName || row.BillableMetricName || "").slice(0, 140),
+            cumulative_quantity: Number.isFinite(Number(row.CumulatedPricingQuantity)) ? Number(row.CumulatedPricingQuantity) : null,
+            cumulative_cost: Number.isFinite(Number(row.CumulatedContractedCost)) ? Number(row.CumulatedContractedCost) : null,
             cost: Number(cost.toFixed(6)),
             currency: String(row.BillingCurrency || "USD").slice(0, 8),
             charge_start: row.ChargePeriodStart || null,
@@ -633,6 +639,22 @@ async function handle(request, env) {
           };
         }).sort((a, b) => String(b.charge_start || "").localeCompare(String(a.charge_start || "")));
         const periods = records.map(row => row.charge_start).filter(Boolean).sort();
+        const todayUtc = new Date().toISOString().slice(0, 10);
+        const workersAiRecords = records.filter(row => (row.family + " " + row.service).toLowerCase().includes("workers ai"));
+        const neuronRecords = records.filter(row => /neuron/i.test(row.unit + " " + row.metric_name + " " + row.description));
+        const neuronTotal = neuronRecords.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+        const neuronToday = neuronRecords.filter(row => String(row.charge_start || "").slice(0, 10) === todayUtc)
+          .reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+        const dailyUsage = {};
+        for (const row of records) {
+          const day = String(row.charge_start || "").slice(0, 10);
+          if (!day) continue;
+          if (!dailyUsage[day]) dailyUsage[day] = { date: day, records: 0, cost: 0, quantity_by_unit: {} };
+          dailyUsage[day].records++;
+          dailyUsage[day].cost += Number(row.cost || 0);
+          const unit = row.unit || "count";
+          dailyUsage[day].quantity_by_unit[unit] = (dailyUsage[day].quantity_by_unit[unit] || 0) + Number(row.quantity || 0);
+        }
         const credit = credits.result && typeof credits.result === "object" ? credits.result : null;
         const creditSummary = credit ? {
           eligible: credit.eligible === true,
@@ -652,6 +674,19 @@ async function handle(request, env) {
             period_from: periods[0] || null, period_to: periods[periods.length - 1] || null,
             currency: rows[0]?.BillingCurrency || "USD",
             total_billed_cost: Number(totalCost.toFixed(6)), record_count: rows.length,
+            workers_ai_record_count: workersAiRecords.length,
+            neuron_usage: {
+              available: neuronRecords.length > 0,
+              reported_total: neuronRecords.length ? Number(neuronTotal.toFixed(4)) : null,
+              reported_today: neuronRecords.length ? Number(neuronToday.toFixed(4)) : null,
+              unit: neuronRecords[0]?.unit || null,
+              records: neuronRecords.length,
+              freshness_note: "Cloudflare billable usage data is updated daily and is not a live Neurons meter."
+            },
+            daily_usage: Object.values(dailyUsage).sort((a,b) => a.date.localeCompare(b.date)).map(day => ({
+              ...day, cost: Number(day.cost.toFixed(6))
+            })),
+            workers_ai_records: workersAiRecords,
             services: Object.entries(services).map(([name, value]) => ({
               name, cost: Number(value.cost.toFixed(6)), records: value.records,
               products: Object.entries(value.services).map(([product, item]) => ({ name: product, cost: Number(item.cost.toFixed(6)), records: item.records }))
@@ -659,6 +694,19 @@ async function handle(request, env) {
             records, errors: billable.errors
           }
         });
+      }
+
+      if (path === "/api/admin/ai-usage-settings" && method === "POST") {
+        const body = await request.json().catch(() => null);
+        const limit = Number(body?.daily_request_limit);
+        if (!Number.isSafeInteger(limit) || (limit !== 0 && (limit < 5 || limit > 500))) {
+          return json({ok:false,error:"Daily Workers AI request cap must be 0 (disabled) or a whole number from 5 to 500."},400);
+        }
+        await env.DB.prepare("INSERT INTO ai_usage_settings (id,daily_request_limit,warning_percent,updated_at) VALUES ('global',?,?,unixepoch()) ON CONFLICT(id) DO UPDATE SET daily_request_limit=excluded.daily_request_limit,warning_percent=excluded.warning_percent,updated_at=unixepoch()")
+          .bind(limit,80).run();
+        await env.DB.prepare("INSERT INTO admin_audit_logs (id,actor_id,action,details_json) VALUES (?,?,?,?)")
+          .bind(crypto.randomUUID(),user.id,"ai_usage_safety_cap",JSON.stringify({daily_request_limit:limit,warning_percent:80})).run();
+        return json({ok:true,settings:await readAIUsageSettings(env)});
       }
 
       if (path === "/api/admin/ai-usage" && method === "GET") {
@@ -1124,7 +1172,7 @@ async function handle(request, env) {
       }catch(error){
         await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
         const message=String(error.message||"Character reference generation failed.");
-        return json({ok:false,error:message},/limit|quota|billing|exceeded/i.test(message)?429:502);
+        return json({ok:false,error:message},error?.code==="AI_DAILY_LIMIT_REACHED"||/limit|quota|billing|exceeded/i.test(message)?429:502);
       }
     }
     const charactersMatch=path.match(/^\/api\/projects\/([a-f0-9-]+)\/characters$/i);
@@ -1315,7 +1363,7 @@ async function handle(request, env) {
         return json({ok:true,generation_id:generationId,visual:{generation_id:generationId,...output}},201);      }catch(error){
         await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();
         const message=String(error.message||"Visual generation failed.");
-        return json({ok:false,error:message},/limit|quota|billing|exceeded/i.test(message)?429:502);
+        return json({ok:false,error:message},error?.code==="AI_DAILY_LIMIT_REACHED"||/limit|quota|billing|exceeded/i.test(message)?429:502);
       }
     }
 
@@ -1488,7 +1536,7 @@ async function handle(request, env) {
       } catch (error) {
         await env.DB.prepare("UPDATE generations SET status='failed', error_message=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
         const message = String(error.message || "Speech recognition failed.");
-        return json({ ok: false, error: message }, /limit|quota|billing|credit|exceeded/i.test(message) ? 429 : 502);
+        return json({ ok: false, error: message }, error?.code==="AI_DAILY_LIMIT_REACHED"||/limit|quota|billing|credit|exceeded/i.test(message) ? 429 : 502);
       }
     }
 
