@@ -183,11 +183,11 @@ async function generateScriptWithProviders(env, project, continuation = null) {
   };
   let firstError;
   if (primary.apiKey) {
-    try { return { script: await callAiProvider(env, primary, prompt), provider: "primary" }; }
+    try { return { script: await callAiProvider(env, primary, prompt), provider: "primary", model: primary.model || "gpt-4o-mini" }; }
     catch (error) { firstError = error; }
   }
   if (fallback.apiKey) {
-    try { return { script: await callAiProvider(env, fallback, prompt), provider: "fallback" }; }
+    try { return { script: await callAiProvider(env, fallback, prompt), provider: "fallback", model: fallback.model || "configured fallback model" }; }
     catch (error) { throw new Error("Primary and fallback AI providers failed. " + (firstError?.message || "") + " " + error.message); }
   }
   if (firstError) throw firstError;
@@ -211,7 +211,7 @@ async function processScriptQueueMessage(message, env) {
    return {id,name,role:String(c?.role||"").trim().slice(0,180),visual_identity:String(c?.visual_identity||"").trim().slice(0,600),signature_outfit:String(c?.signature_outfit||"").trim().slice(0,350),distinctive_features:String(c?.distinctive_features||"").trim().slice(0,350)};
   }).filter(c=>c.name&&c.visual_identity);
   if(!script||typeof script!=="object"||!Array.isArray(script.scenes)||!script.narration)throw new Error("AI response is missing required script fields.");
-  await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({...script,_provider:result.provider}),generationId,userId).run();
+  await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({...script,_provider:result.provider,_provider_type:"external-api",_model:result.model}),generationId,userId).run();
   await env.DB.prepare("UPDATE projects SET status='completed',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(projectId,userId).run();
   console.log(JSON.stringify({event:"background_script_completed",generation_id:generationId,project_id:projectId}));
   message.ack();
@@ -578,6 +578,84 @@ async function handle(request, env) {
             })).sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name)),
             records, errors: billable.errors
           }
+        });
+      }
+
+      if (path === "/api/admin/ai-usage" && method === "GET") {
+        const period = String(url.searchParams.get("period") || "30d");
+        const periodSeconds = period === "7d" ? 7 * 86400 : period === "90d" ? 90 * 86400 : period === "all" ? 0 : 30 * 86400;
+        const since = periodSeconds ? Math.floor(Date.now() / 1000) - periodSeconds : 0;
+        const q = String(url.searchParams.get("q") || "").trim().slice(0, 100).toLowerCase();
+        const [totals, members, models, recent] = await Promise.all([
+          env.DB.prepare(`
+            SELECT COUNT(*) AS total_jobs,
+              SUM(CASE WHEN stage IN ('voice','visuals','character_reference','subtitles') THEN 1 ELSE 0 END) AS cloudflare_ai_jobs,
+              SUM(CASE WHEN stage='script' THEN 1 ELSE 0 END) AS external_script_jobs,
+              SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed_jobs,
+              SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed_jobs,
+              SUM(CASE WHEN status IN ('queued','processing') THEN 1 ELSE 0 END) AS pending_jobs,
+              SUM(CASE WHEN stage='voice' THEN COALESCE(CAST(json_extract(input_json,'$.characters') AS INTEGER),CAST(json_extract(output_json,'$.source_characters') AS INTEGER),0) ELSE 0 END) AS tts_characters,
+              SUM(CASE WHEN stage='visuals' THEN 1 ELSE 0 END) AS scene_image_jobs,
+              SUM(CASE WHEN stage='character_reference' THEN 1 ELSE 0 END) AS character_image_jobs,
+              SUM(CASE WHEN stage='subtitles' THEN COALESCE(CAST(json_extract(input_json,'$.audio_bytes') AS INTEGER),0) ELSE 0 END) AS subtitle_audio_bytes,
+              COUNT(DISTINCT user_id) AS active_users
+            FROM generations WHERE created_at >= ?
+          `).bind(since).first(),
+          env.DB.prepare(`
+            SELECT u.id,u.email,u.display_name,u.role,u.status,u.created_at,
+              COUNT(g.id) AS total_jobs,
+              SUM(CASE WHEN g.stage='script' THEN 1 ELSE 0 END) AS script_jobs,
+              SUM(CASE WHEN g.stage='voice' THEN 1 ELSE 0 END) AS voice_jobs,
+              SUM(CASE WHEN g.stage='visuals' THEN 1 ELSE 0 END) AS scene_image_jobs,
+              SUM(CASE WHEN g.stage='character_reference' THEN 1 ELSE 0 END) AS character_image_jobs,
+              SUM(CASE WHEN g.stage='subtitles' THEN 1 ELSE 0 END) AS subtitle_jobs,
+              SUM(CASE WHEN g.stage IN ('voice','visuals','character_reference','subtitles') THEN 1 ELSE 0 END) AS cloudflare_ai_jobs,
+              SUM(CASE WHEN g.status='failed' THEN 1 ELSE 0 END) AS failed_jobs,
+              SUM(CASE WHEN g.stage='voice' THEN COALESCE(CAST(json_extract(g.input_json,'$.characters') AS INTEGER),CAST(json_extract(g.output_json,'$.source_characters') AS INTEGER),0) ELSE 0 END) AS tts_characters,
+              SUM(CASE WHEN g.stage='subtitles' THEN COALESCE(CAST(json_extract(g.input_json,'$.audio_bytes') AS INTEGER),0) ELSE 0 END) AS subtitle_audio_bytes,
+              MAX(g.created_at) AS last_activity
+            FROM users u JOIN generations g ON g.user_id=u.id
+            WHERE g.created_at >= ? AND (?='' OR lower(u.email) LIKE '%'||?||'%' OR lower(COALESCE(u.display_name,'')) LIKE '%'||?||'%')
+            GROUP BY u.id
+            ORDER BY total_jobs DESC, last_activity DESC LIMIT 100
+          `).bind(since,q,q,q).all(),
+          env.DB.prepare(`
+            SELECT stage,
+              CASE WHEN stage='script' THEN COALESCE(json_extract(output_json,'$._model'),'External API model not recorded')
+                   ELSE COALESCE(json_extract(output_json,'$.model'),json_extract(input_json,'$.model'),'Model not recorded') END AS model,
+              COUNT(*) AS jobs,
+              SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed,
+              SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed
+            FROM generations WHERE created_at >= ?
+            GROUP BY stage,model ORDER BY jobs DESC,stage,model LIMIT 30
+          `).bind(since).all(),
+          env.DB.prepare(`
+            SELECT g.id,g.stage,g.status,g.created_at,p.title AS project_title,
+              u.email,u.display_name,u.role,
+              CASE WHEN g.stage='script' THEN COALESCE(json_extract(g.output_json,'$._model'),'External API model not recorded')
+                   ELSE COALESCE(json_extract(g.output_json,'$.model'),json_extract(g.input_json,'$.model'),'Model not recorded') END AS model
+            FROM generations g
+            JOIN users u ON u.id=g.user_id
+            LEFT JOIN projects p ON p.id=g.project_id
+            WHERE g.created_at >= ?
+            ORDER BY g.created_at DESC LIMIT 15
+          `).bind(since).all()
+        ]);
+        const n = value => Number(value || 0);
+        return json({
+          ok: true, period, since,
+          totals: {
+            total_jobs:n(totals?.total_jobs),cloudflare_ai_jobs:n(totals?.cloudflare_ai_jobs),
+            external_script_jobs:n(totals?.external_script_jobs),failed_jobs:n(totals?.failed_jobs),
+            completed_jobs:n(totals?.completed_jobs),pending_jobs:n(totals?.pending_jobs),
+            tts_characters:n(totals?.tts_characters),scene_image_jobs:n(totals?.scene_image_jobs),
+            character_image_jobs:n(totals?.character_image_jobs),subtitle_audio_bytes:n(totals?.subtitle_audio_bytes),
+            active_users:n(totals?.active_users)
+          },
+          members: members.results || [],
+          models: models.results || [],
+          recent: recent.results || [],
+          accounting_note: "Generation counts and workload measures are recorded per user. Exact Neurons and USD charges are account-level Cloudflare billing data and are not apportioned to individual users by this endpoint."
         });
       }
 
