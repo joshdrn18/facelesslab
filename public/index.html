@@ -795,6 +795,23 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
 .subtitle-edit-status{font-size:10px;color:#8fe0c4;overflow-wrap:anywhere}
 @media(max-width:700px){.subtitle-cue-row{grid-template-columns:1fr}.subtitle-cue-number{padding:0}.subtitle-time-grid{max-width:100%}.subtitle-edit-actions>*{flex:1}.subtitle-edit-status{flex-basis:100%}}
 
+
+.cf-neuron-summary{margin:10px 0;padding:13px;border:1px solid var(--line-soft);border-radius:12px;background:rgba(8,13,23,.38)}
+.cf-neuron-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.cf-neuron-summary-grid>div{padding:10px;border:1px solid rgba(148,164,196,.1);border-radius:9px;background:rgba(23,32,49,.45)}
+.cf-neuron-summary-grid span,.cf-neuron-summary-grid b,.cf-neuron-summary-grid small{display:block}.cf-neuron-summary-grid span{font-size:9px;color:var(--muted)}.cf-neuron-summary-grid b{font-size:16px;margin:4px 0}.cf-neuron-summary-grid small{font-size:9px;color:#91a0b8;line-height:1.5}.cf-neuron-summary a{color:#a99cff}
+.admin-usage-table{min-width:980px}.admin-usage-table th,.admin-usage-table td{padding:9px 8px;border-bottom:1px solid var(--line-soft);vertical-align:top}.admin-usage-table td{font-size:10px}
+.ai-daily-guard{margin:14px 0;padding:15px;border:1px solid rgba(145,160,190,.18);border-radius:14px;background:linear-gradient(145deg,rgba(15,24,39,.96),rgba(10,16,27,.96))}
+.ai-daily-head{display:flex;justify-content:space-between;gap:12px}.ai-daily-head h3{margin:5px 0 3px;font-size:15px}.ai-daily-head p{margin:0;color:var(--muted);font-size:10px}
+.ai-guard-state{padding:5px 9px;border:1px solid var(--line-soft);border-radius:99px;font-size:9px;font-weight:850}.ai-guard-state[data-state="safe"]{color:#8fe0c4}.ai-guard-state[data-state="warning"]{color:#e9c778}.ai-guard-state[data-state="limit"]{color:#ff9aa4}
+.ai-daily-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:12px;margin-top:13px}.ai-daily-meter,.ai-daily-metrics{padding:12px;border:1px solid rgba(148,164,196,.12);border-radius:11px;background:rgba(4,10,19,.34);min-width:0}
+.ai-daily-meter-head{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}.ai-daily-meter-head strong{font-size:25px}.ai-daily-meter-head strong small{font-size:10px;color:#a6b3c8}.ai-daily-meter-head>span{font-size:10px;color:#9daec4}
+.ai-daily-track{height:9px;margin:13px 0 8px;border-radius:99px;overflow:hidden;background:#273248}.ai-daily-track span{display:block;width:0;height:100%;background:linear-gradient(90deg,#70e5dc,#a18aff)}.ai-daily-meter p{margin:0;color:#9baac0;font-size:10px}
+.ai-daily-breakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px}.ai-daily-breakdown>span{padding:8px;border:1px solid rgba(148,164,196,.1);border-radius:8px}.ai-daily-breakdown b,.ai-daily-breakdown small{display:block}.ai-daily-breakdown b{font-size:14px}.ai-daily-breakdown small{font-size:8px;color:var(--muted)}
+.ai-daily-metrics{display:grid;gap:8px}.ai-daily-metrics>div{padding-bottom:8px;border-bottom:1px solid rgba(148,164,196,.1)}.ai-daily-metrics>div:last-child{padding:0;border:0}.ai-daily-metrics span,.ai-daily-metrics b,.ai-daily-metrics small{display:block}.ai-daily-metrics span{font-size:9px;color:var(--muted)}.ai-daily-metrics b{font-size:13px;margin:3px 0}.ai-daily-metrics small{font-size:8px;color:#8292aa}
+.ai-daily-cap-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid rgba(148,164,196,.12)}.ai-daily-cap-controls>label{font-size:10px;font-weight:800}.ai-daily-cap-controls>label small{display:block;font-size:8px;font-weight:500;color:var(--muted)}.ai-daily-cap-controls>div{display:flex;gap:7px}.ai-daily-cap-controls input{width:100px;padding:8px;font-size:11px}.ai-daily-cap-controls button{padding:9px 12px;font-size:10px}#aiDailyCapSaveStatus{font-size:9px;color:#8fe0c4}
+.ai-daily-disclaimer{font-size:9px;color:#8493aa;line-height:1.6}.ai-usage-day-row{display:grid;grid-template-columns:100px 1fr 38px;gap:9px;align-items:center;padding:7px 2px;border-bottom:1px solid rgba(148,164,196,.1)}.ai-usage-day-track{height:7px;background:#273248;border-radius:99px;overflow:hidden}.ai-usage-day-track span{display:block;height:100%;background:linear-gradient(90deg,#70e5dc,#a18aff)}.ai-inference-row{padding:10px 2px;border-bottom:1px solid rgba(148,164,196,.1)}.ai-inference-row-head,.ai-inference-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.ai-inference-row-head b,.ai-inference-row-head small{display:block}.ai-inference-row-head b{font-size:10px}.ai-inference-row-head small,.ai-inference-meta{font-size:8px;color:var(--muted)}
+@media(max-width:700px){.cf-neuron-summary-grid{grid-template-columns:1fr 1fr}.ai-daily-grid{grid-template-columns:1fr}.ai-daily-head{flex-direction:column}.ai-daily-cap-controls>div{width:100%}.ai-daily-cap-controls input{flex:1;width:auto}.ai-usage-day-row{grid-template-columns:76px 1fr 32px}}
+
 </style>
 </head>
 <body>
@@ -903,6 +920,7 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
      <article class="stat"><span>Last checked</span><strong id="cfCheckedAt" style="font-size:13px">—</strong></article>
     </div>
     <div id="cfCreditDetails" class="admin-audit-list"><div class="empty">Press Check now to retrieve billing data.</div></div>
+    <div id="cfNeuronSummary" class="cf-neuron-summary"><div class="empty">Check Cloudflare usage to load any reported Neurons data.</div></div>
     <div id="cfUsageServices" class="admin-audit-list"></div>
    </div>
    <div class="content-card ai-usage-panel">
@@ -916,6 +934,18 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
      <article class="stat"><span>External script jobs</span><strong id="aiUsageExternalJobs">—</strong></article>
      <article class="stat"><span>Failed jobs</span><strong id="aiUsageFailedJobs">—</strong></article>
     </div>
+    <section class="ai-daily-guard">
+     <div class="ai-daily-head"><div><span class="content-label">DAILY WORKERS AI SAFETY GUARD</span><h3>Today’s inference usage</h3><p>Counts actual Workers AI model calls. Resets daily at 00:00 UTC.</p></div><span class="ai-guard-state" id="aiDailyCapState">Checking limit…</span></div>
+     <div class="ai-daily-grid">
+      <div class="ai-daily-meter"><div class="ai-daily-meter-head"><strong><span id="aiDailyUsed">—</span><small> model requests</small></strong><span id="aiDailyRemaining">— remaining</span></div><div class="ai-daily-track" role="progressbar" aria-label="Daily AI model request cap" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="aiDailyProgress"><span id="aiDailyProgressFill"></span></div><p id="aiDailyCapHint">Loading daily request cap…</p><div class="ai-daily-breakdown"><span><b id="aiDailyCompleted">—</b><small>Completed</small></span><span><b id="aiDailyFailed">—</b><small>Failed</small></span><span><b id="aiDailyProcessing">—</b><small>Processing</small></span></div></div>
+      <div class="ai-daily-metrics"><div><span>Reported Neurons</span><b id="aiDailyNeurons">Not reported</b><small id="aiDailyNeuronNote">Not estimated from request counts</small></div><div><span>Input / output data</span><b id="aiDailyDataBytes">—</b><small>Bytes sent to and returned from model calls</small></div><div><span>Tokens reported by provider</span><b id="aiDailyTokens">—</b><small id="aiDailyTokenNote">Only when response includes token usage</small></div></div>
+     </div>
+     <div class="ai-daily-cap-controls"><label for="aiDailyCapInput">Internal daily model-request cap <small>5–500 requests · 0 disables this guard</small></label><div><input id="aiDailyCapInput" type="number" min="0" max="500" step="1" value="20"><button class="secondary" id="aiDailyCapSave" type="button">Save safety cap</button></div><span id="aiDailyCapSaveStatus" role="status" aria-live="polite"></span></div>
+     <p class="ai-daily-disclaimer">This extra request cap is not Cloudflare’s 10,000-Neuron allowance. Models have different costs. Actual Neurons are displayed only when provided by Cloudflare; billable usage may be delayed.</p>
+    </section>
+    <details class="ai-usage-details"><summary>Today by model and feature <span id="aiDailyModelCount">—</span></summary><div id="aiDailyModelBreakdown" class="ai-usage-breakdown"></div></details>
+    <details class="ai-usage-details"><summary>Last 7 days <span>UTC daily history</span></summary><div id="aiDailyHistory" class="ai-usage-breakdown"></div></details>
+    <details class="ai-usage-details"><summary>Detailed model-call log <span id="aiInferenceLogCount">—</span></summary><div id="aiInferenceLog" class="ai-usage-breakdown"><div class="empty">Detailed inference records will appear after new calls.</div></div></details>
     <div class="ai-usage-workload" id="aiUsageWorkload"><span>Voice characters: —</span><span>Image jobs: —</span><span>Audio analyzed: —</span><span>Active accounts: —</span></div>
     <div class="ai-usage-toolbar-secondary">
      <div><b>Member activity</b><small>Counts are generation jobs, not individual internal model retries.</small></div>
