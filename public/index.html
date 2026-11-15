@@ -2572,7 +2572,7 @@ $("ideaVaultList").addEventListener("click",event=>{
  if(button.dataset.ideaAction==="use"){
   const blueprint=creatorBlueprints[item.format]||creatorBlueprints["mini-doc"];
   $("topic").value=typeof item.prompt==="string"&&item.prompt?item.prompt:blueprint.prompt.replace(/\[YOUR TOPIC\]/g,item.title);
-  $("duration").value=String(blueprint.duration);$("style").value=blueprint.style;
+  $("duration").value=String(Number(item.duration)||blueprint.duration);$("style").value=blueprint.style;
   $("createNotice").style.color="var(--cyan)";$("createNotice").textContent="Idea loaded from your local vault. Review the prompt and save when ready.";
   navigateTo("create");$("topic").focus();
  }
@@ -2696,7 +2696,7 @@ $("saveStoryboardIdea").addEventListener("click",()=>{
  const notice=$("storyboardNotice");
  if(currentStoryboard.saved){notice.style.color="var(--cyan)";notice.textContent="This storyboard is already saved in your Idea Vault.";return;}
  const previous=ideaVaultItems,id=(globalThis.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+"-storyboard";
- ideaVaultItems=[...ideaVaultItems,{id,title:(currentStoryboard.topic+" — storyboard").slice(0,180),format:currentStoryboard.format,targetDate:"",status:"idea",createdAt:Date.now(),prompt:currentStoryboard.prompt,productionType:"storyboard"}];
+ ideaVaultItems=[...ideaVaultItems,{id,title:(currentStoryboard.topic+" — storyboard").slice(0,180),format:currentStoryboard.format,duration:currentStoryboard.duration,targetDate:"",status:"idea",createdAt:Date.now(),prompt:currentStoryboard.prompt,productionType:"storyboard"}];
  if(!saveIdeaVault()){ideaVaultItems=previous;notice.style.color="var(--red)";notice.textContent="Could not save. Browser storage may be full; export older ideas and try again.";return;}
  currentStoryboard.saved=true;$("saveStoryboardIdea").textContent="Saved to Idea Vault ✓";
  renderIdeaVault();notice.style.color="var(--cyan)";notice.textContent="Storyboard saved. Find it in Idea Vault and use it whenever you're ready.";
