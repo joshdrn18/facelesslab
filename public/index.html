@@ -773,6 +773,12 @@ input:disabled,select:disabled,textarea:disabled{opacity:.62;cursor:not-allowed}
  .caption-preview-card{grid-template-columns:74px minmax(0,1fr);gap:9px}
 }
 
+
+/* Subtitle reliability and render-time feedback */
+[id^="subtitle-result-"] .empty{padding:12px;border-color:rgba(161,138,255,.18);background:rgba(9,15,26,.55);text-align:left}
+[id^="subtitle-result-"] .caption-preview-card{box-shadow:0 8px 22px rgba(0,0,0,.12)}
+.editor-status[aria-live="polite"]{overflow-wrap:anywhere}
+
 </style>
 </head>
 <body>
@@ -1431,15 +1437,37 @@ function downloadSubtitles(projectId) {
  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 async function loadSavedSubtitles(projectId) {
- try {const data=await api("/api/projects/"+projectId+"/subtitles");if(data.subtitles)renderSubtitleResult(projectId,data.subtitles);}catch(error){console.warn("Could not load saved subtitles:",error.message);}
+ try {
+  const data=await api("/api/projects/"+projectId+"/subtitles");
+  if(Array.isArray(data.subtitles?.cues)&&data.subtitles.cues.length)renderSubtitleResult(projectId,data.subtitles);
+ }catch(error){console.warn("Could not load saved subtitles:",error.message);}
+}
+async function requestProjectSubtitles(projectId){
+ window.facelessSubtitleJobs=window.facelessSubtitleJobs||{};
+ if(window.facelessSubtitleJobs[projectId])return window.facelessSubtitleJobs[projectId];
+ const job=(async()=>{
+  const data=await api("/api/projects/"+projectId+"/subtitles",{method:"POST",body:"{}"});
+  const subtitles=data?.subtitles;
+  const validCues=Array.isArray(subtitles?.cues)?subtitles.cues.filter(c=>Number.isFinite(Number(c.start))&&Number.isFinite(Number(c.end))&&Number(c.end)>Number(c.start)&&String(c.text||"").trim()):[];
+  if(!validCues.length)throw new Error(data?.error||"The speech recognizer did not return usable caption timestamps. Retry subtitle generation.");
+  renderSubtitleResult(projectId,subtitles);
+  return subtitles;
+ })();
+ window.facelessSubtitleJobs[projectId]=job;
+ try{return await job;}
+ finally{if(window.facelessSubtitleJobs[projectId]===job)delete window.facelessSubtitleJobs[projectId];}
 }
 async function generateSubtitles(projectId,button) {
  const result=$("subtitle-result-"+projectId);
  button.disabled=true;button.textContent="Generating captions…";
  result.innerHTML='<div class="empty">Analyzing your saved voice-over and aligning captions to the spoken words…</div>';
- try {const data=await api("/api/projects/"+projectId+"/subtitles",{method:"POST",body:"{}"});renderSubtitleResult(projectId,data.subtitles);button.textContent="↻ Regenerate subtitles";}
- catch(error){result.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';button.textContent="↻ Retry subtitles";}
- finally{button.disabled=false;}
+ try {
+  await requestProjectSubtitles(projectId);
+  button.textContent="↻ Regenerate subtitles";
+ }catch(error){
+  result.innerHTML='<div class="empty">Subtitle generation failed: '+escapeHtml(error.message||error)+'</div>';
+  button.textContent="↻ Retry subtitles";
+ }finally{button.disabled=false;}
 }
 
 const visualObjectUrls = {};
@@ -1778,9 +1806,23 @@ async function renderProjectVideo(projectId,button) {
     throw new Error("Scene "+sceneNumber+" visual generation failed: "+visualMessage);
    }
   }
-  const subtitleData=subtitleResponse.subtitles||window.facelessSubtitles?.[projectId];
+  let subtitleData=subtitleResponse.subtitles||window.facelessSubtitles?.[projectId];
   const captionMode=$("editor-captions-"+projectId)?.value||"burn";
-  if(captionMode!=="off"&&!subtitleData?.cues?.length)throw new Error("Generate subtitles first, or choose No subtitles.");
+  if(captionMode!=="off"&&(!Array.isArray(subtitleData?.cues)||!subtitleData.cues.length)){
+   status.textContent="No saved captions found. Generating subtitles from the saved voice-over…";
+   const subtitleButton=$("subtitle-btn-"+projectId),restoreSubtitleButton=!!subtitleButton&&!subtitleButton.disabled;
+   if(restoreSubtitleButton){subtitleButton.disabled=true;subtitleButton.textContent="Generating captions…";}
+   try{
+    subtitleData=await requestProjectSubtitles(projectId);
+    if(restoreSubtitleButton)subtitleButton.textContent="↻ Regenerate subtitles";
+   }catch(subtitleError){
+    const message=String(subtitleError?.message||subtitleError);
+    throw new Error("Automatic subtitle generation failed: "+message);
+   }finally{
+    if(restoreSubtitleButton)subtitleButton.disabled=false;
+   }
+  }
+  if(captionMode!=="off"&&(!Array.isArray(subtitleData?.cues)||!subtitleData.cues.length))throw new Error("No usable subtitle cues are available. Generate subtitles again or choose No subtitles.");
   const voiceBlob=await voiceResponse.blob();
   if(!voiceBlob.size)throw new Error("The saved voice-over file is empty. Regenerate the voice-over before rendering.");
   const voiceFile=(voiceResponse.headers.get("content-type")||"").includes("wav")?"voice.wav":"voice.mp3";
