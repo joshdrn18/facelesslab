@@ -1208,7 +1208,7 @@ async function handle(request, env) {
       await env.DB.prepare("INSERT INTO production_schedules (id,user_id,connection_id,topic,style,duration_seconds,platform,privacy,production_at,publish_at,review_required,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,'scheduled')")
         .bind(id,user.id,connection.id,topic,style,duration,platform,privacy,productionAt,publishAt,reviewRequired).run();
       try{
-        await env.JOBS.send({type:"scheduled_dispatch",kind:"production",schedule_id:id,due_at:productionAt},{delaySeconds:Math.min(86400,Math.max(1,productionAt-now))});
+        await env.JOBS.send({type:"scheduled_dispatch",kind:"production",schedule_id:id,due_at:productionAt},{delaySeconds:Math.min(72000,Math.max(1,productionAt-now))});
       }catch(error){
         const detail=String(error?.message||error).slice(0,350);
         await env.DB.prepare("UPDATE production_schedules SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,id).run();
@@ -1260,7 +1260,7 @@ async function handle(request, env) {
           .bind(backupId,jobId,nextStatus,id,user.id).run();
         await env.DB.prepare("UPDATE projects SET status='completed',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(schedule.project_id,user.id).run();
         if(autoPublish){
-          try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:jobId,due_at:Number(schedule.publish_at)},{delaySeconds:Math.min(86400,Math.max(1,Number(schedule.publish_at)-Math.floor(Date.now()/1000))) });}
+          try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:jobId,due_at:Number(schedule.publish_at)},{delaySeconds:Math.min(72000,Math.max(1,Number(schedule.publish_at)-Math.floor(Date.now()/1000))) });}
           catch(error){
             const detail=String(error?.message||error).slice(0,350);
             await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,jobId).run();
@@ -1275,7 +1275,7 @@ async function handle(request, env) {
         await env.DB.prepare("UPDATE publish_jobs SET status='queued',scheduled_at=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=? AND status='draft'")
           .bind(schedule.publish_at,schedule.publish_job_id,user.id).run();
         await env.DB.prepare("UPDATE production_schedules SET status='publish_queued',updated_at=unixepoch() WHERE id=? AND user_id=? AND status='awaiting_review'").bind(id,user.id).run();
-        try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:schedule.publish_job_id,due_at:Number(schedule.publish_at)},{delaySeconds:Math.min(86400,Math.max(1,Number(schedule.publish_at)-Math.floor(Date.now()/1000)))});}
+        try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:schedule.publish_job_id,due_at:Number(schedule.publish_at)},{delaySeconds:Math.min(72000,Math.max(1,Number(schedule.publish_at)-Math.floor(Date.now()/1000)))});}
         catch(error){
           const detail=String(error?.message||error).slice(0,350);
           await env.DB.prepare("UPDATE publish_jobs SET status='draft',scheduled_at=NULL,error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,schedule.publish_job_id).run();
@@ -1372,7 +1372,7 @@ async function handle(request, env) {
       const initialStatus=scheduledAt?"queued":"draft";
       await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,tags_json,privacy,scheduled_at,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,JSON.stringify(tags),String(body?.privacy||"private"),scheduledAt,initialStatus).run();
       if(scheduledAt){
-        try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:id,due_at:scheduledAt},{delaySeconds:Math.min(86400,Math.max(1,scheduledAt-Math.floor(Date.now()/1000)))});}
+        try{await env.JOBS.send({type:"scheduled_dispatch",kind:"publish_job",job_id:id,due_at:scheduledAt},{delaySeconds:Math.min(72000,Math.max(1,scheduledAt-Math.floor(Date.now()/1000)))});}
         catch(error){
           const detail=String(error?.message||error).slice(0,350);
           await env.DB.prepare("UPDATE publish_jobs SET status='failed',scheduled_at=NULL,error_message=?,updated_at=unixepoch() WHERE id=?").bind(detail,id).run();
@@ -2065,7 +2065,7 @@ async function processScheduledDispatchMessage(message,env){
   if(!["production","publish_job"].includes(body.kind)||!dueAt){message.ack();return;}
   if(dueAt>now){
     try{
-      await env.JOBS.send(body,{delaySeconds:Math.min(86400,Math.max(1,dueAt-now))});
+      await env.JOBS.send(body,{delaySeconds:Math.min(72000,Math.max(1,dueAt-now))});
       message.ack();
     }catch(error){
       console.error(JSON.stringify({event:"scheduled_dispatch_reschedule_failed",kind:body.kind,error:String(error?.message||error).slice(0,240)}));
