@@ -1259,8 +1259,13 @@ async function handle(request, env) {
       const key="users/"+user.id+"/rendered-backups/"+backupId+".mp4",object=await env.MEDIA.head(key);
       if(!object)return json({ok:false,error:"Cloud video not found. Upload or render a video backup first."},404);
       const id=crypto.randomUUID();
-      await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,tags_json,privacy,status) VALUES (?,?,?,?,?,?,?,?,?,?,'draft')").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,JSON.stringify(tags),String(body?.privacy||"private")).run();
-      return json({ok:true,job:{id,backup_id:backupId,platform,title,status:"draft"}},201);
+      const scheduledAtRaw=body?.scheduled_at;
+      const scheduledAt=scheduledAtRaw?Math.floor(new Date(scheduledAtRaw).getTime()/1000):null;
+      if(scheduledAtRaw&&(!Number.isFinite(scheduledAt)||scheduledAt<=Math.floor(Date.now()/1000)))return json({ok:false,error:"Choose a future date and time for scheduled publishing."},400);
+      const initialStatus=scheduledAt?"queued":"draft";
+      await env.DB.prepare("INSERT INTO publish_jobs (id,user_id,backup_id,platform,connection_id,title,description,hashtags,tags_json,privacy,scheduled_at,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(id,user.id,backupId,platform,connection.id,title,description,hashtags,JSON.stringify(tags),String(body?.privacy||"private"),scheduledAt,initialStatus).run();
+      if(scheduledAt)return json({ok:true,job:{id,backup_id:backupId,platform,title,status:initialStatus,scheduled_at:scheduledAt}},201);
+      return json({ok:true,job:{id,backup_id:backupId,platform,title,status:initialStatus}},201);
     }
     const youtubeStatusMatch=path.match(new RegExp("^/api/publishing/jobs/([a-f0-9-]+)/refresh-status$","i"));
     if(youtubeStatusMatch&&method==="POST"){
@@ -1928,6 +1933,25 @@ async function runScheduledMaintenance(env, scheduledTime) {
     "UPDATE generations SET status='failed', error_message=COALESCE(error_message, 'Job timed out before completion. Please retry this step.'), updated_at=? WHERE status='processing' AND updated_at < ?"
   ).bind(now, staleBefore).run();
 
+  // Dispatch scheduled publishing jobs once their timestamp is due.
+  const dueJobs = await env.DB.prepare(
+    "SELECT id FROM publish_jobs WHERE status='queued' AND scheduled_at IS NOT NULL AND scheduled_at<=? ORDER BY scheduled_at ASC LIMIT 10"
+  ).bind(now).all();
+  let dispatchedSchedules=0;
+  for(const job of dueJobs.results||[]){
+    const claim=await env.DB.prepare(
+      "UPDATE publish_jobs SET scheduled_at=NULL,updated_at=? WHERE id=? AND status='queued' AND scheduled_at IS NOT NULL AND scheduled_at<=?"
+    ).bind(now,job.id,now).run();
+    if(Number(claim.meta?.changes||0)!==1)continue;
+    try{
+      await env.JOBS.send({type:"publish_video",job_id:job.id});
+      dispatchedSchedules++;
+    }catch(error){
+      await env.DB.prepare("UPDATE publish_jobs SET scheduled_at=?,error_message=?,updated_at=? WHERE id=? AND status='queued'")
+        .bind(now+60,String(error?.message||error).slice(0,400),now,job.id).run();
+    }
+  }
+
   // Remove expired session hashes; active sessions are unaffected.
   const expiredSessions = await env.DB.prepare(
     "DELETE FROM user_sessions WHERE expires_at <= ?"
@@ -1937,7 +1961,8 @@ async function runScheduledMaintenance(env, scheduledTime) {
     event: "scheduled_maintenance_completed",
     scheduled_at: new Date(scheduledTime || now * 1000).toISOString(),
     stale_jobs_recovered: Number(staleJobs.meta?.changes || 0),
-    expired_sessions_removed: Number(expiredSessions.meta?.changes || 0)
+    expired_sessions_removed: Number(expiredSessions.meta?.changes || 0),
+    scheduled_publish_jobs_dispatched: dispatchedSchedules
   }));
 }
 
