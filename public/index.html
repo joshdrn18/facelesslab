@@ -1195,13 +1195,13 @@ textarea{line-height:1.65}
      <article class="stat"><span>Failed jobs</span><strong id="aiUsageFailedJobs">—</strong></article>
     </div>
     <section class="ai-daily-guard">
-     <div class="ai-daily-head"><div><span class="content-label">DAILY WORKERS AI SAFETY GUARD</span><h3>Today’s inference usage</h3><p>Counts actual Workers AI model calls. Resets daily at 00:00 UTC.</p></div><span class="ai-guard-state" id="aiDailyCapState">Checking limit…</span></div>
+     <div class="ai-daily-head"><div><span class="content-label">MEMBER WORKERS AI SAFETY GUARD</span><h3>Non-admin member request cap</h3><p>Combined request cap for all non-admin accounts. Admin accounts bypass this app-level cap.</p></div><span class="ai-guard-state" id="aiDailyCapState">Checking limit…</span></div>
      <div class="ai-daily-grid">
-      <div class="ai-daily-meter"><div class="ai-daily-meter-head"><strong><span id="aiDailyUsed">—</span><small> model requests</small></strong><span id="aiDailyRemaining">— remaining</span></div><div class="ai-daily-track" role="progressbar" aria-label="Daily AI model request cap" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="aiDailyProgress"><span id="aiDailyProgressFill"></span></div><p id="aiDailyCapHint">Loading daily request cap…</p><div class="ai-daily-breakdown"><span><b id="aiDailyCompleted">—</b><small>Completed</small></span><span><b id="aiDailyFailed">—</b><small>Failed</small></span><span><b id="aiDailyProcessing">—</b><small>Processing</small></span></div></div>
+      <div class="ai-daily-meter"><div class="ai-daily-meter-head"><strong><span id="aiDailyUsed">—</span><small> member requests</small></strong><span id="aiDailyRemaining">— remaining</span></div><div class="ai-daily-track" role="progressbar" aria-label="Daily non-admin member AI model request cap" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="aiDailyProgress"><span id="aiDailyProgressFill"></span></div><p id="aiDailyCapHint">Loading daily request cap…</p><div class="ai-daily-breakdown"><span><b id="aiDailyCompleted">—</b><small>Completed</small></span><span><b id="aiDailyFailed">—</b><small>Failed</small></span><span><b id="aiDailyProcessing">—</b><small>Processing</small></span></div></div>
       <div class="ai-daily-metrics"><div><span>Workers AI Neurons today</span><b id="aiDailyNeurons">Not reported</b><small id="aiDailyNeuronNote">Not estimated from request counts</small><div class="ai-neuron-track" role="progressbar" aria-label="Daily Workers AI Neuron allowance" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="aiDailyNeuronProgress"><span id="aiDailyNeuronProgressFill"></span></div></div><div><span>Input / output data</span><b id="aiDailyDataBytes">—</b><small>Bytes sent to and returned from model calls</small></div><div><span>Tokens reported by provider</span><b id="aiDailyTokens">—</b><small id="aiDailyTokenNote">Only when response includes token usage</small></div></div>
      </div>
-     <div class="ai-daily-cap-controls"><label for="aiDailyCapInput">Internal daily model-request cap <small>5–500 requests · 0 disables this guard</small></label><div><input id="aiDailyCapInput" type="number" min="0" max="500" step="1" value="20"><button class="secondary" id="aiDailyCapSave" type="button">Save safety cap</button></div><span id="aiDailyCapSaveStatus" role="status" aria-live="polite"></span></div>
-     <p class="ai-daily-disclaimer">This extra request cap is not Cloudflare’s 10,000-Neuron allowance. Models have different costs. Actual Neurons are displayed only when provided by Cloudflare; billable usage may be delayed.</p>
+     <div class="ai-daily-cap-controls"><label for="aiDailyCapInput">Daily non-admin member request cap <small>5–500 requests · 0 disables the member cap</small></label><div><input id="aiDailyCapInput" type="number" min="0" max="500" step="1" value="40"><button class="secondary" id="aiDailyCapSave" type="button">Save safety cap</button></div><span id="aiDailyCapSaveStatus" role="status" aria-live="polite"></span></div>
+     <p class="ai-daily-disclaimer">Admin accounts with role=admin are exempt from this app-level request cap. Every call still uses the Cloudflare account Neuron allowance, model rate limits, and plan limits. Workers AI Free includes 10,000 Neurons per day; usage beyond that requires Workers Paid. Neuron and billing reports can be delayed.</p>
     </section>
     <details class="ai-usage-details"><summary>Today by model and feature <span id="aiDailyModelCount">—</span></summary><div id="aiDailyModelBreakdown" class="ai-usage-breakdown"></div></details>
     <details class="ai-usage-details"><summary>Last 7 days <span>UTC daily history</span></summary><div id="aiDailyHistory" class="ai-usage-breakdown"></div></details>
@@ -1485,7 +1485,7 @@ async function refreshAdminAiUsage(){
   const audioMb=(Number(t.subtitle_audio_bytes||0)/1048576).toFixed(2);
   $("aiUsageWorkload").innerHTML='<span><b>'+number(t.tts_characters)+'</b> voice characters</span><span><b>'+number(Number(t.scene_image_jobs||0)+Number(t.character_image_jobs||0))+'</b> image jobs</span><span><b>'+audioMb+' MB</b> audio analyzed</span><span><b>'+number(t.active_users)+'</b> active accounts</span>';
 
-  const today=data.today||{},settings=data.settings||{},cap=Number(today.cap??settings.daily_request_limit??20),used=Math.max(Number(today.guard_requests??today.requests??0),Number(aiAnalytics.success?aiToday.requests||0:0)),warnAt=Number(today.warning_at??Math.ceil(cap*.8));
+  const today=data.today||{},settings=data.settings||{},cap=Number(today.cap??settings.daily_request_limit??40),used=Math.max(0,Number(today.guard_requests??0)),warnAt=Number(today.warning_at??Math.ceil(cap*.8));
   const pct=cap>0?Math.min(100,Math.round(used/cap*100)):0,remaining=cap>0?Math.max(0,cap-used):null;
   const warn=cap>0&&used>=warnAt,limited=cap>0&&used>=cap;
   $("aiDailyUsed").textContent=number(used);
@@ -1497,8 +1497,8 @@ async function refreshAdminAiUsage(){
   $("aiDailyProcessing").textContent=number(today.processing);
   const capState=$("aiDailyCapState");
   capState.dataset.state=limited?"limit":warn?"warning":"safe";
-  capState.textContent=cap===0?"CAP DISABLED":limited?"REQUEST CAP REACHED":warn?"APPROACHING CAP":"WITHIN INTERNAL CAP";
-  $("aiDailyCapHint").textContent=cap===0?"Internal request cap is disabled. Cloudflare's account-level daily quota still applies.":number(used)+" of "+number(cap)+" model requests used ("+pct+"%). "+number(remaining)+" requests remaining before FacelessLab pauses new AI calls.";
+  capState.textContent=cap===0?"MEMBER CAP DISABLED":limited?"MEMBER CAP REACHED":warn?"APPROACHING MEMBER CAP":"MEMBER CAP AVAILABLE";
+  $("aiDailyCapHint").textContent=cap===0?"The non-admin member cap is disabled. Admin accounts are always exempt. Cloudflare's actual account limits still apply.":number(used)+" of "+number(cap)+" non-admin member requests used ("+pct+"%). "+number(remaining)+" member requests remain today. Admin accounts are exempt from this app cap.";
   const neuronUsed=aiAnalytics.success?Number(aiToday.neurons||0):null,neuronAllowance=Number(aiToday.allowance_neurons||10000),neuronPct=neuronUsed===null?0:Math.min(100,neuronAllowance?neuronUsed/neuronAllowance*100:0),neuronRemaining=neuronUsed===null?null:Math.max(0,neuronAllowance-neuronUsed);
   $("aiDailyNeurons").textContent=neuronUsed===null?"Not available":number(neuronUsed)+" / "+number(neuronAllowance);
   $("aiDailyNeuronNote").textContent=neuronUsed===null?(aiAnalytics.error||"Requires Cloudflare Account Analytics:Read permission"):(number(neuronRemaining)+" Neurons remaining · "+neuronPct.toFixed(2)+"% used today");
@@ -1608,11 +1608,11 @@ $("adminAiUsageRefresh").addEventListener("click",async()=>{await refreshCloudfl
 
 $("aiDailyCapSave").addEventListener("click",async()=>{
  const button=$("aiDailyCapSave"),status=$("aiDailyCapSaveStatus"),value=Number($("aiDailyCapInput").value);
- if(!Number.isSafeInteger(value)||(value!==0&&(value<5||value>500))){status.textContent="Use 0 to disable, or choose 5–500.";return;}
+ if(!Number.isSafeInteger(value)||(value!==0&&(value<5||value>500))){status.textContent="Use 0 to disable the member cap, or choose 5–500.";return;}
  button.disabled=true;status.textContent="Saving safety cap…";
  try{
   const saved=await api("/api/admin/ai-usage-settings",{method:"POST",body:JSON.stringify({daily_request_limit:value})});
-  status.textContent="Saved · "+(saved.settings.daily_request_limit===0?"guard disabled":saved.settings.daily_request_limit+" requests/day");
+  status.textContent="Saved · "+(saved.settings.daily_request_limit===0?"member cap disabled":saved.settings.daily_request_limit+" member requests/day");
   await refreshAdminAiUsage();
  }catch(error){status.textContent=error.message||"Could not save safety cap.";}
  finally{button.disabled=false;}
