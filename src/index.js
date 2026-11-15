@@ -502,8 +502,15 @@ async function processPublishQueueMessage(message,env) {
   if(job.platform==="youtube"){
    if(typeof FixedLengthStream!=="function")throw new Error("Cloudflare fixed-length upload streaming is unavailable in this Worker runtime.");
    if(!object.body)throw new Error("Cloud backup has no readable MP4 stream.");
-   const tags=(String(job.hashtags||"").match(/#[\p{L}\p{N}_]+/gu)||[]).map(x=>x.slice(1)).slice(0,30);
-   const description=String(job.description||"")+(job.hashtags?"\n\n"+String(job.hashtags):"");
+   const tagCandidates=[...new Set((String(job.hashtags||"").match(/#[\p{L}\p{N}_]+/gu)||[]).map(x=>x.slice(1)))];
+   const tags=[];let tagBytes=0;
+   for(const tag of tagCandidates){const cost=encoder.encode(tag).byteLength+(tags.length?1:0);if(tags.length>=30||tagBytes+cost>500)break;tags.push(tag);tagBytes+=cost;}
+   let description=String(job.description||"")+(job.hashtags?"\n\n"+String(job.hashtags):"");
+   if(encoder.encode(description).byteLength>5000){
+    let clipped="",used=0;
+    for(const character of description){const size=encoder.encode(character).byteLength;if(used+size>5000)break;clipped+=character;used+=size;}
+    description=clipped;
+   }
    const snippet={title:String(job.title||"FacelessLab video").slice(0,100),description,categoryId:"24"};
    if(tags.length)snippet.tags=tags;
    const metadata={snippet,status:{privacyStatus:["public","unlisted","private"].includes(job.privacy)?job.privacy:"private"}};
@@ -586,7 +593,7 @@ async function processYouTubeStatusMessage(message,env) {
   await env.DB.prepare("UPDATE publish_jobs SET status='published',error_message=NULL,updated_at=unixepoch() WHERE id=?").bind(id).run();
   return;
  }
- if(["failed","rejected","deleted"].includes(uploadStatus)||["failed","rejected","terminated"].includes(processingStatus)){
+ if(["failed","rejected","deleted"].includes(uploadStatus)||processingStatus==="failed"||processingStatus==="rejected"){
   const reason=video.status?.rejectionReason||video.status?.failureReason||video.processingDetails?.processingFailureReason||uploadStatus||processingStatus||"unknown";
   await env.DB.prepare("UPDATE publish_jobs SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=?")
    .bind("YouTube could not process this upload: "+String(reason).slice(0,400),id).run();
