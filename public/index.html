@@ -2510,41 +2510,78 @@ async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=
  const scale=Math.max(width/bitmap.width,height/bitmap.height),w=bitmap.width*scale,h=bitmap.height*scale;
  ctx.fillStyle="#080b12";ctx.fillRect(0,0,width,height);
  ctx.drawImage(bitmap,(width-w)/2,(height-h)/2,w,h);bitmap.close();
- const text=String(caption||"").replace(/\s+/g," ").trim();
+ const languageLines=String(caption||"").split(/\n+/).map(value=>value.trim()).filter(Boolean).slice(0,2);
  const design=["creator","classic","minimal","neon"].includes(captionOptions.design)?captionOptions.design:"creator";
  const position=["bottom","center","top"].includes(captionOptions.position)?captionOptions.position:"bottom";
  const size=["small","medium","large"].includes(captionOptions.size)?captionOptions.size:"medium";
- if(text){
-  const fontScale={small:0.04,medium:0.047,large:0.055}[size];
-  let fontSize=Math.max(20,Math.round(width*fontScale)),maxWidth=width*0.88,lineHeight;
+ if(languageLines.length){
+  const baseFont=Math.max(20,Math.round(width*({small:0.04,medium:0.047,large:0.055}[size])));
+  const maxWidth=width*0.88;
   const stopWords=new Set(["the","and","for","that","with","this","from","have","your","you","are","was","were","they","them","then","than","into","onto","about","just","like","what","when","where","which","while","will","would","could","should","there","their","here","over","under","also","only","very","more","some","been","being","it's","that's"]);
   const impactWords=new Set(["secret","never","always","danger","warning","mistake","truth","powerful","hidden","shocking","incredible","impossible","survive","survived","destroy","destroyed","instantly","suddenly","finally","strongest","fastest","biggest","worst","best","real","proof","million","billion","free","wrong","right","fear","death","life","win","lost","found"]);
-  const tokens=text.split(/\s+/).filter(Boolean);
-  const ranked=tokens.map((word,index)=>({word,index,clean:word.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9']+$/g,"")})).filter(item=>item.clean&&!stopWords.has(item.clean));
-  const chosen=ranked.find(item=>impactWords.has(item.clean))||ranked.filter(item=>item.clean.length>=4).sort((a,b)=>b.clean.length-a.clean.length)[0]||ranked[0];
-  const wrap=()=>{
-   ctx.font="800 "+fontSize+"px Arial, sans-serif";lineHeight=Math.round(fontSize*1.22);
-   const lines=[];let line=[];
-   for(const token of tokens){const test=line.concat(token),testWidth=test.reduce((sum,w,i)=>sum+ctx.measureText(w).width+(i?fontSize*0.28:0),0);if(testWidth>maxWidth&&line.length){lines.push(line);line=[token];}else line=test;}
-   if(line.length)lines.push(line);
-   return lines;
-  };
-  let lines=wrap();
-  while(lines.length>3&&fontSize>Math.max(15,Math.round(width*0.026))){fontSize-=1;lines=wrap();}
-  const shown=lines,measureLine=items=>items.reduce((sum,w,i)=>{const emphasized=design!=="classic"&&chosen&&w===chosen.word;ctx.font=(emphasized?"900 ":"800 ")+(emphasized?fontSize*1.08:fontSize)+"px Arial, sans-serif";return sum+ctx.measureText(w).width+(i?fontSize*0.28:0);},0);
-  const boxHeight=shown.length*lineHeight+Math.round(fontSize*0.72),boxWidth=Math.min(width*0.94,Math.max(...shown.map(measureLine))+fontSize*0.9);
-  const x=(width-boxWidth)/2,y=position==="top"?Math.max(Math.round(height*0.07),Math.round(height*0.1)):position==="center"?Math.round((height-boxHeight)/2):Math.max(Math.round(height*0.07),height-Math.round(height*0.13)-boxHeight);
+  const blocks=languageLines.map((value,index)=>{
+   let fontSize=index===0?baseFont:Math.max(15,Math.round(baseFont*0.78));
+   const tokens=value.split(/\s+/).filter(Boolean);
+   const wrap=()=>{
+    ctx.font=(index===0?"850 ":"750 ")+fontSize+"px Arial, sans-serif";
+    const lines=[];let line=[];
+    for(const token of tokens){
+     const test=line.concat(token),measured=test.reduce((sum,word,i)=>sum+ctx.measureText(word).width+(i?fontSize*0.28:0),0);
+     if(measured>maxWidth&&line.length){lines.push(line);line=[token];}else line=test;
+    }
+    if(line.length)lines.push(line);
+    return lines;
+   };
+   let lines=wrap();
+   while(lines.length>2&&fontSize>Math.max(14,Math.round(baseFont*0.62))){fontSize-=1;lines=wrap();}
+   const ranked=tokens.map((word,index)=>({word,index,clean:word.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9']+$/g,"")})).filter(item=>item.clean&&!stopWords.has(item.clean));
+   const chosen=index===0?(ranked.find(item=>impactWords.has(item.clean))||ranked.filter(item=>item.clean.length>=4).sort((a,b)=>b.clean.length-a.clean.length)[0]||ranked[0]):null;
+   return {lines,fontSize,lineHeight:Math.round(fontSize*1.2),chosen,index};
+  });
+  const lineGap=blocks.length>1?Math.round(baseFont*0.3):0,pad=Math.round(baseFont*0.42);
+  const textHeight=blocks.reduce((sum,block)=>sum+block.lines.length*block.lineHeight,0)+lineGap;
+  const boxHeight=textHeight+pad*2;
+  const lineWidths=blocks.map(block=>Math.max(...block.lines.map(items=>{
+   ctx.font="850 "+block.fontSize+"px Arial, sans-serif";
+   return items.reduce((sum,word,index)=>sum+ctx.measureText(word).width+(index?block.fontSize*0.28:0),0);
+  })));
+  const boxWidth=Math.min(width*0.94,Math.max(...lineWidths)+pad*2);
+  const x=(width-boxWidth)/2;
+  const y=position==="top"?Math.max(Math.round(height*0.07),Math.round(height*0.1)):position==="center"?Math.round((height-boxHeight)/2):Math.max(Math.round(height*0.07),height-Math.round(height*0.13)-boxHeight);
   if(design!=="minimal"){
-   ctx.fillStyle=design==="classic"?"rgba(0,0,0,.8)":"rgba(4,7,14,0.84)";ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,design==="classic"?Math.round(fontSize*.08):Math.round(fontSize*0.24));ctx.fill();
+   ctx.fillStyle=design==="classic"?"rgba(0,0,0,.82)":"rgba(4,7,14,.86)";
+   ctx.beginPath();ctx.roundRect(x,y,boxWidth,boxHeight,design==="classic"?Math.round(baseFont*.08):Math.round(baseFont*.24));ctx.fill();
    if(design==="neon"){ctx.strokeStyle="rgba(112,229,220,.9)";ctx.lineWidth=Math.max(1,width*.002);ctx.stroke();}
   }
-  ctx.textAlign="left";ctx.textBaseline="middle";ctx.lineJoin="round";ctx.lineWidth=Math.max(2,width*0.003);ctx.strokeStyle="rgba(0,0,0,0.98)";
-  shown.forEach((items,i)=>{const ty=y+boxHeight/2+(i-(shown.length-1)/2)*lineHeight;let cursor=(width-measureLine(items))/2;items.forEach(word=>{const isHighlight=design!=="classic"&&chosen&&word===chosen.word;const size=isHighlight?fontSize*1.08:fontSize;ctx.font=(isHighlight?"900 ":"800 ")+size+"px Arial, sans-serif";const wordWidth=ctx.measureText(word).width;ctx.fillStyle=isHighlight?(design==="neon"?"#70e5dc":"#facc15"):"#ffffff";ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=3;ctx.strokeText(word,cursor,ty);ctx.fillText(word,cursor,ty);ctx.shadowBlur=0;cursor+=wordWidth+fontSize*0.28;});});
+  ctx.textAlign="left";ctx.textBaseline="middle";ctx.lineJoin="round";ctx.lineWidth=Math.max(2,width*.003);ctx.strokeStyle="rgba(0,0,0,.98)";
+  let yCursor=y+pad;
+  blocks.forEach(block=>{
+   block.lines.forEach(items=>{
+    const measured=items.reduce((sum,word,index)=>{
+     const emphasized=block.index===0&&block.chosen&&word===block.chosen.word;
+     ctx.font=(emphasized?"900 ":"850 ")+(emphasized?block.fontSize*1.06:block.fontSize)+"px Arial, sans-serif";
+     return sum+ctx.measureText(word).width+(index?block.fontSize*0.28:0);
+    },0);
+    let xCursor=(width-measured)/2;
+    items.forEach(word=>{
+     const emphasized=block.index===0&&block.chosen&&word===block.chosen.word;
+     const wordSize=emphasized?block.fontSize*1.06:block.fontSize;
+     ctx.font=(emphasized?"900 ":"850 ")+wordSize+"px Arial, sans-serif";
+     const wordWidth=ctx.measureText(word).width;
+     ctx.fillStyle=emphasized?(design==="neon"?"#70e5dc":"#facc15"):(block.index===0?"#ffffff":"#c9def2");
+     ctx.shadowColor="rgba(0,0,0,.8)";ctx.shadowBlur=3;
+     ctx.strokeText(word,xCursor,yCursor+block.lineHeight/2);
+     ctx.fillText(word,xCursor,yCursor+block.lineHeight/2);
+     ctx.shadowBlur=0;xCursor+=wordWidth+block.fontSize*0.28;
+    });
+    yCursor+=block.lineHeight;
+   });
+   if(block.index===0&&blocks.length>1)yCursor+=lineGap;
+  });
  }
  if(watermarkEnabled){
   const label="FacelessLab",fontSize=Math.max(12,Math.round(width*0.022)),pad=Math.round(width*0.034);
-  ctx.save();
-  ctx.font="700 "+fontSize+"px Arial, sans-serif";
+  ctx.save();ctx.font="700 "+fontSize+"px Arial, sans-serif";
   const iconSize=Math.round(fontSize*1.22),gap=Math.round(fontSize*0.48),innerPad=Math.round(fontSize*0.72);
   const textWidth=ctx.measureText(label).width,badgeWidth=innerPad*2+iconSize+gap+textWidth,badgeHeight=Math.round(fontSize*2.05);
   const x=width-pad-badgeWidth,y=pad;
@@ -2558,7 +2595,7 @@ async function makeCaptionFrame(imageBlob,caption,width,height,watermarkEnabled=
   ctx.font="700 "+fontSize+"px Arial, sans-serif";ctx.textAlign="left";ctx.textBaseline="middle";ctx.fillStyle="rgba(255,255,255,.96)";ctx.fillText(label,ix+iconSize+gap,y+badgeHeight/2);
   ctx.restore();
  }
- const blob=await new Promise((resolve,reject)=>canvas.toBlob(v=>v?resolve(v):reject(new Error("Could not create caption frame.")),"image/jpeg",0.92));
+ const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("Could not create caption frame.")),"image/jpeg",0.92));
  return new Uint8Array(await blob.arrayBuffer());
 }
 function setEditorProgress(projectId,value){
@@ -2601,6 +2638,7 @@ async function renderProjectVideo(projectId,button) {
   }
   let subtitleData=subtitleResponse.subtitles||window.facelessSubtitles?.[projectId];
   const captionMode=$("editor-captions-"+projectId)?.value||"burn";
+  const subtitleLanguage=$("editor-subtitle-language-"+projectId)?.value||"bilingual";
   if(captionMode!=="off"&&(!Array.isArray(subtitleData?.cues)||!subtitleData.cues.length)){
    status.textContent="No saved captions found. Generating subtitles from the saved voice-over…";
    const subtitleButton=$("subtitle-btn-"+projectId),restoreSubtitleButton=!!subtitleButton&&!subtitleButton.disabled;
@@ -2616,6 +2654,13 @@ async function renderProjectVideo(projectId,button) {
    }
   }
   if(captionMode!=="off"&&(!Array.isArray(subtitleData?.cues)||!subtitleData.cues.length))throw new Error("No usable subtitle cues are available. Generate subtitles again or choose No subtitles.");
+  if(captionMode!=="off"&&subtitleLanguage!=="en"&&(subtitleData?.cues||[]).some(cue=>!String(cue.text_id||"").trim())){
+   status.textContent="Translating captions to Bahasa Indonesia without changing the original timestamps…";
+   const translation=await api("/api/projects/"+projectId+"/subtitles",{method:"POST",body:JSON.stringify({action:"translate"}),timeoutMs:90000});
+   subtitleData=translation.subtitles;
+   window.facelessSubtitles=window.facelessSubtitles||{};
+   window.facelessSubtitles[projectId]=JSON.parse(JSON.stringify(subtitleData));
+  }
   const voiceBlob=await voiceResponse.blob();
   if(!voiceBlob.size)throw new Error("The saved voice-over file is empty. Regenerate the voice-over before rendering.");
   const voiceFile=(voiceResponse.headers.get("content-type")||"").includes("wav")?"voice.wav":"voice.mp3";
@@ -2636,9 +2681,12 @@ async function renderProjectVideo(projectId,button) {
   const quality=Number($("editor-quality-"+projectId)?.value)||720,frameWidth=quality===480?480:720,frameHeight=quality===480?854:1280;
   const captionOptions={design:$("editor-caption-design-"+projectId)?.value||"creator",position:$("editor-caption-position-"+projectId)?.value||"bottom",size:$("editor-caption-size-"+projectId)?.value||"medium"};
   const addBrandWatermark=currentUser?.role!=="admin";
-  const rawCues=(subtitleData?.cues||[]).map(c=>({start:Number(c.start),end:Number(c.end),text:String(c.text||"").replace(/\s+/g," ").trim()}))
-   .filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start&&c.text)
-   .sort((a,b)=>a.start-b.start);
+  const rawCues=(subtitleData?.cues||[]).map(c=>{
+   const english=String(c.text||"").replace(/\s+/g," ").trim();
+   const indonesian=String(c.text_id||"").replace(/\s+/g," ").trim();
+   const text=subtitleLanguage==="en"?english:(subtitleLanguage==="id"?(indonesian||english):[english,indonesian].filter(Boolean).join("\n"));
+   return {start:Number(c.start),end:Number(c.end),text};
+  }).filter(c=>Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start&&c.text).sort((a,b)=>a.start-b.start);
   const cues=rawCues.map(c=>({start:Math.max(0,Math.min(audioDuration,c.start)),end:Math.max(0,Math.min(audioDuration,c.end)),text:c.text}))
    .filter(c=>c.end-c.start>=0.08);
   if(captionMode!=="off"&&!cues.length)throw new Error("The saved subtitles do not overlap the voice-over duration. Regenerate subtitles from the current voice-over.");
