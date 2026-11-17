@@ -2074,12 +2074,24 @@ async function handle(request, env) {
           timingMode = "estimated-from-script-and-audio-duration";
         }
         if (!cues.length) throw new Error("Whisper returned a transcript, but no usable subtitle phrases could be built from the saved script. Check the project narration and regenerate the script if it is empty.");
-        const subtitleTranslation = await translateSubtitleCues(env, cues);
-        cues = subtitleTranslation.cues;
+        let subtitleTranslation = { cues, provider: null, model: null, error: null };
+        try {
+          subtitleTranslation = await translateSubtitleCues(env, cues);
+          cues = subtitleTranslation.cues;
+        } catch (translationError) {
+          subtitleTranslation.error = String(translationError?.message || translationError).slice(0, 360);
+          console.warn(JSON.stringify({
+            event: "subtitle_translation_pending",
+            project_id: projectId,
+            generation_id: generationId,
+            error: subtitleTranslation.error
+          }));
+        }
         const duration = Number(Math.max(...cues.map(cue => cue.end)).toFixed(3));
         if (!Number.isFinite(duration) || duration <= 0) throw new Error("Subtitle timing is invalid. Regenerate the voice-over and try again.");
-        const subtitleData = { format: "webvtt", timing: timingMode, source: subtitleSource, model: "@cf/openai/whisper", languages: ["en", "id"], translation: { status: "complete", language: "id", language_name: "Bahasa Indonesia", provider: subtitleTranslation.provider, model: subtitleTranslation.model }, duration_seconds: duration, word_count: words.length || Number(transcription.word_count) || 0, transcript: whisperTranscript.slice(0, 12000), script_match_score: Number(matchScore.toFixed(3)), quality_check: matchScore < 0.72 ? "low-whisper-match-script-fallback-used" : "whisper-transcript-accepted", cues };
-        await env.DB.prepare("UPDATE generations SET status='completed', input_json=?, output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({ source: "saved voice-over audio", timing: timingMode, model: "@cf/openai/whisper", audio_bytes: audioBytes.byteLength, script_match_score: Number(matchScore.toFixed(3)), subtitle_source: subtitleSource, translation_provider: subtitleTranslation.provider, translation_model: subtitleTranslation.model, languages: ["en", "id"] }), JSON.stringify(subtitleData), generationId, user.id).run();
+        const bilingualReady = cues.length > 0 && cues.every(cue => String(cue.text_id || "").trim());
+        const subtitleData = { format: "webvtt", timing: timingMode, source: subtitleSource, model: "@cf/openai/whisper", languages: bilingualReady ? ["en", "id"] : ["en"], translation: { status: bilingualReady ? "complete" : "pending", language: "id", language_name: "Bahasa Indonesia", provider: subtitleTranslation.provider, model: subtitleTranslation.model, error: subtitleTranslation.error || null }, duration_seconds: duration, word_count: words.length || Number(transcription.word_count) || 0, transcript: whisperTranscript.slice(0, 12000), script_match_score: Number(matchScore.toFixed(3)), quality_check: matchScore < 0.72 ? "low-whisper-match-script-fallback-used" : "whisper-transcript-accepted", cues };
+        await env.DB.prepare("UPDATE generations SET status='completed', input_json=?, output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({ source: "saved voice-over audio", timing: timingMode, model: "@cf/openai/whisper", audio_bytes: audioBytes.byteLength, script_match_score: Number(matchScore.toFixed(3)), subtitle_source: subtitleSource, translation_provider: subtitleTranslation.provider, translation_model: subtitleTranslation.model, translation_status: bilingualReady ? "complete" : "pending", languages: bilingualReady ? ["en", "id"] : ["en"] }), JSON.stringify(subtitleData), generationId, user.id).run();
         return json({ ok: true, subtitles: subtitleData, generation_id: generationId }, 201);
       } catch (error) {
         await env.DB.prepare("UPDATE generations SET status='failed', error_message=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
