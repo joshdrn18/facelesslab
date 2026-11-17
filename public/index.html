@@ -2734,37 +2734,38 @@ async function renderProjectVideo(projectId,button) {
   // Apply a visible, scene-aware camera path to each anime still.
   // Frame ranges come from the narration-aligned scene timeline, so the motion restarts per scene.
   const motionMode=$("editor-motion-"+projectId)?.value||"cinematic";
-  const motionStrength={cinematic:0.14,dynamic:0.24,gentle:0.07,off:0}[motionMode]??0.14;
+  const motionStrength={cinematic:0.10,dynamic:0.16,gentle:0.05,off:0}[motionMode]??0.10;
   const motionScenePaths=sceneRanges.map((range,index)=>{
-   const startFrame=Math.max(0,Math.floor(range.start*30));
-   const endFrame=Math.max(startFrame+1,Math.ceil(range.end*30)-1);
+   // Use the selected output frame rate: fast preview is 24 FPS, final quality is 30 FPS.
+   const startFrame=Math.max(0,Math.floor(range.start*frameRate));
+   const endFrame=Math.max(startFrame+1,Math.ceil(range.end*frameRate)-1);
    const frameCount=Math.max(1,endFrame-startFrame);
-   const p="min(1,max(0,(on-"+startFrame+")/"+frameCount+"))";
+   const rawProgress="min(1,max(0,(on-"+startFrame+")/"+frameCount+"))";
+   // Smoothstep removes sudden acceleration at the start/end of every camera move.
+   const p="(("+rawProgress+")*("+rawProgress+")*(3-2*("+rawProgress+")))";
    const availableX="(iw-iw/zoom)",availableY="(ih-ih/zoom)";
-   const centerX="(iw-iw/zoom)/2",centerY="(ih-ih/zoom)/2";
+   const centerX="("+availableX+"/2)",centerY="("+availableY+"/2)";
    const pathIndex=index%5;
-   let z=centerX,x=centerX,y=centerY;
+   let z="1.05",x=centerX,y=centerY;
    if(motionMode==="off")return {startFrame,endFrame,z:"1",x:"0",y:"0"};
    if(pathIndex===0){
-    z="1.06+"+motionStrength+"*"+p;
+    z="1.04+"+motionStrength+"*"+p;
     x=centerX+"+"+availableX+"*0.12*"+p;
-    y=centerY;
    }else if(pathIndex===1){
-    z=String(1.13+motionStrength*0.45);
-    x=availableX+"*"+p;
-    y=centerY+"-"+availableY+"*0.08*"+p;
-   }else if(pathIndex===2){
-    z=String(1.06+motionStrength)+"-"+motionStrength+"*"+p;
-    x=centerX+"-"+availableX+"*0.10*"+p;
-    y=centerY;
-   }else if(pathIndex===3){
-    z=String(1.13+motionStrength*0.45);
-    x=availableX+"*(1-"+p+")";
+    z=String(1.10+motionStrength*0.28);
+    x=centerX+"-"+availableX+"*0.16*"+p;
     y=centerY+"+"+availableY+"*0.08*"+p;
+   }else if(pathIndex===2){
+    z=String(1.08+motionStrength)+"-"+motionStrength+"*"+p;
+    x=centerX+"+"+availableX+"*0.14*(1-"+p+")";
+   }else if(pathIndex===3){
+    z=String(1.10+motionStrength*0.28);
+    x=centerX+"+"+availableX+"*0.16*"+p;
+    y=centerY+"-"+availableY+"*0.08*"+p;
    }else{
-    z="1.08+"+(motionStrength*0.75)+"*"+p;
-    x=availableX+"*"+p;
-    y=availableY+"*(1-"+p+")";
+    z="1.06+"+(motionStrength*0.7)+"*"+p;
+    x=centerX+"-"+availableX+"*0.12*"+p;
+    y=centerY+"+"+availableY+"*0.06*"+p;
    }
    return {startFrame,endFrame,z,x,y};
   });
