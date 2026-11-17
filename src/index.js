@@ -221,7 +221,7 @@ function extractJson(text) {
   throw new Error("AI returned an invalid script format.");
 }
 
-async function callAiProvider(env, provider, prompt) {
+async function callAiProvider(env, provider, prompt, systemPrompt = null, temperature = 0.68) {
   const baseUrl = String(provider.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
   const endpoint = baseUrl + "/chat/completions";
   const headers = {
@@ -229,15 +229,16 @@ async function callAiProvider(env, provider, prompt) {
     "content-type": "application/json"
   };
   const model = provider.model || "gpt-4o-mini";
+  const defaultSystemPrompt = "You are an expert YouTube storyteller, documentary writer, voice-over script editor, and metadata strategist. Write vivid, natural English that sounds like a skilled human narrator speaking to one person, not an essay being read aloud. Prioritize clear breath groups, effortless pronunciation, varied cadence, and emotional authenticity. Avoid repetitive wording, generic AI phrases, filler, fake suspense, and unsupported claims. Silently revise awkward sentences before returning. Optimize for viewer satisfaction and honest discoverability. Return one valid JSON object only; no markdown fences or commentary.";
   const messages = [
-    { role: "system", content: "You are an expert YouTube storyteller, documentary writer, voice-over script editor, and metadata strategist. Write vivid, natural English that sounds like a skilled human narrator speaking to one person, not an essay being read aloud. Prioritize clear breath groups, effortless pronunciation, varied cadence, and emotional authenticity. Avoid repetitive wording, generic AI phrases, filler, fake suspense, and unsupported claims. Silently revise awkward sentences before returning. Optimize for viewer satisfaction and honest discoverability. Return one valid JSON object only; no markdown fences or commentary." },
+    { role: "system", content: systemPrompt || defaultSystemPrompt },
     { role: "user", content: prompt }
   ];
 
   async function requestJson(useJsonMode, tokenLimit = 3500) {
     const body = {
       model,
-      temperature: 0.68,
+      temperature: Math.max(0, Math.min(1, Number(temperature) || 0.68)),
       max_completion_tokens: tokenLimit,
       messages
     };
@@ -343,6 +344,73 @@ async function generateScriptWithProviders(env, project, continuation = null) {
   }
   if (firstError) throw firstError;
   throw new Error("AI provider is not configured. Add AI_API_KEY and AI_MODEL to Worker secrets/variables.");
+}
+
+async function translateSubtitleCues(env, cues) {
+  if (!Array.isArray(cues) || !cues.length) return { cues: [], provider: "none", model: null };
+  const providers = [
+    { name: "primary", apiKey: env.AI_API_KEY, baseUrl: env.AI_BASE_URL, model: env.AI_MODEL },
+    { name: "fallback", apiKey: env.AI_FALLBACK_API_KEY, baseUrl: env.AI_FALLBACK_BASE_URL, model: env.AI_FALLBACK_MODEL }
+  ].filter(provider => provider.apiKey);
+  if (!providers.length) {
+    throw new Error("Bahasa Indonesia subtitle translation is unavailable. Configure AI_API_KEY and AI_MODEL on the FacelessLab Worker.");
+  }
+
+  const systemPrompt = "You are a professional English-to-Indonesian subtitle localizer. Translate for natural spoken Bahasa Indonesia, not literal written prose. Preserve every fact, name, number, tone and intent. Keep each subtitle concise enough to read on a phone. Never merge, split, omit, reorder or add subtitle cues. Return exactly one valid JSON object with a translations array. Each item must contain the original numeric index and a translated text string. Do not include English source text, explanations, markdown or extra keys.";
+  const translatedByIndex = new Map();
+  let usedProvider = null;
+  const chunkSize = 30;
+
+  for (let offset = 0; offset < cues.length; offset += chunkSize) {
+    const chunk = cues.slice(offset, offset + chunkSize);
+    const input = chunk.map((cue, index) => ({
+      index: offset + index + 1,
+      text: String(cue.text || "").replace(/\s+/g, " ").trim()
+    }));
+    const prompt = [
+      "Translate the following English video subtitle cues into Bahasa Indonesia.",
+      "Keep the same order and one Indonesian translation for every index.",
+      "Use natural, concise, conversational Indonesian suitable for an Indonesian audience. Preserve technical terms or proper names when translating them would be confusing.",
+      "SOURCE CUES:",
+      JSON.stringify(input),
+      'REQUIRED JSON SHAPE: {"translations":[{"index":1,"text":"Terjemahan Bahasa Indonesia"}]}'
+    ].join("\n");
+
+    let result = null;
+    let lastError = null;
+    for (const provider of providers) {
+      try {
+        result = await callAiProvider(env, provider, prompt, systemPrompt, 0.18);
+        usedProvider = provider;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!result) {
+      throw new Error("English-to-Indonesian subtitle translation failed. " + String(lastError?.message || lastError || "Text AI provider unavailable").slice(0, 300));
+    }
+
+    const rows = Array.isArray(result.translations) ? result.translations : [];
+    for (const row of rows) {
+      const index = Number(row?.index);
+      const text = String(row?.text || "").replace(/\s+/g, " ").trim().slice(0, 180);
+      if (Number.isInteger(index) && index >= offset + 1 && index <= offset + chunk.length && text) {
+        translatedByIndex.set(index, text);
+      }
+    }
+    for (let index = offset + 1; index <= offset + chunk.length; index += 1) {
+      if (!translatedByIndex.has(index)) {
+        throw new Error("Indonesian subtitle translation was incomplete at caption " + index + ". Retry translation.");
+      }
+    }
+  }
+
+  return {
+    cues: cues.map((cue, index) => ({ ...cue, text_id: translatedByIndex.get(index + 1) })),
+    provider: usedProvider?.name || "configured",
+    model: usedProvider?.model || "configured text model"
+  };
 }
 
 async function processScriptQueueMessage(message, env) {
@@ -1822,7 +1890,8 @@ async function handle(request, env) {
         }
         const duration = Number(subtitleData.duration_seconds) || Math.max(...(subtitleData.cues || []).map(cue => Number(cue.end) || 0));
         if (!Number.isFinite(duration) || duration <= 0) return json({ ok: false, error: "The saved subtitle duration is invalid. Regenerate subtitles." }, 409);
-        const cues = [];
+        const existingCues = Array.isArray(subtitleData.cues) ? subtitleData.cues : [];
+        let cues = [];
         let previousStart = -1;
         for (let index = 0; index < body.cues.length; index++) {
           const item = body.cues[index] || {};
@@ -1837,9 +1906,18 @@ async function handle(request, env) {
           if (start < previousStart) return json({ ok: false, error: "Caption start times must stay in chronological order." }, 400);
           if (!text || text.length > 180) return json({ ok: false, error: "Caption " + (index + 1) + " must contain 1–180 characters." }, 400);
           previousStart = start;
-          cues.push({ index: index + 1, start: Number(start.toFixed(3)), end: Number(end.toFixed(3)), text });
+          const previousCue = existingCues[index] || {};
+          const textId = String(item.text_id ?? previousCue.text_id ?? "").replace(/\s+/g, " ").trim().slice(0, 180);
+          cues.push({
+            index: index + 1,
+            start: Number(start.toFixed(3)),
+            end: Number(end.toFixed(3)),
+            text,
+            ...(textId ? { text_id: textId } : {})
+          });
         }
         subtitleData.cues = cues;
+        subtitleData.languages = cues.some(cue => cue.text_id) ? ["en", "id"] : ["en"];
         subtitleData.edited_at = new Date().toISOString();
         subtitleData.edit_source = "user";
         await env.DB.prepare("UPDATE generations SET output_json = ?, updated_at = unixepoch() WHERE id = ? AND project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed'")
@@ -1849,6 +1927,35 @@ async function handle(request, env) {
       if (method === "GET") {
         const saved = await env.DB.prepare("SELECT id, output_json, created_at FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed' AND json_array_length(json_extract(output_json, '$.cues')) > 0 ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
         return json({ ok: true, subtitles: saved ? JSON.parse(saved.output_json) : null, generation_id: saved?.id || null });
+      }
+      if (method === "POST") {
+        const body = await request.json().catch(() => null);
+        if (body?.action === "translate") {
+          const saved = await env.DB.prepare("SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed' AND json_array_length(json_extract(output_json, '$.cues')) > 0 ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
+          if (!saved) return json({ ok: false, error: "Generate English subtitles before translating them." }, 409);
+          let subtitleData = {};
+          try { subtitleData = JSON.parse(saved.output_json || "{}"); } catch {}
+          if (!Array.isArray(subtitleData.cues) || !subtitleData.cues.length) return json({ ok: false, error: "No English subtitle cues are available to translate." }, 409);
+          try {
+            const translated = await translateSubtitleCues(env, subtitleData.cues);
+            subtitleData.cues = translated.cues;
+            subtitleData.languages = ["en", "id"];
+            subtitleData.translation = {
+              status: "complete",
+              language: "id",
+              language_name: "Bahasa Indonesia",
+              provider: translated.provider,
+              model: translated.model,
+              updated_at: new Date().toISOString()
+            };
+            subtitleData.edited_at = new Date().toISOString();
+            await env.DB.prepare("UPDATE generations SET output_json = ?, updated_at = unixepoch() WHERE id = ? AND project_id = ? AND user_id = ? AND stage = 'subtitles' AND status = 'completed'")
+              .bind(JSON.stringify(subtitleData), saved.id, projectId, user.id).run();
+            return json({ ok: true, subtitles: subtitleData, generation_id: saved.id });
+          } catch (error) {
+            return json({ ok: false, error: String(error?.message || error).slice(0, 420) }, 502);
+          }
+        }
       }
       if (!env.AI || typeof env.AI.run !== "function") return json({ ok: false, error: "Speech recognition is unavailable. Check the Workers AI binding." }, 503);
       const scriptRow = await env.DB.prepare("SELECT id, output_json FROM generations WHERE project_id = ? AND user_id = ? AND stage = 'script' AND status = 'completed' ORDER BY created_at DESC LIMIT 1").bind(projectId, user.id).first();
@@ -1967,10 +2074,12 @@ async function handle(request, env) {
           timingMode = "estimated-from-script-and-audio-duration";
         }
         if (!cues.length) throw new Error("Whisper returned a transcript, but no usable subtitle phrases could be built from the saved script. Check the project narration and regenerate the script if it is empty.");
+        const subtitleTranslation = await translateSubtitleCues(env, cues);
+        cues = subtitleTranslation.cues;
         const duration = Number(Math.max(...cues.map(cue => cue.end)).toFixed(3));
         if (!Number.isFinite(duration) || duration <= 0) throw new Error("Subtitle timing is invalid. Regenerate the voice-over and try again.");
-        const subtitleData = { format: "webvtt", timing: timingMode, source: subtitleSource, model: "@cf/openai/whisper", duration_seconds: duration, word_count: words.length || Number(transcription.word_count) || 0, transcript: whisperTranscript.slice(0, 12000), script_match_score: Number(matchScore.toFixed(3)), quality_check: matchScore < 0.72 ? "low-whisper-match-script-fallback-used" : "whisper-transcript-accepted", cues };
-        await env.DB.prepare("UPDATE generations SET status='completed', input_json=?, output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({ source: "saved voice-over audio", timing: timingMode, model: "@cf/openai/whisper", audio_bytes: audioBytes.byteLength, script_match_score: Number(matchScore.toFixed(3)), subtitle_source: subtitleSource }), JSON.stringify(subtitleData), generationId, user.id).run();
+        const subtitleData = { format: "webvtt", timing: timingMode, source: subtitleSource, model: "@cf/openai/whisper", languages: ["en", "id"], translation: { status: "complete", language: "id", language_name: "Bahasa Indonesia", provider: subtitleTranslation.provider, model: subtitleTranslation.model }, duration_seconds: duration, word_count: words.length || Number(transcription.word_count) || 0, transcript: whisperTranscript.slice(0, 12000), script_match_score: Number(matchScore.toFixed(3)), quality_check: matchScore < 0.72 ? "low-whisper-match-script-fallback-used" : "whisper-transcript-accepted", cues };
+        await env.DB.prepare("UPDATE generations SET status='completed', input_json=?, output_json=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify({ source: "saved voice-over audio", timing: timingMode, model: "@cf/openai/whisper", audio_bytes: audioBytes.byteLength, script_match_score: Number(matchScore.toFixed(3)), subtitle_source: subtitleSource, translation_provider: subtitleTranslation.provider, translation_model: subtitleTranslation.model, languages: ["en", "id"] }), JSON.stringify(subtitleData), generationId, user.id).run();
         return json({ ok: true, subtitles: subtitleData, generation_id: generationId }, 201);
       } catch (error) {
         await env.DB.prepare("UPDATE generations SET status='failed', error_message=?, updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message || error).slice(0, 500), generationId, user.id).run();
