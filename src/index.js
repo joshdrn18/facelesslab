@@ -53,6 +53,9 @@ async function getUser(request, env) {
 
 
 const DEFAULT_AI_DAILY_REQUEST_LIMIT = 40;
+const FACELESSLAB_DAILY_AI_REQUEST_LIMIT = 80;
+const FACELESSLAB_DAILY_TTS_CHARACTER_LIMIT = 10000;
+const FACELESSLAB_ACCOUNT_NEURON_SOFT_STOP = 8000;
 async function readAIUsageSettings(env) {
   await env.DB.prepare("INSERT OR IGNORE INTO ai_usage_settings (id,daily_request_limit,warning_percent) VALUES ('global',?,80)")
     .bind(DEFAULT_AI_DAILY_REQUEST_LIMIT).run();
@@ -155,6 +158,11 @@ async function runTrackedAI(env, context, model, input) {
     ]);
     baselineRequests=Number(tracked?.count||0)+Number(legacy?.count||0);
   }
+  if (analytics.success && baselineNeurons >= FACELESSLAB_ACCOUNT_NEURON_SOFT_STOP) {
+    const error = new Error("FacelessLab paused: this Cloudflare account has reached its 8,000-Neuron daily safety threshold. The account-wide Workers AI allowance is 10,000 Neurons/day. Check usage before retrying.");
+    error.code = "AI_ACCOUNT_NEURON_SOFT_STOP";
+    throw error;
+  }
   await env.DB.prepare("INSERT OR IGNORE INTO ai_usage_daily_counters (utc_date,analytics_requests,pending_requests,analytics_neurons) VALUES (?,?,0,?)")
     .bind(utcDate,baselineRequests,baselineNeurons).run();
   if(analytics.success){
@@ -176,10 +184,44 @@ async function runTrackedAI(env, context, model, input) {
     }
     reservedMemberRequest=true;
   }
+
+  // Count every FacelessLab inference, including admin calls. This is separate
+  // from Cloudflare's account-wide Neuron analytics and remains available if
+  // Analytics is delayed or temporarily unavailable.
+  let reservedFacelessRequest=false,reservedTtsCharacters=false;
+  const appReservation=await env.DB.prepare(
+    "UPDATE ai_usage_daily_counters SET faceless_requests=faceless_requests+1,updated_at=unixepoch() WHERE utc_date=? AND faceless_requests<?"
+  ).bind(utcDate,FACELESSLAB_DAILY_AI_REQUEST_LIMIT).run();
+  if(Number(appReservation.meta?.changes||0)!==1){
+    if(reservedMemberRequest) await env.DB.prepare("UPDATE ai_usage_daily_counters SET member_requests=MAX(0,member_requests-1),updated_at=unixepoch() WHERE utc_date=?").bind(utcDate).run().catch(()=>{});
+    const error=new Error("FacelessLab daily AI safety cap reached ("+FACELESSLAB_DAILY_AI_REQUEST_LIMIT+" total model calls across all accounts, including admins). Try again after the UTC daily reset.");
+    error.code="AI_DAILY_APP_LIMIT_REACHED";throw error;
+  }
+  reservedFacelessRequest=true;
+
+  if(stage==="voice" && inputCharacters>0){
+    const ttsReservation=await env.DB.prepare(
+      "UPDATE ai_usage_daily_counters SET tts_characters=tts_characters+?,updated_at=unixepoch() WHERE utc_date=? AND tts_characters+?<=?"
+    ).bind(inputCharacters,utcDate,inputCharacters,FACELESSLAB_DAILY_TTS_CHARACTER_LIMIT).run();
+    if(Number(ttsReservation.meta?.changes||0)!==1){
+      await env.DB.prepare("UPDATE ai_usage_daily_counters SET faceless_requests=MAX(0,faceless_requests-1),updated_at=unixepoch() WHERE utc_date=?").bind(utcDate).run().catch(()=>{});
+      if(reservedMemberRequest) await env.DB.prepare("UPDATE ai_usage_daily_counters SET member_requests=MAX(0,member_requests-1),updated_at=unixepoch() WHERE utc_date=?").bind(utcDate).run().catch(()=>{});
+      const error=new Error("FacelessLab daily voice limit reached ("+FACELESSLAB_DAILY_TTS_CHARACTER_LIMIT+" TTS characters). Try again after the UTC daily reset.");
+      error.code="AI_DAILY_TTS_LIMIT_REACHED";throw error;
+    }
+    reservedTtsCharacters=true;
+  }
+
   try{
     await env.DB.prepare("INSERT INTO ai_inference_events (id,user_id,project_id,generation_id,stage,model,status,input_characters,input_bytes) VALUES (?,?,?,?,?,?,'processing',?,?)")
       .bind(eventId,context.user_id,context.project_id||null,context.generation_id||null,stage,model,inputCharacters,inputBytes).run();
   }catch(insertError){
+    if(reservedTtsCharacters){
+      await env.DB.prepare("UPDATE ai_usage_daily_counters SET tts_characters=MAX(0,tts_characters-?),updated_at=unixepoch() WHERE utc_date=?").bind(inputCharacters,utcDate).run().catch(()=>{});
+    }
+    if(reservedFacelessRequest){
+      await env.DB.prepare("UPDATE ai_usage_daily_counters SET faceless_requests=MAX(0,faceless_requests-1),updated_at=unixepoch() WHERE utc_date=?").bind(utcDate).run().catch(()=>{});
+    }
     if(reservedMemberRequest){
       await env.DB.prepare("UPDATE ai_usage_daily_counters SET member_requests=MAX(0,member_requests-1),updated_at=unixepoch() WHERE utc_date=?").bind(utcDate).run().catch(()=>{});
     }
@@ -1080,7 +1122,7 @@ async function handle(request, env) {
             "LEFT JOIN projects p ON p.id=e.project_id WHERE e.created_at>=? " +
             "ORDER BY e.created_at DESC LIMIT 25"
           ).bind(utcDayStart).all(),
-          env.DB.prepare("SELECT analytics_requests,pending_requests,analytics_neurons,member_requests FROM ai_usage_daily_counters WHERE utc_date=?")
+          env.DB.prepare("SELECT analytics_requests,pending_requests,analytics_neurons,member_requests,faceless_requests,tts_characters FROM ai_usage_daily_counters WHERE utc_date=?")
             .bind(new Date().toISOString().slice(0,10)).first()
         ]);
         const n = value => Number(value || 0);
@@ -1103,6 +1145,11 @@ async function handle(request, env) {
             requests: n(todayTotals?.requests),
             guard_requests: n(dailyCounter?.member_requests),
             guard_neurons: n(dailyCounter?.analytics_neurons),
+            faceless_requests: n(dailyCounter?.faceless_requests),
+            faceless_request_cap: FACELESSLAB_DAILY_AI_REQUEST_LIMIT,
+            tts_characters: n(dailyCounter?.tts_characters),
+            tts_character_cap: FACELESSLAB_DAILY_TTS_CHARACTER_LIMIT,
+            neuron_soft_stop: FACELESSLAB_ACCOUNT_NEURON_SOFT_STOP,
             completed: n(todayTotals?.completed),
             failed: n(todayTotals?.failed),
             processing: n(todayTotals?.processing),
@@ -1119,7 +1166,7 @@ async function handle(request, env) {
           today_by_model: todayStages.results || [],
           last_7_days: dailyHistory.results || [],
           recent_inferences: recentInferences.results || [],
-          accounting_note: "Generation counts and workload measures are recorded per user. Exact Neurons and USD charges are account-level Cloudflare billing data and are not apportioned to individual users by this endpoint."
+          accounting_note: "FacelessLab pauses after 80 total daily model calls, 10,000 daily TTS characters, or when account-wide Workers AI analytics reaches 8,000 Neurons. Cloudflare Analytics may be delayed; other Workers and Pages projects still share the account allowance. Exact USD charges remain account-level billing data."
         });
       }
 
