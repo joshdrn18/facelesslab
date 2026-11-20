@@ -527,7 +527,7 @@ async function processVoiceQueueMessage(message, env) {
  }catch(error){
   const detail=String(error?.message||error).slice(0,500),attempts=Number(message.attempts||1);
   console.error(JSON.stringify({event:"background_voice_attempt_failed",generation_id:generationId,attempts,error:detail}));
-  if(error?.code==="AI_DAILY_LIMIT_REACHED"||attempts>=3){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(detail,generationId,userId).run();message.ack();}
+  if(["AI_DAILY_LIMIT_REACHED","AI_DAILY_APP_LIMIT_REACHED","AI_DAILY_TTS_LIMIT_REACHED","AI_ACCOUNT_NEURON_SOFT_STOP"].includes(error?.code)||attempts>=3){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(detail,generationId,userId).run();message.ack();}
   else message.retry({delaySeconds:Math.min(60,attempts*15)});
  }
 }
