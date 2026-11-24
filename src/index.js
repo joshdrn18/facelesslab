@@ -229,11 +229,20 @@ async function runTrackedAI(env, context, model, input) {
   }
   const startedAt=Date.now();
   try{
-    const result=await env.AI.run(model,input),usage=result?.usage||result?.response?.usage||{};
+    let result=await env.AI.run(model,input);
+    const usage=result?.usage||result?.response?.usage||{};
+    let outputBytes=estimateAIOutputBytes(result);
+    // Aura TTS returns a ReadableStream. Tee it so usage accounting can measure
+    // the audio bytes without consuming the stream returned to the caller.
+    if(result&&typeof result.getReader==="function"&&typeof result.tee==="function"){
+      const [callerStream,meterStream]=result.tee();
+      result=callerStream;
+      try{outputBytes=(await new Response(meterStream).arrayBuffer()).byteLength;}catch{}
+    }
     const promptTokens=Number(usage.prompt_tokens??usage.input_tokens),completionTokens=Number(usage.completion_tokens??usage.output_tokens);
     const neuronsValue=Number(usage.neurons??result?.neurons??result?.response?.neurons);
     await env.DB.prepare("UPDATE ai_inference_events SET status='completed',duration_ms=?,output_bytes=?,prompt_tokens=?,completion_tokens=?,neurons=?,updated_at=unixepoch() WHERE id=?")
-      .bind(Math.max(0,Date.now()-startedAt),estimateAIOutputBytes(result),
+      .bind(Math.max(0,Date.now()-startedAt),outputBytes,
         Number.isFinite(promptTokens)?promptTokens:null,Number.isFinite(completionTokens)?completionTokens:null,
         Number.isFinite(neuronsValue)&&neuronsValue>0?neuronsValue:null,eventId).run();
     return result;
@@ -487,6 +496,34 @@ async function processScriptQueueMessage(message, env) {
  }
 }
 
+function splitTtsText(text,maxCharacters=1900){
+ const chunks=[];
+ let remaining=String(text||"").trim();
+ const minimumBoundary=Math.floor(maxCharacters*0.55);
+ while(remaining.length>maxCharacters){
+  let cut=0;
+  for(const delimiter of [". ","? ","! ","; ",": ",String.fromCharCode(10)]){
+   const index=remaining.lastIndexOf(delimiter,maxCharacters-delimiter.length);
+   if(index>=minimumBoundary){
+    const candidate=index+(delimiter.endsWith(" ")?delimiter.length-1:delimiter.length);
+    cut=Math.max(cut,candidate);
+   }
+  }
+  if(cut<minimumBoundary){
+   const space=remaining.lastIndexOf(" ",maxCharacters);
+   cut=space>=minimumBoundary?space:maxCharacters;
+  }
+  const previousCodeUnit=remaining.charCodeAt(cut-1);
+  if(previousCodeUnit>=0xD800&&previousCodeUnit<=0xDBFF)cut--;
+  if(cut<=0)cut=maxCharacters;
+  const chunk=remaining.slice(0,cut).trim();
+  if(chunk)chunks.push(chunk);
+  remaining=remaining.slice(cut).trim();
+ }
+ if(remaining)chunks.push(remaining);
+ return chunks;
+}
+
 async function processVoiceQueueMessage(message, env) {
  const job=message.body||{},generationId=String(job.generation_id||""),projectId=String(job.project_id||""),userId=String(job.user_id||"");
  if(job.type!=="generate_voice"||!generationId||!projectId||!userId){message.ack();return;}
@@ -497,7 +534,7 @@ async function processVoiceQueueMessage(message, env) {
   if(!scriptRow)throw new Error("The source script is no longer available.");
   const script=JSON.parse(scriptRow.output_json);
   // Normalize narration for plain-text TTS without changing its wording or meaning.
-  // MeloTTS does not expose SSML controls here, so punctuation is the pause signal.
+  // Aura-2 accepts up to 2,000 characters per request, so split at safe boundaries.
   const rawNarration=String(script.narration||(script.scenes||[]).map(s=>s.voiceover||"").join(" "));
   const narration=rawNarration
     .replace(/\\r\\n?/g,"\\n")
@@ -513,15 +550,47 @@ async function processVoiceQueueMessage(message, env) {
     .trim();
   if(!narration||narration.length>4500)throw new Error("Narration is empty or exceeds the current 4,500 character limit.");
   await env.DB.prepare("UPDATE generations SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(generationId,userId).run();
-  const model="@cf/myshell-ai/melotts",provider="cloudflare-workers-ai",result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:narration.length},model,{prompt:narration,lang:"en"}),audioValue=typeof result==="string"?result:result?.audio;
-  if(!audioValue||typeof audioValue!=="string")throw new Error("The text-to-speech model returned no audio.");
-  let audio;
-  if(/^https:\/\//i.test(audioValue)){const response=await fetch(audioValue);if(!response.ok)throw new Error("Could not retrieve the generated audio file.");audio=new Uint8Array(await response.arrayBuffer());}
-  else{const binary=atob(audioValue);audio=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)audio[i]=binary.charCodeAt(i);}
-  if(!audio.byteLength)throw new Error("The text-to-speech model returned an empty audio file.");
+  const model="@cf/deepgram/aura-2-en",provider="cloudflare-workers-ai",speaker="luna";
+  const ttsChunks=splitTtsText(narration,1900),audioParts=[];
+  let totalAudioBytes=0;
+  for(let chunkIndex=0;chunkIndex<ttsChunks.length;chunkIndex++){
+    const chunk=ttsChunks[chunkIndex];
+    const result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:chunk.length},model,{text:chunk,speaker,encoding:"mp3",container:"none"});
+    const stream=result instanceof Response?result.body:(result?.body&&typeof result.body.getReader==="function"?result.body:result);
+    const source=stream&&typeof stream.getReader==="function"?stream:(result?.audio??result);
+    let part;
+    if(source&&typeof source.getReader==="function"){
+      part=new Uint8Array(await new Response(source).arrayBuffer());
+    }else if(source instanceof ArrayBuffer){
+      part=new Uint8Array(source);
+    }else if(ArrayBuffer.isView(source)){
+      part=new Uint8Array(source.buffer,source.byteOffset,source.byteLength);
+    }else if(typeof source==="string"){
+      if(/^https?:\\/\\//i.test(source)){
+        const response=await fetch(source);
+        if(!response.ok)throw new Error("Could not retrieve the generated audio file.");
+        part=new Uint8Array(await response.arrayBuffer());
+      }else{
+        const normalized=source.replace(/-/g,"+").replace(/_/g,"/"),padded=normalized+"=".repeat((4-normalized.length%4)%4);
+        const binary=atob(padded);
+        part=new Uint8Array(binary.length);
+        for(let i=0;i<binary.length;i++)part[i]=binary.charCodeAt(i);
+      }
+    }else{
+      throw new Error("The text-to-speech model returned an unsupported audio response.");
+    }
+    if(!part.byteLength)throw new Error("The text-to-speech model returned an empty audio segment.");
+    audioParts.push(part);
+    totalAudioBytes+=part.byteLength;
+  }
+  if(!totalAudioBytes)throw new Error("The text-to-speech model returned an empty audio file.");
+  // MP3 frames are concatenated into one file so existing playback/render flows remain unchanged.
+  const audio=new Uint8Array(totalAudioBytes);
+  let audioOffset=0;
+  for(const part of audioParts){audio.set(part,audioOffset);audioOffset+=part.byteLength;}
   const objectKey="users/"+userId+"/projects/"+projectId+"/voice/"+generationId+".mp3";
   await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:"audio/mpeg",cacheControl:"private, max-age=3600"},customMetadata:{userId,projectId,generationId}});
-  const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,provider,model,language:"en",characters:narration.length,source_characters:rawNarration.length,preprocessing:"punctuation-and-whitespace-normalized"};
+  const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,provider,model,language:"en",speaker,chunks:ttsChunks.length,characters:narration.length,source_characters:rawNarration.length,preprocessing:"punctuation-and-whitespace-normalized"};
   await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,userId).run();
   console.log(JSON.stringify({event:"background_voice_completed",generation_id:generationId,project_id:projectId}));message.ack();
  }catch(error){
@@ -1610,8 +1679,8 @@ async function handle(request, env) {
       if(narration.length>4500)return json({ok:false,error:"Narration is too long. Keep it under 4,500 characters."},413);
       const pending=await env.DB.prepare("SELECT id,status FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND json_extract(input_json,'$.script_generation_id')=? AND status IN ('queued','processing') ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,scriptRow.id).first();
       if(pending)return json({ok:true,queued:true,generation_id:pending.id,status:pending.status},202);
-      const generationId=crypto.randomUUID(),model="@cf/myshell-ai/melotts",provider="cloudflare-workers-ai";
-      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,billing_note:"Workers AI MeloTTS pricing"};
+      const generationId=crypto.randomUUID(),model="@cf/deepgram/aura-2-en",provider="cloudflare-workers-ai";
+      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,billing_note:"Deepgram Aura-2 pricing: USD 0.03 per 1,000 characters"};
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'voice','queued',?)").bind(generationId,projectId,user.id,JSON.stringify(input)).run();
       try{await env.JOBS.send({type:"generate_voice",generation_id:generationId,project_id:projectId,user_id:user.id});}
       catch(error){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();throw error;}
