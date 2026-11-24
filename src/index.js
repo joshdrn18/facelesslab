@@ -536,7 +536,6 @@ async function processVoiceQueueMessage(message, env) {
   const result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:narration.length},model,{text:narration,speaker:voice,encoding:"mp3"});
   const audioValue=result&&typeof result.getReader==="function"?result:(typeof result==="string"?result:result?.audio);
   let audio;
-  const contentType="audio/mpeg";
   if(result instanceof Response){
     audio=new Uint8Array(await result.arrayBuffer());
   }else if(audioValue&&typeof audioValue.getReader==="function"){
@@ -559,7 +558,7 @@ async function processVoiceQueueMessage(message, env) {
       for(let i=0;i<binary.length;i++)audio[i]=binary.charCodeAt(i);
     }
   }else{
-    throw new Error("Gemini TTS returned an unsupported audio response.");
+    throw new Error("Aura-1 returned an unsupported audio response.");
   }
   if(!audio||!audio.byteLength)throw new Error("Aura-1 returned an empty audio file.");
   const mimeType="audio/mpeg";
