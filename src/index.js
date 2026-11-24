@@ -158,7 +158,11 @@ async function runTrackedAI(env, context, model, input) {
     ]);
     baselineRequests=Number(tracked?.count||0)+Number(legacy?.count||0);
   }
-  if (analytics.success && baselineNeurons >= FACELESSLAB_ACCOUNT_NEURON_SOFT_STOP) {
+  // Third-party Unified AI providers (for example google/* TTS) bill through
+  // AI Gateway credits, not Workers AI Neurons. Keep the Neuron soft-stop only
+  // for native @cf/* models so a busy Workers AI day cannot block paid TTS.
+  const usesWorkersAiNeurons=String(model||"").startsWith("@cf/");
+  if (usesWorkersAiNeurons && analytics.success && baselineNeurons >= FACELESSLAB_ACCOUNT_NEURON_SOFT_STOP) {
     const error = new Error("FacelessLab paused: this Cloudflare account has reached its 8,000-Neuron daily safety threshold. The account-wide Workers AI allowance is 10,000 Neurons/day. Check usage before retrying.");
     error.code = "AI_ACCOUNT_NEURON_SOFT_STOP";
     throw error;
