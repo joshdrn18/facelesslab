@@ -496,34 +496,6 @@ async function processScriptQueueMessage(message, env) {
  }
 }
 
-function splitTtsText(text,maxCharacters=1900){
- const chunks=[];
- let remaining=String(text||"").trim();
- const minimumBoundary=Math.floor(maxCharacters*0.55);
- while(remaining.length>maxCharacters){
-  let cut=0;
-  for(const delimiter of [". ","? ","! ","; ",": ",String.fromCharCode(10)]){
-   const index=remaining.lastIndexOf(delimiter,maxCharacters-delimiter.length);
-   if(index>=minimumBoundary){
-    const candidate=index+(delimiter.endsWith(" ")?delimiter.length-1:delimiter.length);
-    cut=Math.max(cut,candidate);
-   }
-  }
-  if(cut<minimumBoundary){
-   const space=remaining.lastIndexOf(" ",maxCharacters);
-   cut=space>=minimumBoundary?space:maxCharacters;
-  }
-  const previousCodeUnit=remaining.charCodeAt(cut-1);
-  if(previousCodeUnit>=0xD800&&previousCodeUnit<=0xDBFF)cut--;
-  if(cut<=0)cut=maxCharacters;
-  const chunk=remaining.slice(0,cut).trim();
-  if(chunk)chunks.push(chunk);
-  remaining=remaining.slice(cut).trim();
- }
- if(remaining)chunks.push(remaining);
- return chunks;
-}
-
 async function processVoiceQueueMessage(message, env) {
  const job=message.body||{},generationId=String(job.generation_id||""),projectId=String(job.project_id||""),userId=String(job.user_id||"");
  if(job.type!=="generate_voice"||!generationId||!projectId||!userId){message.ack();return;}
@@ -533,8 +505,7 @@ async function processVoiceQueueMessage(message, env) {
   const input=JSON.parse(row.input_json||"{}"),scriptRow=await env.DB.prepare("SELECT output_json FROM generations WHERE id=? AND project_id=? AND user_id=? AND stage='script' AND status='completed'").bind(input.script_generation_id,projectId,userId).first();
   if(!scriptRow)throw new Error("The source script is no longer available.");
   const script=JSON.parse(scriptRow.output_json);
-  // Normalize narration for plain-text TTS without changing its wording or meaning.
-  // Aura-2 accepts up to 2,000 characters per request, so split at safe boundaries.
+  // Normalize narration for Gemini TTS while preserving its wording and sentence order.
   const rawNarration=String(script.narration||(script.scenes||[]).map(s=>s.voiceover||"").join(" "));
   const narration=rawNarration
     .replace(/\\r\\n?/g,"\\n")
@@ -548,49 +519,44 @@ async function processVoiceQueueMessage(message, env) {
     .replace(/([,;:])(?=\\S)/g,"$1 ")
     .replace(/([.!?])(?=[A-Z])/g,"$1 ")
     .trim();
-  if(!narration||narration.length>4500)throw new Error("Narration is empty or exceeds the current 4,500 character limit.");
+  if(!narration||narration.length>10000)throw new Error("Narration is empty or exceeds Gemini Flash-Lite TTS's 10,000 character limit.");
   await env.DB.prepare("UPDATE generations SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(generationId,userId).run();
-  const model="@cf/deepgram/aura-2-en",provider="cloudflare-workers-ai",speaker="luna";
-  const ttsChunks=splitTtsText(narration,1900),audioParts=[];
-  let totalAudioBytes=0;
-  for(let chunkIndex=0;chunkIndex<ttsChunks.length;chunkIndex++){
-    const chunk=ttsChunks[chunkIndex];
-    const result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:chunk.length},model,{text:chunk,speaker,encoding:"mp3",container:"none"});
-    const stream=result instanceof Response?result.body:(result?.body&&typeof result.body.getReader==="function"?result.body:result);
-    const source=stream&&typeof stream.getReader==="function"?stream:(result?.audio??result);
-    let part;
-    if(source&&typeof source.getReader==="function"){
-      part=new Uint8Array(await new Response(source).arrayBuffer());
-    }else if(source instanceof ArrayBuffer){
-      part=new Uint8Array(source);
-    }else if(ArrayBuffer.isView(source)){
-      part=new Uint8Array(source.buffer,source.byteOffset,source.byteLength);
-    }else if(typeof source==="string"){
-      if(source.startsWith("https://")||source.startsWith("http://")){
-        const response=await fetch(source);
-        if(!response.ok)throw new Error("Could not retrieve the generated audio file.");
-        part=new Uint8Array(await response.arrayBuffer());
-      }else{
-        const normalized=source.replace(/-/g,"+").replace(/_/g,"/"),padded=normalized+"=".repeat((4-normalized.length%4)%4);
-        const binary=atob(padded);
-        part=new Uint8Array(binary.length);
-        for(let i=0;i<binary.length;i++)part[i]=binary.charCodeAt(i);
-      }
+  const model="google/gemini-3.8-flash-lite-tts",provider="cloudflare-unified-ai",voice="Charon";
+  const result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:narration.length},model,{text:narration,voice});
+  const audioValue=typeof result==="string"?result:result?.audio;
+  let audio;
+  let contentType="audio/wav";
+  if(result instanceof Response){
+    contentType=result.headers.get("content-type")||contentType;
+    audio=new Uint8Array(await result.arrayBuffer());
+  }else if(audioValue&&typeof audioValue.getReader==="function"){
+    audio=new Uint8Array(await new Response(audioValue).arrayBuffer());
+  }else if(audioValue instanceof ArrayBuffer){
+    audio=new Uint8Array(audioValue);
+  }else if(ArrayBuffer.isView(audioValue)){
+    audio=new Uint8Array(audioValue.buffer,audioValue.byteOffset,audioValue.byteLength);
+  }else if(typeof audioValue==="string"){
+    const value=audioValue.trim();
+    if(value.startsWith("https://")||value.startsWith("http://")){
+      const response=await fetch(value);
+      if(!response.ok)throw new Error("Could not retrieve the generated WAV audio file.");
+      contentType=response.headers.get("content-type")||contentType;
+      audio=new Uint8Array(await response.arrayBuffer());
     }else{
-      throw new Error("The text-to-speech model returned an unsupported audio response.");
+      const base64=value.startsWith("data:")?value.slice(value.indexOf("base64,")+7):value;
+      const normalized=base64.replace(/-/g,"+").replace(/_/g,"/"),padded=normalized+"=".repeat((4-normalized.length%4)%4);
+      const binary=atob(padded);
+      audio=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++)audio[i]=binary.charCodeAt(i);
     }
-    if(!part.byteLength)throw new Error("The text-to-speech model returned an empty audio segment.");
-    audioParts.push(part);
-    totalAudioBytes+=part.byteLength;
+  }else{
+    throw new Error("Gemini TTS returned an unsupported audio response.");
   }
-  if(!totalAudioBytes)throw new Error("The text-to-speech model returned an empty audio file.");
-  // MP3 frames are concatenated into one file so existing playback/render flows remain unchanged.
-  const audio=new Uint8Array(totalAudioBytes);
-  let audioOffset=0;
-  for(const part of audioParts){audio.set(part,audioOffset);audioOffset+=part.byteLength;}
-  const objectKey="users/"+userId+"/projects/"+projectId+"/voice/"+generationId+".mp3";
-  await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:"audio/mpeg",cacheControl:"private, max-age=3600"},customMetadata:{userId,projectId,generationId}});
-  const output={object_key:objectKey,mime_type:"audio/mpeg",bytes:audio.byteLength,provider,model,language:"en",speaker,chunks:ttsChunks.length,characters:narration.length,source_characters:rawNarration.length,preprocessing:"punctuation-and-whitespace-normalized"};
+  if(!audio||!audio.byteLength)throw new Error("Gemini TTS returned an empty audio file.");
+  const mimeType=contentType.includes("wav")||contentType.includes("l16")?"audio/wav":"audio/wav";
+  const objectKey="users/"+userId+"/projects/"+projectId+"/voice/"+generationId+".wav";
+  await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:mimeType,cacheControl:"private, max-age=3600"},customMetadata:{userId,projectId,generationId}});
+  const output={object_key:objectKey,mime_type:mimeType,bytes:audio.byteLength,provider,model,language:"en",voice,characters:narration.length,source_characters:rawNarration.length,preprocessing:"punctuation-and-whitespace-normalized"};
   await env.DB.prepare("UPDATE generations SET status='completed',output_json=?,error_message=NULL,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(JSON.stringify(output),generationId,userId).run();
   console.log(JSON.stringify({event:"background_voice_completed",generation_id:generationId,project_id:projectId}));message.ack();
  }catch(error){
@@ -1676,11 +1642,11 @@ async function handle(request, env) {
       if(!scriptRow)return json({ok:false,error:"Generate a script before creating the voice-over."},409);
       const script=JSON.parse(scriptRow.output_json),narration=String(script.narration||(script.scenes||[]).map(s=>s.voiceover||"").join(" ")).trim();
       if(!narration)return json({ok:false,error:"The saved script has no narration text."},422);
-      if(narration.length>4500)return json({ok:false,error:"Narration is too long. Keep it under 4,500 characters."},413);
+      if(narration.length>10000)return json({ok:false,error:"Narration is too long. Gemini Flash-Lite TTS accepts up to 10,000 characters per request."},413);
       const pending=await env.DB.prepare("SELECT id,status FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND json_extract(input_json,'$.script_generation_id')=? AND status IN ('queued','processing') ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,scriptRow.id).first();
       if(pending)return json({ok:true,queued:true,generation_id:pending.id,status:pending.status},202);
-      const generationId=crypto.randomUUID(),model="@cf/deepgram/aura-2-en",provider="cloudflare-workers-ai";
-      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,billing_note:"Deepgram Aura-2 pricing: USD 0.03 per 1,000 characters"};
+      const generationId=crypto.randomUUID(),model="google/gemini-3.8-flash-lite-tts",provider="cloudflare-unified-ai";
+      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,billing_note:"Google Gemini 3.8 Flash-Lite TTS: USD 0.50 per 1M input tokens and USD 6.00 per 1M output-audio tokens"};
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'voice','queued',?)").bind(generationId,projectId,user.id,JSON.stringify(input)).run();
       try{await env.JOBS.send({type:"generate_voice",generation_id:generationId,project_id:projectId,user_id:user.id});}
       catch(error){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();throw error;}
