@@ -505,21 +505,21 @@ async function requestGoogleGeminiTts(env, narration, voice) {
   const apiKey = String(env.GOOGLE_GEMINI_API_KEY || "").trim();
   if (!apiKey) throw new Error("GOOGLE_GEMINI_API_KEY is not configured.");
   const model = "gemini-3.8-flash-lite-tts";
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent", {
+  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
     method: "POST",
     headers: {
       "x-goog-api-key": apiKey,
       "content-type": "application/json"
     },
     body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: narration }] }],
-      generationConfig: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voice }
-          }
-        }
+      model,
+      input: [{
+        type: "user_input",
+        content: [{ type: "text", text: narration }]
+      }],
+      response_format: { type: "audio" },
+      generation_config: {
+        speech_config: [{ voice }]
       }
     }),
     signal: AbortSignal.timeout(55000)
@@ -533,9 +533,12 @@ async function requestGoogleGeminiTts(env, narration, voice) {
     if (response.status === 401 || response.status === 403) error.code = "GOOGLE_GEMINI_AUTH_FAILED";
     throw error;
   }
-  const audioPart = payload?.candidates?.[0]?.content?.parts?.find(part => typeof part?.inlineData?.data === "string" && part.inlineData.data.length > 0);
+  const audioPart = (payload?.steps || [])
+    .flatMap(step => step?.type === "model_output" ? (step.content || []) : [])
+    .filter(part => part?.type === "audio" && typeof part?.data === "string" && part.data.length > 0)
+    .at(-1);
   if (!audioPart) {
-    const reason = payload?.candidates?.[0]?.finishReason || payload?.promptFeedback?.blockReason || "no audio part";
+    const reason = payload?.status || payload?.error?.message || "no audio block in model_output steps";
     throw new Error("Google Gemini TTS returned no audio (" + String(reason).slice(0, 120) + ").");
   }
   return payload;
@@ -572,10 +575,10 @@ async function processVoiceQueueMessage(message, env) {
   const voice="Charon";
   const runInference=useGoogleGeminiApi?()=>requestGoogleGeminiTts(env,narration,voice):null;
   const result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:narration.length},model,{text:narration,voice},runInference);
-  const googleAudioPart=result?.candidates?.[0]?.content?.parts?.find(part=>typeof part?.inlineData?.data==="string");
-  const audioValue=googleAudioPart?.inlineData?.data??(typeof result==="string"?result:result?.audio);
+  const googleAudioPart=(result?.steps||[]).flatMap(step=>step?.type==="model_output"?(step.content||[]):[]).filter(part=>part?.type==="audio"&&typeof part?.data==="string").at(-1);
+  const audioValue=googleAudioPart?.data??(typeof result==="string"?result:result?.audio);
   let audio;
-  let contentType=String(googleAudioPart?.inlineData?.mimeType||"audio/wav");
+  let contentType="audio/wav";
   if(result instanceof Response){
     contentType=result.headers.get("content-type")||contentType;
     audio=new Uint8Array(await result.arrayBuffer());
