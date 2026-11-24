@@ -71,8 +71,7 @@ function estimateAIOutputBytes(result) {
   if (ArrayBuffer.isView(result)) return result.byteLength;
   if (typeof result === "string") return Math.floor(result.length * 0.75);
   if (!result || typeof result !== "object") return 0;
-  const googleAudio = result?.candidates?.[0]?.content?.parts?.find(part => typeof part?.inlineData?.data === "string")?.inlineData?.data;
-  for (const value of [googleAudio, result.audio, result.image, result.data, result.response]) {
+  for (const value of [result.audio, result.image, result.data, result.response]) {
     if (value instanceof ArrayBuffer) return value.byteLength;
     if (ArrayBuffer.isView(value)) return value.byteLength;
     if (typeof value === "string") return Math.floor(value.length * 0.75);
@@ -153,21 +152,23 @@ async function runTrackedAI(env, context, model, input) {
     baselineRequests=Number(analytics.today.requests||0);
     baselineNeurons=Number(analytics.today.neurons||0);
   }else{
-    const [tracked,legacy]=await Promise.all([
+    const [tracked,legacy,storedUsage]=await Promise.all([
       env.DB.prepare("SELECT COUNT(*) AS count FROM ai_inference_events WHERE created_at>=?").bind(utcDayStart).first(),
-      env.DB.prepare("SELECT COUNT(*) AS count FROM generations g WHERE g.created_at>=? AND g.stage IN ('voice','visuals','character_reference','subtitles') AND NOT EXISTS (SELECT 1 FROM ai_inference_events e WHERE e.generation_id=g.id)").bind(utcDayStart).first()
+      env.DB.prepare("SELECT COUNT(*) AS count FROM generations g WHERE g.created_at>=? AND g.stage IN ('voice','visuals','character_reference','subtitles') AND NOT EXISTS (SELECT 1 FROM ai_inference_events e WHERE e.generation_id=g.id)").bind(utcDayStart).first(),
+      env.DB.prepare("SELECT analytics_neurons FROM ai_usage_daily_counters WHERE utc_date=?").bind(utcDate).first()
     ]);
     baselineRequests=Number(tracked?.count||0)+Number(legacy?.count||0);
+    baselineNeurons=Number(storedUsage?.analytics_neurons||0);
   }
   // Native Workers AI models use the account-wide Neuron allowance.
-  // Aura-2 costs 2,727.27 Neurons per 1,000 input characters; estimate the
+  // Aura-1 costs 1,363.64 Neurons per 1,000 input characters; estimate the
   // request before inference so the 8,000-Neuron safety stop is respected.
   const usesWorkersAiNeurons=String(model||"").startsWith("@cf/");
-  const estimatedTtsNeurons=model==="@cf/deepgram/aura-2-en" ? inputCharacters*2.72727 : 0;
+  const estimatedTtsNeurons=model==="@cf/deepgram/aura-1" ? inputCharacters*1.36364 : 0;
   const wouldCrossNeuronSafetyStop=baselineNeurons>=FACELESSLAB_ACCOUNT_NEURON_SOFT_STOP ||
     (estimatedTtsNeurons>0 && baselineNeurons+estimatedTtsNeurons>FACELESSLAB_ACCOUNT_NEURON_SOFT_STOP);
   if (usesWorkersAiNeurons && analytics.success && wouldCrossNeuronSafetyStop) {
-    const error = new Error("FacelessLab paused this Workers AI request to protect the 8,000-Neuron daily safety budget. Current account usage: "+Math.round(baselineNeurons)+" Neurons; estimated Aura-2 request: "+Math.round(estimatedTtsNeurons)+" Neurons. Try again after the UTC reset.");
+    const error = new Error("FacelessLab paused this Workers AI request to protect the 8,000-Neuron daily safety budget. Current account usage: "+Math.round(baselineNeurons)+" Neurons; estimated Aura-1 request: "+Math.round(estimatedTtsNeurons)+" Neurons. Try again after the UTC reset.");
     error.code = "AI_ACCOUNT_NEURON_SOFT_STOP";
     throw error;
   }
@@ -529,7 +530,7 @@ async function processVoiceQueueMessage(message, env) {
     .trim();
   if(!narration||narration.length>2000)throw new Error("Narration is empty or exceeds Aura-2's 2,000 character per request limit.");
   await env.DB.prepare("UPDATE generations SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(generationId,userId).run();
-  const model="@cf/deepgram/aura-2-en";
+  const model="@cf/deepgram/aura-1";
   const provider="cloudflare-workers-ai";
   const voice="luna";
   const result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:narration.length},model,{text:narration,speaker:voice,encoding:"mp3"});
@@ -560,7 +561,7 @@ async function processVoiceQueueMessage(message, env) {
   }else{
     throw new Error("Gemini TTS returned an unsupported audio response.");
   }
-  if(!audio||!audio.byteLength)throw new Error("Aura-2 returned an empty audio file.");
+  if(!audio||!audio.byteLength)throw new Error("Aura-1 returned an empty audio file.");
   const mimeType="audio/mpeg";
   const objectKey="users/"+userId+"/projects/"+projectId+"/voice/"+generationId+".mp3";
   await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:mimeType,cacheControl:"private, max-age=3600"},customMetadata:{userId,projectId,generationId}});
@@ -1653,8 +1654,8 @@ async function handle(request, env) {
       if(narration.length>2000)return json({ok:false,error:"Narration is too long for one Aura-2 request (maximum 2,000 characters). Shorten the script and try again."},413);
       const pending=await env.DB.prepare("SELECT id,status FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND json_extract(input_json,'$.script_generation_id')=? AND status IN ('queued','processing') ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,scriptRow.id).first();
       if(pending)return json({ok:true,queued:true,generation_id:pending.id,status:pending.status},202);
-      const generationId=crypto.randomUUID(),model="@cf/deepgram/aura-2-en",provider="cloudflare-workers-ai";
-      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,voice:"luna",billing_note:"Cloudflare Workers AI Aura-2: 2,727.27 Neurons per 1,000 input characters; included Workers AI daily free allocation applies."};
+      const generationId=crypto.randomUUID(),model="@cf/deepgram/aura-1",provider="cloudflare-workers-ai";
+      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,voice:"luna",billing_note:"Cloudflare Workers AI Aura-1: 1,363.64 Neurons per 1,000 input characters; included Workers AI daily free allocation applies."};
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'voice','queued',?)").bind(generationId,projectId,user.id,JSON.stringify(input)).run();
       try{await env.JOBS.send({type:"generate_voice",generation_id:generationId,project_id:projectId,user_id:user.id});}
       catch(error){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();throw error;}
