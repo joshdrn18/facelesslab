@@ -71,7 +71,8 @@ function estimateAIOutputBytes(result) {
   if (ArrayBuffer.isView(result)) return result.byteLength;
   if (typeof result === "string") return Math.floor(result.length * 0.75);
   if (!result || typeof result !== "object") return 0;
-  for (const value of [result.audio, result.image, result.data, result.response]) {
+  const googleAudio = result?.candidates?.[0]?.content?.parts?.find(part => typeof part?.inlineData?.data === "string")?.inlineData?.data;
+  for (const value of [googleAudio, result.audio, result.image, result.data, result.response]) {
     if (value instanceof ArrayBuffer) return value.byteLength;
     if (ArrayBuffer.isView(value)) return value.byteLength;
     if (typeof value === "string") return Math.floor(value.length * 0.75);
@@ -136,7 +137,7 @@ async function fetchCloudflareAiAnalytics(env, startDate, endDate) {
   }
 }
 
-async function runTrackedAI(env, context, model, input) {
+async function runTrackedAI(env, context, model, input, runInference = null) {
   const settings=await readAIUsageSettings(env);
   // Resolve the role from D1 on the server; never trust a client-supplied role.
   const account=await env.DB.prepare("SELECT role FROM users WHERE id=? AND status='active'").bind(context.user_id).first();
@@ -233,8 +234,8 @@ async function runTrackedAI(env, context, model, input) {
   }
   const startedAt=Date.now();
   try{
-    let result=await env.AI.run(model,input);
-    const usage=result?.usage||result?.response?.usage||{};
+    let result=typeof runInference==="function" ? await runInference() : await env.AI.run(model,input);
+    const usage=result?.usage||result?.response?.usage||result?.usageMetadata||{};
     let outputBytes=estimateAIOutputBytes(result);
     // Aura TTS returns a ReadableStream. Tee it so usage accounting can measure
     // the audio bytes without consuming the stream returned to the caller.
@@ -243,7 +244,7 @@ async function runTrackedAI(env, context, model, input) {
       result=callerStream;
       try{outputBytes=(await new Response(meterStream).arrayBuffer()).byteLength;}catch{}
     }
-    const promptTokens=Number(usage.prompt_tokens??usage.input_tokens),completionTokens=Number(usage.completion_tokens??usage.output_tokens);
+    const promptTokens=Number(usage.prompt_tokens??usage.input_tokens??usage.promptTokenCount),completionTokens=Number(usage.completion_tokens??usage.output_tokens??usage.candidatesTokenCount);
     const neuronsValue=Number(usage.neurons??result?.neurons??result?.response?.neurons);
     await env.DB.prepare("UPDATE ai_inference_events SET status='completed',duration_ms=?,output_bytes=?,prompt_tokens=?,completion_tokens=?,neurons=?,updated_at=unixepoch() WHERE id=?")
       .bind(Math.max(0,Date.now()-startedAt),outputBytes,
@@ -500,6 +501,46 @@ async function processScriptQueueMessage(message, env) {
  }
 }
 
+async function requestGoogleGeminiTts(env, narration, voice) {
+  const apiKey = String(env.GOOGLE_GEMINI_API_KEY || "").trim();
+  if (!apiKey) throw new Error("GOOGLE_GEMINI_API_KEY is not configured.");
+  const model = "gemini-3.8-flash-lite-tts";
+  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent", {
+    method: "POST",
+    headers: {
+      "x-goog-api-key": apiKey,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: narration }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voice }
+          }
+        }
+      }
+    }),
+    signal: AbortSignal.timeout(55000)
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = String(payload?.error?.message || payload?.message || "Google Gemini TTS request failed.").slice(0, 320);
+    const error = new Error("Google Gemini TTS HTTP " + response.status + ": " + detail);
+    error.status = response.status;
+    if (response.status === 429) error.code = "GOOGLE_GEMINI_RATE_LIMIT";
+    if (response.status === 401 || response.status === 403) error.code = "GOOGLE_GEMINI_AUTH_FAILED";
+    throw error;
+  }
+  const audioPart = payload?.candidates?.[0]?.content?.parts?.find(part => typeof part?.inlineData?.data === "string" && part.inlineData.data.length > 0);
+  if (!audioPart) {
+    const reason = payload?.candidates?.[0]?.finishReason || payload?.promptFeedback?.blockReason || "no audio part";
+    throw new Error("Google Gemini TTS returned no audio (" + String(reason).slice(0, 120) + ").");
+  }
+  return payload;
+}
+
 async function processVoiceQueueMessage(message, env) {
  const job=message.body||{},generationId=String(job.generation_id||""),projectId=String(job.project_id||""),userId=String(job.user_id||"");
  if(job.type!=="generate_voice"||!generationId||!projectId||!userId){message.ack();return;}
@@ -525,11 +566,16 @@ async function processVoiceQueueMessage(message, env) {
     .trim();
   if(!narration||narration.length>10000)throw new Error("Narration is empty or exceeds Gemini Flash-Lite TTS's 10,000 character limit.");
   await env.DB.prepare("UPDATE generations SET status='processing',updated_at=unixepoch() WHERE id=? AND user_id=?").bind(generationId,userId).run();
-  const model="google/gemini-3.8-flash-lite-tts",provider="cloudflare-unified-ai",voice="Charon";
-  const result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:narration.length},model,{text:narration,voice});
-  const audioValue=typeof result==="string"?result:result?.audio;
+  const useGoogleGeminiApi=Boolean(String(env.GOOGLE_GEMINI_API_KEY||"").trim());
+  const model=useGoogleGeminiApi?"gemini-3.8-flash-lite-tts":"google/gemini-3.8-flash-lite-tts";
+  const provider=useGoogleGeminiApi?"google-gemini-api-free-tier":"cloudflare-unified-ai-fallback";
+  const voice="Charon";
+  const runInference=useGoogleGeminiApi?()=>requestGoogleGeminiTts(env,narration,voice):null;
+  const result=await runTrackedAI(env,{user_id:userId,project_id:projectId,generation_id:generationId,stage:"voice",input_characters:narration.length},model,{text:narration,voice},runInference);
+  const googleAudioPart=result?.candidates?.[0]?.content?.parts?.find(part=>typeof part?.inlineData?.data==="string");
+  const audioValue=googleAudioPart?.inlineData?.data??(typeof result==="string"?result:result?.audio);
   let audio;
-  let contentType="audio/wav";
+  let contentType=String(googleAudioPart?.inlineData?.mimeType||"audio/wav");
   if(result instanceof Response){
     contentType=result.headers.get("content-type")||contentType;
     audio=new Uint8Array(await result.arrayBuffer());
@@ -557,7 +603,8 @@ async function processVoiceQueueMessage(message, env) {
     throw new Error("Gemini TTS returned an unsupported audio response.");
   }
   if(!audio||!audio.byteLength)throw new Error("Gemini TTS returned an empty audio file.");
-  const mimeType=contentType.includes("wav")||contentType.includes("l16")?"audio/wav":"audio/wav";
+  if(contentType.toLowerCase().includes("l16")||contentType.toLowerCase().includes("pcm"))throw new Error("Gemini TTS returned raw PCM instead of WAV; expected the unary WAV response.");
+  const mimeType="audio/wav";
   const objectKey="users/"+userId+"/projects/"+projectId+"/voice/"+generationId+".wav";
   await env.MEDIA.put(objectKey,audio,{httpMetadata:{contentType:mimeType,cacheControl:"private, max-age=3600"},customMetadata:{userId,projectId,generationId}});
   const output={object_key:objectKey,mime_type:mimeType,bytes:audio.byteLength,provider,model,language:"en",voice,characters:narration.length,source_characters:rawNarration.length,preprocessing:"punctuation-and-whitespace-normalized"};
@@ -566,8 +613,8 @@ async function processVoiceQueueMessage(message, env) {
  }catch(error){
   const detail=String(error?.message||error).slice(0,500),attempts=Number(message.attempts||1);
   console.error(JSON.stringify({event:"background_voice_attempt_failed",generation_id:generationId,attempts,error:detail}));
-  if(["AI_DAILY_LIMIT_REACHED","AI_DAILY_APP_LIMIT_REACHED","AI_DAILY_TTS_LIMIT_REACHED","AI_ACCOUNT_NEURON_SOFT_STOP"].includes(error?.code)||attempts>=3){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(detail,generationId,userId).run();message.ack();}
-  else message.retry({delaySeconds:Math.min(60,attempts*15)});
+  if(["AI_DAILY_LIMIT_REACHED","AI_DAILY_APP_LIMIT_REACHED","AI_DAILY_TTS_LIMIT_REACHED","AI_ACCOUNT_NEURON_SOFT_STOP","GOOGLE_GEMINI_AUTH_FAILED"].includes(error?.code)||attempts>=3){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(detail,generationId,userId).run();message.ack();}
+  else message.retry({delaySeconds:error?.code==="GOOGLE_GEMINI_RATE_LIMIT"?Math.min(900,300*attempts):Math.min(60,attempts*15)});
  }
 }
 
@@ -1641,7 +1688,8 @@ async function handle(request, env) {
       const projectId=voiceMatch[1],project=await env.DB.prepare("SELECT id,language,style FROM projects WHERE id=? AND user_id=?").bind(projectId,user.id).first();
       if(!project)return json({ok:false,error:"Project not found."},404);
       if(!env.JOBS||typeof env.JOBS.send!=="function")return json({ok:false,error:"Background job queue is not configured yet."},503);
-      if(!env.AI||typeof env.AI.run!=="function")return json({ok:false,error:"Workers AI text-to-speech is unavailable."},503);
+      const googleTtsConfigured=Boolean(String(env.GOOGLE_GEMINI_API_KEY||"").trim());
+      if(!googleTtsConfigured&&(!env.AI||typeof env.AI.run!=="function"))return json({ok:false,error:"No TTS provider is configured. Add GOOGLE_GEMINI_API_KEY or restore the Workers AI binding."},503);
       const scriptRow=await env.DB.prepare("SELECT id,output_json FROM generations WHERE project_id=? AND user_id=? AND stage='script' AND status='completed' ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id).first();
       if(!scriptRow)return json({ok:false,error:"Generate a script before creating the voice-over."},409);
       const script=JSON.parse(scriptRow.output_json),narration=String(script.narration||(script.scenes||[]).map(s=>s.voiceover||"").join(" ")).trim();
@@ -1649,8 +1697,8 @@ async function handle(request, env) {
       if(narration.length>10000)return json({ok:false,error:"Narration is too long. Gemini Flash-Lite TTS accepts up to 10,000 characters per request."},413);
       const pending=await env.DB.prepare("SELECT id,status FROM generations WHERE project_id=? AND user_id=? AND stage='voice' AND json_extract(input_json,'$.script_generation_id')=? AND status IN ('queued','processing') ORDER BY created_at DESC LIMIT 1").bind(projectId,user.id,scriptRow.id).first();
       if(pending)return json({ok:true,queued:true,generation_id:pending.id,status:pending.status},202);
-      const generationId=crypto.randomUUID(),model="google/gemini-3.8-flash-lite-tts",provider="cloudflare-unified-ai";
-      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,billing_note:"Google Gemini 3.8 Flash-Lite TTS: USD 0.50 per 1M input tokens and USD 6.00 per 1M output-audio tokens"};
+      const generationId=crypto.randomUUID(),model=googleTtsConfigured?"gemini-3.8-flash-lite-tts":"google/gemini-3.8-flash-lite-tts",provider=googleTtsConfigured?"google-gemini-api-free-tier":"cloudflare-unified-ai-fallback";
+      const input={provider,model,language:"en",script_generation_id:scriptRow.id,characters:narration.length,billing_note:googleTtsConfigured?"Google Gemini API Free Tier (usage limits apply; provider quota is managed in Google AI Studio).":"Cloudflare Unified AI fallback is active until GOOGLE_GEMINI_API_KEY is configured."};
       await env.DB.prepare("INSERT INTO generations (id,project_id,user_id,stage,status,input_json) VALUES (?,?,?,'voice','queued',?)").bind(generationId,projectId,user.id,JSON.stringify(input)).run();
       try{await env.JOBS.send({type:"generate_voice",generation_id:generationId,project_id:projectId,user_id:user.id});}
       catch(error){await env.DB.prepare("UPDATE generations SET status='failed',error_message=?,updated_at=unixepoch() WHERE id=? AND user_id=?").bind(String(error.message||error).slice(0,500),generationId,user.id).run();throw error;}
