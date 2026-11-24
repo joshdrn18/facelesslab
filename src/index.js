@@ -566,7 +566,7 @@ async function processVoiceQueueMessage(message, env) {
     }else if(ArrayBuffer.isView(source)){
       part=new Uint8Array(source.buffer,source.byteOffset,source.byteLength);
     }else if(typeof source==="string"){
-      if(/^https?:\\/\\//i.test(source)){
+      if(source.startsWith("https://")||source.startsWith("http://")){
         const response=await fetch(source);
         if(!response.ok)throw new Error("Could not retrieve the generated audio file.");
         part=new Uint8Array(await response.arrayBuffer());
