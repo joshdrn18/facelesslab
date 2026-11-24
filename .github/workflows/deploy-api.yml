@@ -31,8 +31,25 @@ jobs:
       - name: Install Wrangler
         run: npm install --no-save wrangler@4
 
+      - name: Check deployment credential
+        id: deploy-check
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy Worker
+        if: steps.deploy-check.outputs.available == 'true'
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 7fba808c5a694f2755dc45ab94cee505
+
+      - name: Explain skipped deployment
+        if: steps.deploy-check.outputs.available == 'false'
+        run: echo "::warning::Worker syntax passed, but GitHub Actions deployment was skipped because CLOUDFLARE_API_TOKEN is not configured. The current production version was deployed directly through Cloudflare."
