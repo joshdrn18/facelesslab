@@ -1,0 +1,33 @@
+name: FacelessLab Auto Production
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 1 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: facelesslab-auto-production
+  cancel-in-progress: false
+jobs:
+  produce:
+    if: github.event_name == 'workflow_dispatch' || vars.FACELESSLAB_AUTO_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      FACELESSLAB_EMAIL: ${{ secrets.FACELESSLAB_EMAIL }}
+      FACELESSLAB_PASSWORD: ${{ secrets.FACELESSLAB_PASSWORD }}
+      FACELESSLAB_MODE: ${{ github.event_name == 'schedule' && vars.FACELESSLAB_PUBLIC_ENABLED == 'true' && 'public' || 'private' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate configuration
+        run: |
+          test -n "$FACELESSLAB_EMAIL" && test -n "$FACELESSLAB_PASSWORD" || { echo "Configure the two FacelessLab Actions secrets first."; exit 1; }
+      - name: Install headless browser
+        run: |
+          npm install --no-save --no-package-lock playwright@1.51.1
+          npx playwright install --with-deps chromium
+      - name: Run production
+        run: node scripts/auto-produce.mjs
