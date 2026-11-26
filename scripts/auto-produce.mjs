@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 const BASE='https://facelesslab-api.joshdrn18.workers.dev', SITE='https://facelesslab.pages.dev/';
 const email=process.env.FACELESSLAB_EMAIL,password=process.env.FACELESSLAB_PASSWORD;
 const mode=process.env.FACELESSLAB_MODE||'private';
-if(!email||!password||!['public','private'].includes(mode))throw new Error('Missing or invalid configuration');
+if(!email||!password||!['public','private','render-only'].includes(mode))throw new Error('Missing or invalid configuration');
 const anchor='1e64e2f0-7d59-41b4-999b-1d992da26b0a';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let token,browser;
@@ -39,16 +39,19 @@ try{
  }
  let children=projects.filter(p=>p.parent_project_id===parent.id&&Number(p.episode_number)===next);
  if(children.length>1)throw new Error('Multiple candidate continuation projects; no duplicate created');
+ if(mode==='render-only'&&!children.length)throw new Error('Render-only pilot requires existing episode assets');
  const project=children[0]||(await api('/api/projects/'+parent.id+'/continue','POST',{})).project;
  if(!project?.id||Number(project.episode_number)!==next)throw new Error('Continuation project invalid');
  const id=project.id;
  console.log('Continuing existing series: Part '+next);
  let scriptState=await api('/api/projects/'+id+'/script');
+ if(mode==='render-only'&&!scriptState.script)throw new Error('Saved script missing; no inference allowed during pilot');
  if(!scriptState.script&&!['queued','processing'].includes(scriptState.status))await api('/api/projects/'+id+'/generate-script','POST',{});
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage','--autoplay-policy=no-user-gesture-required']});
  const context=await browser.newContext({viewport:{width:1440,height:900},serviceWorkers:'block'});
  await context.addInitScript(session=>{if(location.origin==='https://facelesslab.pages.dev')localStorage.setItem('facelesslab_token',session)},token);
  const page=await context.newPage();
+ if(mode==='render-only')await page.route(BASE+'/**',route=>route.request().method()==='POST'?route.abort():route.continue());
  await page.goto(SITE,{waitUntil:'domcontentloaded',timeout:60000});
  await page.waitForFunction(()=>typeof refreshProjects==='function'&&!!document.getElementById('appScreen')&&!document.getElementById('appScreen').classList.contains('hidden'),{},{timeout:90000});
  await page.evaluate(async id=>{
@@ -65,8 +68,23 @@ try{
   else renderSubtitleResult(id,sub.subtitles);
  },id);
  console.log('Assets ready');
+ if(mode==='render-only'){
+  await page.evaluate(async id=>{
+   const quality=$('editor-quality-'+id);if(quality)quality.value='720';
+   const lang=$('editor-subtitle-language-'+id);if(lang)lang.value='en';
+   const button=$('editor-btn-'+id);if(!button)throw new Error('Render editor unavailable');await renderProjectVideo(id,button);
+  },id);
+  const result=await page.evaluate(async id=>{
+   const url=window.facelessRenderedUrls?.[id];if(!url)throw new Error('No rendered video');
+   const v=document.createElement('video');v.preload='metadata';v.src=url;
+   await new Promise((resolve,reject)=>{v.onloadedmetadata=resolve;v.onerror=reject;setTimeout(()=>reject(new Error('Video metadata timeout')),15000)});
+   return {width:v.videoWidth,height:v.videoHeight,duration:v.duration};
+  },id);
+  if(result.height<=result.width||result.duration<10||result.duration>181)throw new Error('Render validation failed');
+  console.log('Render-only pilot passed: '+JSON.stringify(result)+'; no AI, backup or publishing POST allowed.');
+ }else{
  const backupPromise=page.waitForResponse(r=>r.url()===BASE+'/api/video-backups'&&r.request().method()==='POST'&&r.ok(),{timeout:25*60000});
- const [backupResponse]=await Promise.all([backupPromise,page.evaluate(async id=>{const button=$('editor-btn-'+id);if(!button)throw new Error('Render editor unavailable');await renderProjectVideo(id,button)},id)]);
+ const [backupResponse]=await Promise.all([backupPromise,page.evaluate(async id=>{const button=$('editor-btn-'+id);if(!button)throw new Error('Render editor unavailable');const q=$('editor-quality-'+id);if(q)q.value='720';await renderProjectVideo(id,button)},id)]);
  const backup=(await backupResponse.json()).backup;
  if(!backup?.id)throw new Error('R2 backup missing');
  const quality=await page.evaluate(async id=>{
@@ -88,5 +106,6 @@ try{
  if(!job?.id)throw new Error('Publish job missing');
  console.log('Upload queued: Part '+next);
  for(let i=0;i<40;i++){await sleep(15000);const current=(await api('/api/publishing/jobs')).jobs?.find(j=>j.id===job.id);if(current?.status==='published'){console.log('Published '+current.provider_url);break;}if(['failed','cancelled'].includes(current?.status))throw new Error('Publishing failed; inspect dashboard');if(i===39)throw new Error('Publishing pending; do not duplicate');}
+ }
  }
 }finally{if(browser)await browser.close();if(token)await api('/api/auth/logout','POST',{}).catch(()=>{});}
