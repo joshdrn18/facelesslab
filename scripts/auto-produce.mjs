@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 const BASE='https://facelesslab-api.joshdrn18.workers.dev', SITE='https://facelesslab.pages.dev/';
 const email=process.env.FACELESSLAB_EMAIL,password=process.env.FACELESSLAB_PASSWORD;
 const mode=process.env.FACELESSLAB_MODE||'private';
-if(!email||!password||!['public','private','render-only'].includes(mode))throw new Error('Missing or invalid configuration');
+if(!email||!password||!['public','private','render-only','budget-audit'].includes(mode))throw new Error('Missing or invalid configuration');
 const anchor='1e64e2f0-7d59-41b4-999b-1d992da26b0a';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const slot=process.env.FACELESSLAB_PUBLISH_SLOT||'';
@@ -16,7 +16,7 @@ if(mode==='public'){
  const utc=new Date();utc.setUTCHours(Number(slot)-7,0,0,0);publishAt=utc;
  if(publishAt.getTime()-Date.now()<120000||publishAt.getTime()-Date.now()>90*60000)throw new Error('Publishing window missed or invalid; skip rather than upload late');
 }
-let token,browser,workdir;
+let token,browser,workdir,returnAudit=false;
 async function api(path,method='GET',body){
  const res=await fetch(BASE+path,{method,headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(30000)});
  const data=await res.json().catch(()=>({}));
@@ -27,6 +27,15 @@ const episode=t=>Number(String(t||'').match(/\bPart\s+(\d+)\b/i)?.[1]||0);
 try{
  token=(await api('/api/auth/login','POST',{email,password})).token;
  if(!token)throw new Error('Login failed');
+ if(mode==='budget-audit'||mode==='public'){
+  const b=await api('/api/admin/cloudflare-billing');
+  const bill=b.billable_usage||{}, ai=b.ai_analytics||{}, today=ai.today||{};
+  const summary={billingAvailable:bill.success===true,billedCost:bill.success?bill.total_billed_cost:null,currency:bill.currency||null,billingRecords:bill.record_count??null,usagePeriodTo:bill.period_to||null,aiAnalyticsAvailable:ai.success===true,neurons:today.neurons??null,remainingNeurons:today.remaining_neurons??null};
+  console.log('Budget audit: '+JSON.stringify(summary));
+  if(mode==='budget-audit')returnAudit=true;
+  else if(!summary.billingAvailable||!summary.aiAnalyticsAvailable||summary.billingRecords===0||summary.billedCost!==0||!Number.isFinite(summary.neurons)||summary.neurons>=6000)throw new Error('Budget data unavailable or safety threshold reached; production blocked');
+ }
+ if(!returnAudit){
  const con=(await api('/api/publishing/connections')).connections||[];
  if(!con.some(c=>c.platform==='youtube'&&c.status==='active'))throw new Error('YouTube connection unavailable');
  let jobs=(await api('/api/publishing/jobs')).jobs||[];
@@ -125,4 +134,5 @@ try{
  if(!publishAt)for(let i=0;i<40;i++){await sleep(15000);const current=(await api('/api/publishing/jobs')).jobs?.find(j=>j.id===job.id);if(current?.status==='published'){console.log('Published '+current.provider_url);break;}if(['failed','cancelled'].includes(current?.status))throw new Error('Publishing failed; inspect dashboard');if(i===39)throw new Error('Publishing pending; do not duplicate');}
  }
  }
+}
 }finally{if(workdir)await rm(workdir,{recursive:true,force:true});if(browser)await browser.close();if(token)await api('/api/auth/logout','POST',{}).catch(()=>{});}
