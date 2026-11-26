@@ -9,6 +9,13 @@ const mode=process.env.FACELESSLAB_MODE||'private';
 if(!email||!password||!['public','private','render-only'].includes(mode))throw new Error('Missing or invalid configuration');
 const anchor='1e64e2f0-7d59-41b4-999b-1d992da26b0a';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const slot=process.env.FACELESSLAB_PUBLISH_SLOT||'';
+let publishAt=null;
+if(mode==='public'){
+ if(!['12','20'].includes(slot))throw new Error('Public run requires an explicit WIB publishing slot');
+ const utc=new Date();utc.setUTCHours(Number(slot)-7,0,0,0);publishAt=utc;
+ if(publishAt.getTime()-Date.now()<120000||publishAt.getTime()-Date.now()>90*60000)throw new Error('Publishing window missed or invalid; skip rather than upload late');
+}
 let token,browser,workdir;
 async function api(path,method='GET',body){
  const res=await fetch(BASE+path,{method,headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(30000)});
@@ -25,8 +32,9 @@ try{
  let jobs=(await api('/api/publishing/jobs')).jobs||[];
  const publicParts=jobs.filter(j=>j.platform==='youtube'&&j.privacy==='public'&&j.status==='published'&&episode(j.title)>=20);
  const latest=Math.max(...publicParts.map(j=>episode(j.title)),20);
- const localDay=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kuala_Lumpur',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(t));
- if(publicParts.some(j=>episode(j.title)>20&&localDay(Number(j.created_at)*1000)===localDay(Date.now()))){console.log('Daily public episode already created');}
+ const localDay=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(t));
+ const todaysJobs=jobs.filter(j=>j.platform==='youtube'&&episode(j.title)>20&&localDay(Number(j.scheduled_at||j.created_at)*1000)===localDay(Date.now()));
+ if(mode==='public'&&(todaysJobs.length>=2||todaysJobs.some(j=>Math.abs(Number(j.scheduled_at)*1000-publishAt.getTime())<60000))){console.log('Daily two-episode cap or publishing slot already used');}
  else{
  const next=latest+1;
  const existingJobs=jobs.filter(j=>j.platform==='youtube'&&episode(j.title)===next);
@@ -96,6 +104,7 @@ try{
  if(mode==='render-only'){
   console.log('Render-only pilot passed; no new AI, backup or publishing requests allowed.');
  }else{
+ if(publishAt&&publishAt.getTime()-Date.now()<120000)throw new Error('Render finished too late for requested slot; no upload queued');
  const data=await readFile(file);
  const scriptForBackup=(await api('/api/projects/'+id+'/script')).script;
  const backupResponse=await fetch(BASE+'/api/video-backups',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'video/mp4','x-video-title':encodeURIComponent(String(scriptForBackup?.title||'FacelessLab episode').slice(0,160)),'x-video-duration':String(duration),'x-video-quality':'720'},body:data,signal:AbortSignal.timeout(120000)});
@@ -110,10 +119,10 @@ try{
  for(const raw of (Array.isArray(script.youtube_tags)?script.youtube_tags:[])){const tag=String(raw).trim().replace(/^#+/,'');if(tag&&!tags.includes(tag)&&tags.length<30&&length+Buffer.byteLength(tag)+1<=480){tags.push(tag);length+=Buffer.byteLength(tag)+1;}}
  jobs=(await api('/api/publishing/jobs')).jobs||[];
  if(jobs.some(j=>j.platform==='youtube'&&episode(j.title)===next))throw new Error('Duplicate publishing job detected before upload');
- const job=(await api('/api/publishing/jobs','POST',{backup_id:backup.id,platform:'youtube',title,description:String(script.youtube_description||''),hashtags:(Array.isArray(script.hashtags)?script.hashtags:[]).join(' '),tags,privacy:mode,scheduled_at:new Date(Date.now()+90000).toISOString()})).job;
+ const job=(await api('/api/publishing/jobs','POST',{backup_id:backup.id,platform:'youtube',title,description:String(script.youtube_description||''),hashtags:(Array.isArray(script.hashtags)?script.hashtags:[]).join(' '),tags,privacy:mode,scheduled_at:(publishAt||new Date(Date.now()+90000)).toISOString()})).job;
  if(!job?.id)throw new Error('Publish job missing');
- console.log('Upload queued: Part '+next);
- for(let i=0;i<40;i++){await sleep(15000);const current=(await api('/api/publishing/jobs')).jobs?.find(j=>j.id===job.id);if(current?.status==='published'){console.log('Published '+current.provider_url);break;}if(['failed','cancelled'].includes(current?.status))throw new Error('Publishing failed; inspect dashboard');if(i===39)throw new Error('Publishing pending; do not duplicate');}
+ console.log('Upload queued: Part '+next+' at '+(publishAt?.toISOString()||'next available time'));
+ if(!publishAt)for(let i=0;i<40;i++){await sleep(15000);const current=(await api('/api/publishing/jobs')).jobs?.find(j=>j.id===job.id);if(current?.status==='published'){console.log('Published '+current.provider_url);break;}if(['failed','cancelled'].includes(current?.status))throw new Error('Publishing failed; inspect dashboard');if(i===39)throw new Error('Publishing pending; do not duplicate');}
  }
  }
 }finally{if(workdir)await rm(workdir,{recursive:true,force:true});if(browser)await browser.close();if(token)await api('/api/auth/logout','POST',{}).catch(()=>{});}
