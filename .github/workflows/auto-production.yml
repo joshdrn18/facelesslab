@@ -13,14 +13,16 @@ concurrency:
   cancel-in-progress: false
 jobs:
   produce:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.FACELESSLAB_AUTO_ENABLED == 'true') || (github.event_name == 'push' && github.event.head_commit.message == 'Run FacelessLab private pilot 2026-11-26')
-    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.FACELESSLAB_AUTO_ENABLED == 'true' && vars.FACELESSLAB_BUDGET_VERIFIED == 'true' && vars.FACELESSLAB_PUBLIC_ENABLED == 'true') || (github.event_name == 'push' && github.event.head_commit.message == 'Retry FacelessLab render-only pilot 2026-11-26')
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check runner syntax
+        run: node --check scripts/auto-produce.mjs
       - name: Validate configuration
         env:
           FACELESSLAB_EMAIL: ${{ secrets.FACELESSLAB_EMAIL }}
@@ -35,5 +37,5 @@ jobs:
         env:
           FACELESSLAB_EMAIL: ${{ secrets.FACELESSLAB_EMAIL }}
           FACELESSLAB_PASSWORD: ${{ secrets.FACELESSLAB_PASSWORD }}
-          FACELESSLAB_MODE: ${{ github.event_name == 'schedule' && vars.FACELESSLAB_PUBLIC_ENABLED == 'true' && 'public' || 'private' }}
+          FACELESSLAB_MODE: ${{ github.event_name == 'schedule' && vars.FACELESSLAB_PUBLIC_ENABLED == 'true' && vars.FACELESSLAB_BUDGET_VERIFIED == 'true' && 'public' || 'render-only' }}
         run: node scripts/auto-produce.mjs
