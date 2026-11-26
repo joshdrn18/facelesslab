@@ -1,11 +1,15 @@
 import { chromium } from 'playwright';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 const BASE='https://facelesslab-api.joshdrn18.workers.dev', SITE='https://facelesslab.pages.dev/';
 const email=process.env.FACELESSLAB_EMAIL,password=process.env.FACELESSLAB_PASSWORD;
 const mode=process.env.FACELESSLAB_MODE||'private';
 if(!email||!password||!['public','private','render-only'].includes(mode))throw new Error('Missing or invalid configuration');
 const anchor='1e64e2f0-7d59-41b4-999b-1d992da26b0a';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let token,browser;
+let token,browser,workdir;
 async function api(path,method='GET',body){
  const res=await fetch(BASE+path,{method,headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(30000)});
  const data=await res.json().catch(()=>({}));
@@ -51,7 +55,7 @@ try{
  const context=await browser.newContext({viewport:{width:1440,height:900},serviceWorkers:'block'});
  await context.addInitScript(session=>{if(location.origin==='https://facelesslab.pages.dev')localStorage.setItem('facelesslab_token',session)},token);
  const page=await context.newPage();
- if(mode==='render-only')await page.route(BASE+'/**',route=>route.request().method()==='POST'?route.abort():route.continue());
+ await page.route(BASE+'/**',route=>{const req=route.request();return req.method()==='POST'&&(mode==='render-only'||req.url()===BASE+'/api/video-backups')?route.abort():route.continue();});
  await page.goto(SITE,{waitUntil:'domcontentloaded',timeout:60000});
  await page.waitForFunction(()=>typeof refreshProjects==='function'&&!!document.getElementById('appScreen')&&!document.getElementById('appScreen').classList.contains('hidden'),{},{timeout:90000});
  await page.evaluate(async id=>{
@@ -68,32 +72,36 @@ try{
   else renderSubtitleResult(id,sub.subtitles);
  },id);
  console.log('Assets ready');
+ await page.evaluate(async id=>{
+  const q=$('editor-quality-'+id);if(q)q.value='720';
+  const lang=$('editor-subtitle-language-'+id);if(lang)lang.value='en';
+  const button=$('editor-btn-'+id);if(!button)throw new Error('Render editor unavailable');
+  await renderProjectVideo(id,button);
+ },id);
+ workdir=await mkdtemp(join(tmpdir(),'facelesslab-'));
+ const file=join(workdir,'episode.mp4');
+ const bytes=await page.evaluate(async id=>{
+  const url=window.facelessRenderedUrls?.[id];if(!url)throw new Error('No rendered video');
+  const blob=await (await fetch(url)).blob();
+  if(blob.size<10000||blob.size>85*1024*1024)throw new Error('Unexpected render size');
+  return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Read render failed'));reader.readAsDataURL(blob);});
+ },id);
+ await writeFile(file,Buffer.from(bytes,'base64'));
+ const result=JSON.parse(execFileSync('ffprobe',['-v','error','-show_streams','-show_format','-of','json',file],{encoding:'utf8'}));
+ const video=result.streams.find(s=>s.codec_type==='video'),audio=result.streams.find(s=>s.codec_type==='audio'),duration=Number(result.format.duration);
+ if(!video||!audio||video.height<=video.width||!Number.isFinite(duration)||duration<10||duration>181||video.codec_name!=='h264')throw new Error('Rendered file failed video/audio validation');
+ if(Math.abs(Number(audio.duration||duration)-duration)>2)throw new Error('Audio/video duration mismatch');
+ execFileSync('ffmpeg',['-v','error','-xerror','-i',file,'-f','null','-'],{timeout:120000});
+ console.log('Native media verification: '+JSON.stringify({width:video.width,height:video.height,duration,audio:audio.codec_name,video:video.codec_name,size:Number(result.format.size)}));
  if(mode==='render-only'){
-  await page.evaluate(async id=>{
-   const quality=$('editor-quality-'+id);if(quality)quality.value='720';
-   const lang=$('editor-subtitle-language-'+id);if(lang)lang.value='en';
-   const button=$('editor-btn-'+id);if(!button)throw new Error('Render editor unavailable');await renderProjectVideo(id,button);
-  },id);
-  const result=await page.evaluate(async id=>{
-   const url=window.facelessRenderedUrls?.[id];if(!url)throw new Error('No rendered video');
-   const v=document.createElement('video');v.preload='metadata';v.src=url;
-   await new Promise((resolve,reject)=>{v.onloadedmetadata=resolve;v.onerror=reject;setTimeout(()=>reject(new Error('Video metadata timeout')),15000)});
-   return {width:v.videoWidth,height:v.videoHeight,duration:v.duration};
-  },id);
-  if(result.height<=result.width||result.duration<10||result.duration>181)throw new Error('Render validation failed');
-  console.log('Render-only pilot passed: '+JSON.stringify(result)+'; no AI, backup or publishing POST allowed.');
+  console.log('Render-only pilot passed; no new AI, backup or publishing requests allowed.');
  }else{
- const backupPromise=page.waitForResponse(r=>r.url()===BASE+'/api/video-backups'&&r.request().method()==='POST'&&r.ok(),{timeout:25*60000});
- const [backupResponse]=await Promise.all([backupPromise,page.evaluate(async id=>{const button=$('editor-btn-'+id);if(!button)throw new Error('Render editor unavailable');const q=$('editor-quality-'+id);if(q)q.value='720';await renderProjectVideo(id,button)},id)]);
+ const data=await readFile(file);
+ const scriptForBackup=(await api('/api/projects/'+id+'/script')).script;
+ const backupResponse=await fetch(BASE+'/api/video-backups',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'video/mp4','x-video-title':encodeURIComponent(String(scriptForBackup?.title||'FacelessLab episode').slice(0,160)),'x-video-duration':String(duration),'x-video-quality':'720'},body:data,signal:AbortSignal.timeout(120000)});
+ if(!backupResponse.ok)throw new Error('Cloud backup rejected: HTTP '+backupResponse.status);
  const backup=(await backupResponse.json()).backup;
  if(!backup?.id)throw new Error('R2 backup missing');
- const quality=await page.evaluate(async id=>{
-  const url=window.facelessRenderedUrls?.[id];if(!url)return false;
-  const v=document.createElement('video');v.preload='metadata';v.src=url;
-  await new Promise((resolve,reject)=>{v.onloadedmetadata=resolve;v.onerror=reject;setTimeout(()=>reject(new Error('Video metadata timeout')),15000)});
-  return v.videoHeight>v.videoWidth&&v.duration>10&&v.duration<181;
- },id);
- if(!quality)throw new Error('Rendered output failed duration or portrait validation');
  const script=(await api('/api/projects/'+id+'/script')).script;
  if(!script)throw new Error('Script missing');
  const rawTitle=String(script.youtube_title_options?.[0]||script.title||'').replace(/^Part\s+\d+\s*[:—–-]?\s*/i,'');
@@ -108,4 +116,4 @@ try{
  for(let i=0;i<40;i++){await sleep(15000);const current=(await api('/api/publishing/jobs')).jobs?.find(j=>j.id===job.id);if(current?.status==='published'){console.log('Published '+current.provider_url);break;}if(['failed','cancelled'].includes(current?.status))throw new Error('Publishing failed; inspect dashboard');if(i===39)throw new Error('Publishing pending; do not duplicate');}
  }
  }
-}finally{if(browser)await browser.close();if(token)await api('/api/auth/logout','POST',{}).catch(()=>{});}
+}finally{if(workdir)await rm(workdir,{recursive:true,force:true});if(browser)await browser.close();if(token)await api('/api/auth/logout','POST',{}).catch(()=>{});}
