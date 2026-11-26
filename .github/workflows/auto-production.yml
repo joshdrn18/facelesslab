@@ -1,6 +1,9 @@
 name: FacelessLab Auto Production
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/auto-production.yml']
   schedule:
     - cron: '17 1 * * *'
 permissions:
@@ -10,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   produce:
-    if: github.event_name == 'workflow_dispatch' || vars.FACELESSLAB_AUTO_ENABLED == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.FACELESSLAB_AUTO_ENABLED == 'true') || (github.event_name == 'push' && github.event.head_commit.message == 'Run FacelessLab private pilot 2026-11-26')
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
