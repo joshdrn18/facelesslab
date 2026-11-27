@@ -948,7 +948,22 @@ async function handle(request, env) {
           readMetric("queueMessageOperationsAdaptiveGroups",range(day),"sum { billableOperations }"),
           readRest("/r2/metrics")
         ]);
-        return json({ok:true,checked_at:end,r2_month_operations:r2,workers_daily:workers,d1_daily:d1,queues_daily:queues,r2_storage:storage});
+        // The separately authenticated account connector can supply a short-lived
+        // read-only R2 metrics snapshot in the existing audit log. Never use an
+        // old snapshot or infer missing storage classes as zero.
+        let storageMetric=storage;
+        if(storage.success!==true){
+          const snapshot=await env.DB.prepare("SELECT details_json,created_at FROM admin_audit_logs WHERE action='facelesslab_r2_account_metrics_snapshot' AND created_at>=unixepoch()-4500 AND created_at<=unixepoch() ORDER BY created_at DESC LIMIT 1").first();
+          if(snapshot){
+            try{
+              const data=JSON.parse(snapshot.details_json||"{}");
+              if(data.source==="cloudflare_account_connector"&&data.account_id===accountId&&data.metrics&&data.checked_at&&Math.abs(Date.parse(data.checked_at)/1000-Number(snapshot.created_at))<=60){
+                storageMetric={success:true,result:data.metrics,source:data.source,checked_at:data.checked_at};
+              }
+            }catch{}
+          }
+        }
+        return json({ok:true,checked_at:end,r2_month_operations:r2,workers_daily:workers,d1_daily:d1,queues_daily:queues,r2_storage:storageMetric});
       }
 
       if (path === "/api/admin/cloudflare-billing" && method === "GET") {
