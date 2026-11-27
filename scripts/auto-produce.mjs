@@ -32,6 +32,11 @@ try{
   const bill=b.billable_usage||{}, ai=b.ai_analytics||{}, today=ai.today||{};
   const summary={billingAvailable:bill.success===true,billedCost:bill.success?bill.total_billed_cost:null,currency:bill.currency||null,billingRecords:bill.record_count??null,usagePeriodTo:bill.period_to||null,aiAnalyticsAvailable:ai.success===true,neurons:today.neurons??null,remainingNeurons:today.remaining_neurons??null};
   console.log('Budget audit: '+JSON.stringify(summary));
+  const subs=b.subscriptions||{};
+  console.log('Account plan audit: '+JSON.stringify({available:subs.success===true,plans:Array.isArray(subs.plans)?subs.plans:[],httpStatus:subs.http_status??null}));
+  const latestPeriod=String(bill.period_to||'').slice(0,10);
+  const records=Array.isArray(bill.records)?bill.records:[];
+  console.log('Resource billing audit: '+JSON.stringify({period:latestPeriod,services:bill.services||[],latestUsage:(bill.daily_usage||[]).slice(-2),recordUnits:[...new Set(records.map(r=>r.unit))]}));
   if(mode==='budget-audit')returnAudit=true;
   else if(!summary.billingAvailable||!summary.aiAnalyticsAvailable||summary.billingRecords===0||summary.billedCost!==0||!Number.isFinite(summary.neurons)||summary.neurons>=6000)throw new Error('Budget data unavailable or safety threshold reached; production blocked');
  }
