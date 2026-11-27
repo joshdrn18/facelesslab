@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   produce:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.event.head_commit.message == 'Audit FacelessLab budget 2026-11-27')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && (github.event.head_commit.message == 'Audit FacelessLab budget 2026-11-27' || github.event.head_commit.message == 'Prepare FacelessLab Part 22 draft'))
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -31,6 +31,34 @@ jobs:
           FACELESSLAB_PASSWORD: ${{ secrets.FACELESSLAB_PASSWORD }}
         run: |
           test -n "$FACELESSLAB_EMAIL" && test -n "$FACELESSLAB_PASSWORD" || { echo "Configure the two FacelessLab Actions secrets first."; exit 1; }
+      - name: Create Part 22 continuation draft
+        if: github.event_name == 'push' && github.event.head_commit.message == 'Prepare FacelessLab Part 22 draft'
+        env:
+          FACELESSLAB_EMAIL: ${{ secrets.FACELESSLAB_EMAIL }}
+          FACELESSLAB_PASSWORD: ${{ secrets.FACELESSLAB_PASSWORD }}
+        run: |
+          node --input-type=module <<'NODE'
+          const base = 'https://facelesslab-api.joshdrn18.workers.dev';
+          let token;
+          async function api(path, method='GET', body) {
+            const r = await fetch(base+path,{method,headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(30000)});
+            if(!r.ok) throw Error('FacelessLab request failed: '+r.status);
+            return r.json();
+          }
+          try {
+            token=(await api('/api/auth/login','POST',{email:process.env.FACELESSLAB_EMAIL,password:process.env.FACELESSLAB_PASSWORD})).token;
+            if(!token) throw Error('Missing session');
+            const projects=(await api('/api/projects')).projects||[];
+            const parent=projects.find(p=>p.id==='f0e787d4-8084-44f5-9f45-3888c2e7b256'&&Number(p.episode_number)===21);
+            if(!parent) throw Error('Expected Part 21 missing');
+            const existing=projects.filter(p=>Number(p.episode_number)===22&&p.parent_project_id===parent.id);
+            if(existing.length>1) throw Error('Duplicate continuation detected');
+            if(!existing.length && projects.some(p=>Number(p.episode_number)===22)) throw Error('Part 22 lineage mismatch');
+            const result=existing[0]||(await api('/api/projects/'+parent.id+'/continue','POST',{})).project;
+            if(!result?.id||Number(result.episode_number)!==22) throw Error('Continuation not confirmed');
+            console.log('Part 22 draft exists: '+result.id+'; status='+result.status);
+          } finally {if(token) await api('/api/auth/logout','POST',{}).catch(()=>{});}
+          NODE
       - name: Install headless browser
         if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.FACELESSLAB_AUTO_ENABLED == 'true' && vars.FACELESSLAB_BUDGET_VERIFIED == 'true' && vars.FACELESSLAB_PUBLIC_ENABLED == 'true')
         run: |
@@ -41,9 +69,10 @@ jobs:
           command -v ffprobe
           command -v ffmpeg
       - name: Install audit dependency
-        if: github.event_name == 'push' || (github.event_name == 'schedule' && (vars.FACELESSLAB_AUTO_ENABLED != 'true' || vars.FACELESSLAB_BUDGET_VERIFIED != 'true' || vars.FACELESSLAB_PUBLIC_ENABLED != 'true'))
+        if: (github.event_name == 'push' && github.event.head_commit.message != 'Prepare FacelessLab Part 22 draft') || (github.event_name == 'schedule' && (vars.FACELESSLAB_AUTO_ENABLED != 'true' || vars.FACELESSLAB_BUDGET_VERIFIED != 'true' || vars.FACELESSLAB_PUBLIC_ENABLED != 'true'))
         run: npm install --no-save --no-package-lock playwright@1.51.1
       - name: Run production
+        if: github.event_name != 'push' || github.event.head_commit.message != 'Prepare FacelessLab Part 22 draft'
         env:
           FACELESSLAB_EMAIL: ${{ secrets.FACELESSLAB_EMAIL }}
           FACELESSLAB_PASSWORD: ${{ secrets.FACELESSLAB_PASSWORD }}
