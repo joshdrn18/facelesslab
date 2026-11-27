@@ -8,6 +8,8 @@ const email=process.env.FACELESSLAB_EMAIL,password=process.env.FACELESSLAB_PASSW
 const mode=process.env.FACELESSLAB_MODE||'private';
 if(!email||!password||!['public','private','render-only','budget-audit'].includes(mode))throw new Error('Missing or invalid configuration');
 const anchor='1e64e2f0-7d59-41b4-999b-1d992da26b0a';
+const pilotOnly=process.env.FACELESSLAB_PILOT_ONLY==='true';
+const reuseOnly=mode==='render-only'||(mode==='public'&&pilotOnly);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const slot=process.env.FACELESSLAB_PUBLISH_SLOT||'';
 let publishAt=null;
@@ -75,6 +77,7 @@ try{
  if(mode==='public'&&(todaysJobs.length>=2||todaysJobs.some(j=>Math.abs(Number(j.scheduled_at)*1000-publishAt.getTime())<60000))){console.log('Daily two-episode cap or publishing slot already used');}
  else{
  const next=latest+1;
+ if(mode==='public'&&pilotOnly&&next!==21)throw Error('Part 21 pilot verification required before later episodes');
  const existingJobs=jobs.filter(j=>j.platform==='youtube'&&episode(j.title)===next);
  if(existingJobs.some(j=>['queued','uploading','processing','draft','failed'].includes(j.status))){throw new Error('Existing next-episode publishing job requires inspection; no duplicate will be made');}
  if(existingJobs.some(j=>j.status==='published')){throw new Error('Episode already uploaded with different visibility; inspect before publishing');}
@@ -89,19 +92,19 @@ try{
  }
  let children=projects.filter(p=>p.parent_project_id===parent.id&&Number(p.episode_number)===next);
  if(children.length>1)throw new Error('Multiple candidate continuation projects; no duplicate created');
- if(mode==='render-only'&&!children.length)throw new Error('Render-only pilot requires existing episode assets');
+ if(reuseOnly&&!children.length)throw new Error('Render-only pilot requires existing episode assets');
  const project=children[0]||(await api('/api/projects/'+parent.id+'/continue','POST',{})).project;
  if(!project?.id||Number(project.episode_number)!==next)throw new Error('Continuation project invalid');
  const id=project.id;
  console.log('Continuing existing series: Part '+next);
  let scriptState=await api('/api/projects/'+id+'/script');
- if(mode==='render-only'&&!scriptState.script)throw new Error('Saved script missing; no inference allowed during pilot');
+ if(reuseOnly&&!scriptState.script)throw new Error('Saved script missing; no inference allowed during pilot');
  if(!scriptState.script&&!['queued','processing'].includes(scriptState.status))await api('/api/projects/'+id+'/generate-script','POST',{});
  browser=await chromium.launch({headless:true,args:['--disable-dev-shm-usage','--autoplay-policy=no-user-gesture-required']});
  const context=await browser.newContext({viewport:{width:1440,height:900},serviceWorkers:'block'});
  await context.addInitScript(session=>{if(location.origin==='https://facelesslab.pages.dev')localStorage.setItem('facelesslab_token',session)},token);
  const page=await context.newPage();
- await page.route(BASE+'/**',route=>{const req=route.request();return req.method()==='POST'&&(mode==='render-only'||req.url()===BASE+'/api/video-backups')?route.abort():route.continue();});
+ await page.route(BASE+'/**',route=>{const req=route.request();return req.method()==='POST'&&(reuseOnly||req.url()===BASE+'/api/video-backups')?route.abort():route.continue();});
  await page.goto(SITE,{waitUntil:'domcontentloaded',timeout:60000});
  await page.waitForFunction(()=>typeof refreshProjects==='function'&&!!document.getElementById('appScreen')&&!document.getElementById('appScreen').classList.contains('hidden'),{},{timeout:90000});
  await page.evaluate(async id=>{
@@ -151,13 +154,15 @@ try{
  if(!backup?.id)throw new Error('R2 backup missing');
  const script=(await api('/api/projects/'+id+'/script')).script;
  if(!script)throw new Error('Script missing');
- const rawTitle=String(script.youtube_title_options?.[0]||script.title||'').replace(/^Part\s+\d+\s*[:—–-]?\s*/i,'');
+ const rawTitle=String(script.title||script.youtube_title_options?.[0]||'').replace(/^Part\s+\d+\s*[:—–-]?\s*/i,'');
  const title=('Part '+next+': '+(rawTitle||'Kenji’s story continues')).slice(0,100);
  const tags=[];let length=0;
  for(const raw of (Array.isArray(script.youtube_tags)?script.youtube_tags:[])){const tag=String(raw).trim().replace(/^#+/,'');if(tag&&!tags.includes(tag)&&tags.length<30&&length+Buffer.byteLength(tag)+1<=480){tags.push(tag);length+=Buffer.byteLength(tag)+1;}}
  jobs=(await api('/api/publishing/jobs')).jobs||[];
  if(jobs.some(j=>j.platform==='youtube'&&episode(j.title)===next))throw new Error('Duplicate publishing job detected before upload');
- const job=(await api('/api/publishing/jobs','POST',{backup_id:backup.id,platform:'youtube',title,description:String(script.youtube_description||''),hashtags:(Array.isArray(script.hashtags)?script.hashtags:[]).join(' '),tags,privacy:mode,scheduled_at:(publishAt||new Date(Date.now()+90000)).toISOString()})).job;
+ const previous=jobs.find(j=>j.platform==='youtube'&&episode(j.title)===next-1&&j.status==='published'&&j.privacy==='public');
+ const description=String(script.youtube_description||script.hook||'Kenji protects Neo-Tokyo.').trim()+(previous?.provider_url?'\n\nPrevious episode: '+previous.provider_url:'')+'\n\nSubscribe for the next chapter.';
+ const job=(await api('/api/publishing/jobs','POST',{backup_id:backup.id,platform:'youtube',title,description,hashtags:(Array.isArray(script.hashtags)?script.hashtags:[]).join(' '),tags,privacy:mode,scheduled_at:(publishAt||new Date(Date.now()+90000)).toISOString()})).job;
  if(!job?.id)throw new Error('Publish job missing');
  console.log('Upload queued: Part '+next+' at '+(publishAt?.toISOString()||'next available time'));
  if(!publishAt)for(let i=0;i<40;i++){await sleep(15000);const current=(await api('/api/publishing/jobs')).jobs?.find(j=>j.id===job.id);if(current?.status==='published'){console.log('Published '+current.provider_url);break;}if(['failed','cancelled'].includes(current?.status))throw new Error('Publishing failed; inspect dashboard');if(i===39)throw new Error('Publishing pending; do not duplicate');}
