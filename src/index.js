@@ -916,6 +916,41 @@ async function handle(request, env) {
     if (path.startsWith("/api/admin/")) {
       if (user.role !== "admin") return json({ ok: false, error: "Administrator access required." }, 403);
 
+      // Account-wide read-only usage metrics. Keep each query independent so a missing
+      // dataset or permission is reported as unavailable rather than counted as zero.
+      if (path === "/api/admin/production-resource-audit" && method === "GET") {
+        if (!env.CF_API_TOKEN) return json({ok:false,error:"Cloudflare audit token not configured."},503);
+        const accountId="7fba808c5a694f2755dc45ab94cee505";
+        const now=new Date(), end=now.toISOString(), day=end.slice(0,10), month=day.slice(0,7)+"-01";
+        const headers={authorization:"Bearer "+env.CF_API_TOKEN,accept:"application/json"};
+        async function readMetric(dataset,filter,selection){
+          try {
+            const query="query { viewer { accounts(filter:{accountTag:"+JSON.stringify(accountId)+"}) { "+dataset+"(limit:100,filter:"+filter+") { "+selection+" } } } }";
+            const r=await fetch("https://api.cloudflare.com/client/v4/graphql",{method:"POST",headers:{...headers,"content-type":"application/json"},body:JSON.stringify({query}),signal:AbortSignal.timeout(12000)});
+            const p=await r.json();
+            const rows=p.data?.viewer?.accounts?.[0]?.[dataset];
+            if(!r.ok||p.errors?.length||!Array.isArray(rows)||rows.length>=100)return {success:false,http_status:r.status,error:String(p.errors?.[0]?.message||"Metric unavailable or incomplete").slice(0,200)};
+            return {success:true,rows};
+          } catch(e){return {success:false,error:String(e?.message||e).slice(0,200)};}
+        }
+        async function readRest(endpoint){
+          try {
+            const r=await fetch("https://api.cloudflare.com/client/v4/accounts/"+accountId+endpoint,{headers,signal:AbortSignal.timeout(12000)});
+            const p=await r.json();
+            return r.ok&&p.success===true?{success:true,result:p.result}:{success:false,http_status:r.status,error:String(p.errors?.[0]?.message||"Unavailable").slice(0,200)};
+          }catch(e){return {success:false,error:String(e?.message||e).slice(0,200)};}
+        }
+        const range=(date)=>"{datetime_geq:"+JSON.stringify(date+"T00:00:00Z")+",datetime_leq:"+JSON.stringify(end)+"}";
+        const [r2,workers,d1,queues,storage]=await Promise.all([
+          readMetric("r2OperationsAdaptiveGroups",range(month),"sum { requests }"),
+          readMetric("workersInvocationsAdaptive",range(day),"sum { requests }"),
+          readMetric("d1AnalyticsAdaptiveGroups","{date_geq:"+JSON.stringify(day)+",date_leq:"+JSON.stringify(day)+"}","sum { rowsRead rowsWritten }"),
+          readMetric("queueMessageOperationsAdaptiveGroups",range(day),"sum { billableOperations }"),
+          readRest("/r2/metrics")
+        ]);
+        return json({ok:true,checked_at:end,r2_month_operations:r2,workers_daily:workers,d1_daily:d1,queues_daily:queues,r2_storage:storage});
+      }
+
       if (path === "/api/admin/cloudflare-billing" && method === "GET") {
         if (!env.CF_API_TOKEN) return json({ ok: false, error: "Cloudflare billing token is not configured." }, 503);
         const accountId = "7fba808c5a694f2755dc45ab94cee505";
