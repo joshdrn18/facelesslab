@@ -692,6 +692,10 @@ async function processPublishQueueMessage(message,env) {
     description=clipped;
    }
    const snippet={title:String(job.title||"FacelessLab video").slice(0,100),description,categoryId:"24"};
+   // Automated English Kenji anime episodes use Film & Animation; retain the existing default for other uploads.
+   if(/^Part\s+\d+\s*:/i.test(snippet.title)&&/\b(Kenji|Neo[- ]Tokyo)\b/i.test(description)){
+    snippet.categoryId="1";snippet.defaultLanguage="en";snippet.defaultAudioLanguage="en";
+   }
    if(tags.length)snippet.tags=tags;
    const metadata={snippet,status:{privacyStatus:["public","unlisted","private"].includes(job.privacy)?job.privacy:"private"}};
    const init=await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",{method:"POST",headers:{authorization:"Bearer "+access,"content-type":"application/json; charset=UTF-8","x-upload-content-type":"video/mp4","x-upload-content-length":String(size)},body:JSON.stringify(metadata)});
