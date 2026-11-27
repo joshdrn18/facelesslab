@@ -60,7 +60,7 @@ jobs:
           } finally {if(token) await api('/api/auth/logout','POST',{}).catch(()=>{});}
           NODE
       - name: Install headless browser
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.FACELESSLAB_AUTO_ENABLED == 'true' && vars.FACELESSLAB_BUDGET_VERIFIED == 'true' && vars.FACELESSLAB_PUBLIC_ENABLED == 'true')
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.FACELESSLAB_PAUSE != 'true')
         run: |
           npm install --no-save --no-package-lock playwright@1.51.1
           npx playwright install --with-deps chromium
@@ -69,13 +69,15 @@ jobs:
           command -v ffprobe
           command -v ffmpeg
       - name: Install audit dependency
-        if: (github.event_name == 'push' && github.event.head_commit.message != 'Prepare FacelessLab Part 22 draft') || (github.event_name == 'schedule' && (vars.FACELESSLAB_AUTO_ENABLED != 'true' || vars.FACELESSLAB_BUDGET_VERIFIED != 'true' || vars.FACELESSLAB_PUBLIC_ENABLED != 'true'))
+        if: (github.event_name == 'push' && github.event.head_commit.message != 'Prepare FacelessLab Part 22 draft') || (github.event_name == 'schedule' && vars.FACELESSLAB_PAUSE == 'true')
         run: npm install --no-save --no-package-lock playwright@1.51.1
       - name: Run production
         if: github.event_name != 'push' || github.event.head_commit.message != 'Prepare FacelessLab Part 22 draft'
         env:
           FACELESSLAB_EMAIL: ${{ secrets.FACELESSLAB_EMAIL }}
           FACELESSLAB_PASSWORD: ${{ secrets.FACELESSLAB_PASSWORD }}
-          FACELESSLAB_MODE: ${{ github.event_name == 'schedule' && vars.FACELESSLAB_AUTO_ENABLED == 'true' && vars.FACELESSLAB_PUBLIC_ENABLED == 'true' && vars.FACELESSLAB_BUDGET_VERIFIED == 'true' && 'public' || (github.event_name == 'workflow_dispatch' && 'render-only' || 'budget-audit') }}
+          FACELESSLAB_MODE: ${{ github.event_name == 'schedule' && vars.FACELESSLAB_PAUSE != 'true' && 'public' || (github.event_name == 'workflow_dispatch' && 'render-only' || 'budget-audit') }}
+          # Owner-authorized Part 21 pilot. Live budget checks remain mandatory; no new AI.
+          FACELESSLAB_PILOT_ONLY: 'true'
           FACELESSLAB_PUBLISH_SLOT: ${{ github.event.schedule == '0 4 * * *' && '12' || github.event.schedule == '0 12 * * *' && '20' || '' }}
         run: node scripts/auto-produce.mjs
