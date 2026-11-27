@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths: ['.github/workflows/auto-production.yml']
   schedule:
-    # Start production an hour before the 12:00 and 20:00 WIB publish targets.
+    # Start production an hour before the 12:00 and 20:00 WIB publish targets; audit includes account subscription plans.
     - cron: '0 4 * * *'
     - cron: '0 12 * * *'
 permissions:
