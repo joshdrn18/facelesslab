@@ -934,10 +934,11 @@ async function handle(request, env) {
         };
         const analyticsTodayUtc = new Date().toISOString().slice(0,10);
         const analyticsSevenDaysAgoUtc = new Date(Date.now()-6*86400000).toISOString().slice(0,10);
-        const [credits, billable, aiAnalytics] = await Promise.all([
+        const [credits, billable, aiAnalytics, subscriptions] = await Promise.all([
           requestBilling("/accounts/" + accountId + "/billing/credits"),
           requestBilling("/accounts/" + accountId + "/billable-usage"),
-          fetchCloudflareAiAnalytics(env,analyticsSevenDaysAgoUtc,analyticsTodayUtc)
+          fetchCloudflareAiAnalytics(env,analyticsSevenDaysAgoUtc,analyticsTodayUtc),
+          requestBilling("/accounts/" + accountId + "/subscriptions")
         ]);
         const rows = Array.isArray(billable.result) ? billable.result : [];
         const services = {};
@@ -1003,6 +1004,7 @@ async function handle(request, env) {
           checked_at: new Date().toISOString(),
           credits: { success: credits.success, http_status: credits.http_status, result: credits.result, summary: creditSummary, errors: credits.errors },
           ai_analytics: aiAnalytics,
+          subscriptions: { success: subscriptions.success, http_status: subscriptions.http_status, plans: Array.isArray(subscriptions.result) ? subscriptions.result.map(p => ({ name: String(p.rate_plan?.public_name || p.rate_plan?.id || "").slice(0,120), state: String(p.state || "").slice(0,40), price: typeof p.price === "number" ? p.price : null, currency: String(p.currency || "").slice(0,8) })) : [], errors: subscriptions.errors },
           billable_usage: {
             success: billable.success, http_status: billable.http_status,
             billing_period: rows[0]?.BillingPeriodStart || null,
