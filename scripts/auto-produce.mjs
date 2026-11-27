@@ -37,6 +37,30 @@ try{
   const latestPeriod=String(bill.period_to||'').slice(0,10);
   const records=Array.isArray(bill.records)?bill.records:[];
   console.log('Resource billing audit: '+JSON.stringify({period:latestPeriod,services:bill.services||[],latestUsage:(bill.daily_usage||[]).slice(-2),recordUnits:[...new Set(records.map(r=>r.unit))]}));
+  // All-account limits, with conservative buffers. Treat missing/malformed metrics
+  // as a hard stop for production. Aggregate all R2 operations against the smaller
+  // Class A allowance, rather than risking a classification error.
+  let resourceAudit;
+  try{resourceAudit=await api('/api/admin/production-resource-audit');}
+  catch(error){resourceAudit={ok:false,error:String(error.message||error)};}
+  const sumMetric=(metric,key)=>{
+   if(metric?.success!==true||!Array.isArray(metric.rows))return null;
+   if(metric.rows.some(row=>typeof row.sum?.[key]!=='number'||!Number.isFinite(row.sum[key])||row.sum[key]<0))return null;
+   return metric.rows.reduce((total,row)=>total+row.sum[key],0);
+  };
+  const s2=resourceAudit.r2_storage?.result;
+  const byteFields=['payloadSize','metadataSize'];
+  const buckets=[s2?.standard?.published,s2?.standard?.uploaded,s2?.infrequentAccess?.published,s2?.infrequentAccess?.uploaded];
+  const storageBytes=resourceAudit.r2_storage?.success===true&&buckets.every(x=>x&&byteFields.every(k=>typeof x[k]==='number'&&Number.isFinite(x[k])&&x[k]>=0))?buckets.reduce((total,x)=>total+x.payloadSize+x.metadataSize,0):null;
+  const infrequentBytes=storageBytes===null?null:buckets.slice(2).reduce((total,x)=>total+x.payloadSize+x.metadataSize,0);
+  const metrics={r2StorageBytes:storageBytes,r2InfrequentBytes:infrequentBytes,r2MonthlyOperations:sumMetric(resourceAudit.r2_month_operations,'requests'),workersRequests:sumMetric(resourceAudit.workers_daily,'requests'),d1RowsRead:sumMetric(resourceAudit.d1_daily,'rowsRead'),d1RowsWritten:sumMetric(resourceAudit.d1_daily,'rowsWritten'),queueOperations:sumMetric(resourceAudit.queues_daily,'billableOperations')};
+  const metricErrors=Object.fromEntries(Object.entries(resourceAudit).filter(([,value])=>value&&typeof value==='object'&&value.success===false).map(([key,value])=>[key,value.error||'unavailable']));
+  const plans=Array.isArray(subs.plans)?subs.plans:[];
+  const planSafe=subs.success===true&&plans.length===1&&plans[0].name==='R2 Paid'&&plans[0].price===0;
+  const limits={r2StorageBytes:7000000000,r2MonthlyOperations:700000,workersRequests:70000,d1RowsRead:3500000,d1RowsWritten:70000,queueOperations:7000};
+  const headroomSafe=Object.entries(limits).every(([key,max])=>Number.isFinite(metrics[key])&&metrics[key]<max)&&metrics.r2InfrequentBytes===0;
+  console.log('Production resource preflight: '+JSON.stringify({metrics,limits,metricErrors,planSafe,headroomSafe,checkedAt:resourceAudit.checked_at||null}));
+  if(mode==='public'&&(!planSafe||!headroomSafe||resourceAudit.ok!==true))throw Error('Production resource audit incomplete or safety buffer reached; no production started');
   if(mode==='budget-audit')returnAudit=true;
   else if(!summary.billingAvailable||!summary.aiAnalyticsAvailable||summary.billingRecords===0||summary.billedCost!==0||!Number.isFinite(summary.neurons)||summary.neurons>=6000)throw new Error('Budget data unavailable or safety threshold reached; production blocked');
  }
